@@ -97,8 +97,20 @@ The optional urgency assigned to a Reminder.
 _Avoid_: Importance, rank
 
 **Next Reminder**:
-The first Pending Reminder in the Active List after overdue, today, future, and undated Reminders are ordered by time, Priority, and title.
+The first Pending Reminder in the Active List's current displayed order, whether that Reminder List uses Automatic Reminder Order or Manual Reminder Order.
 _Avoid_: First task, current todo
+
+**Automatic Reminder Order**:
+The default order of Pending Reminders: overdue, today, future, and undated, followed by Due Date and time, Priority, title, and stable identity. It applies until the first Reminder Swap or after the user restores it.
+_Avoid_: Manual order, arbitrary order
+
+**Reminder Swap**:
+An exchange of positions between exactly two Pending Reminders in the same Active List. Other Reminders keep their positions, and neither Reminder moves to another Reminder List.
+_Avoid_: Insert, move, cross-list move
+
+**Manual Reminder Order**:
+The user-defined positions of Pending Reminders in one Reminder List after its first Reminder Swap. It applies to both iCloud and Local Sources, persists on the current Mac, appends newly encountered Reminders, and keeps positions stable when Reminder fields change until the user restores Automatic Reminder Order.
+_Avoid_: Automatic order, global order
 
 **Recurring Reminder**:
 A Reminder whose repetition rule is managed in iCloud Reminders. Todo Island can present and complete it but does not change its repetition rule.
