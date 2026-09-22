@@ -20,8 +20,7 @@ The product:
 
 - is backed by the iCloud Source alone;
 - presents Pending Reminders, plus the Completed Reminders due on the Day Schedule's selected date;
-- switches between iCloud Reminder Lists in one Island list menu;
-- creates iCloud Reminder Lists inside the Island;
+- tracks the Active iCloud Reminder List automatically; switching, creating, renaming, and deleting lists happens in Apple Reminders;
 - creates, edits, completes, and deletes Reminders;
 - edits title, optional Due Date and optional time, and Priority;
 - can present and complete existing Recurring Reminders but cannot edit their repetition rules;
@@ -29,7 +28,7 @@ The product:
 - restores the last valid Active List and otherwise prefers iCloud; and
 - does not move or copy Reminders between lists or sources.
 
-iCloud Reminder Lists can be created inside Todo Island, while renaming and deletion remain in Apple Reminders. Reminder Lists are not manually reordered.
+Reminder Lists are managed entirely in Apple Reminders and are not manually reordered.
 
 The first version does not include search, filters, notes, URLs, attachments, locations, tags, subtasks, recurrence editing, notifications, or due-date alerts. A Local Reminder's Due Date affects display and ordering but does not schedule a macOS notification.
 
@@ -61,7 +60,7 @@ Initial Setup, Locked iCloud Source, and no-list recovery remain visible. Auto-H
 
 ### Island Preview
 
-Hovering for 200 milliseconds over the Collapsed Island expands an Island Preview without taking focus from the current application. The Preview shows the same Month Calendar and Day Schedule as the Pinned Island, drawn with tighter metrics so the shorter surface still fits the calendar beside the schedule, and supports pointer-based actions such as switching lists and completing a Reminder. The Preview closes 500 milliseconds after the pointer leaves. With Auto-Hide selected, it transitions directly to a hidden Collapsed Island without briefly rendering the collapsed surface.
+Hovering for 200 milliseconds over the Collapsed Island expands an Island Preview without taking focus from the current application. The Preview shows the same Month Calendar and Day Schedule as the Pinned Island, drawn with tighter metrics so the shorter surface still fits the calendar beside the schedule, and supports pointer-based actions such as completing a Reminder. The Preview closes 500 milliseconds after the pointer leaves. With Auto-Hide selected, it transitions directly to a hidden Collapsed Island without briefly rendering the collapsed surface.
 
 The nominal Preview size is 600 by 240 points so the compact calendar and the Day Schedule remain visible together. It still remains smaller than the Pinned Island and adapts down for shorter displays.
 
@@ -80,7 +79,7 @@ The nominal expanded size is 640 by 320 points, with adaptation for smaller disp
 
 The expanded Island contains:
 
-1. a left sidebar of feature destinations with an ellipsis menu at the bottom of the rail holding Reminder List switching, authorization recovery, and list management (new, rename, delete). The first destination is Reminders; future features add a sidebar item and their own content without changing the Island shell;
+1. a left sidebar of feature destinations. The first destination is Reminders; future features add a sidebar item and their own content without changing the Island shell;
 2. the Reminders content area as a Month Calendar on the left and the selected date's Day Schedule on the right in both expanded states; the Day Schedule keeps a native macOS scroll container with trackpad inertia, mouse-wheel scrolling, and a clipped viewport that keeps rows inside the content area; and
 3. ReUI-style dark card rows containing completion control, title, due state, list tags, and Priority badges, with animated hover and selection highlights and subtle fades at the viewport edges, plus a compact in-Island editor for the selected Reminder.
 
@@ -96,9 +95,7 @@ Reminders without a Due Date always appear in the Undated section of the Day Sch
 
 The last valid Active List is restored on launch. If it no longer exists, the app falls back to the first available iCloud Reminder List. Lists are ordered alphabetically inside each source group.
 
-The list menu includes a New List action that pins the Island when necessary and expands a compact form inside it. The form asks for a name for the new iCloud list. Creating a list rejects a name already used by an existing iCloud list; externally created duplicate iCloud names remain supported and are distinguished by stable identity, source, and color.
-
-Creating a list makes it the Active List. Renaming and deleting Reminder Lists remains in Apple Reminders.
+Todo Island does not manage lists: creating, renaming, deleting, and switching Reminder Lists happen in Apple Reminders. Externally created duplicate iCloud names remain supported and are distinguished by stable identity, source, and color.
 
 When neither the selected date nor the Undated section has any Reminder, the Day Schedule shows a short all-clear state.
 
@@ -183,7 +180,7 @@ After Auto-Hide has been selected, an ordinary subsequent launch starts with the
 
 Changing Collapsed Island Visibility in Settings saves and applies it immediately. Selecting Always Visible reveals a hidden Collapsed Island immediately. Selecting Auto-Hide while the pointer is outside waits 200 milliseconds before hiding, but never dismisses an Island Preview or Pinned Island currently in use; the new preference takes effect when that Island next collapses.
 
-After launch, the app restores the last valid Active List. If it is unavailable or none has been saved, the app automatically uses the first available iCloud Reminder List. The user can switch the Active List from within the Island.
+After launch, the app restores the last valid Active List. If it is unavailable or none has been saved, the app automatically uses the first available iCloud Reminder List.
 
 If no iCloud Reminder List is available, the empty state offers New iCloud List, Open Reminders, and Check Again actions.
 
@@ -238,7 +235,7 @@ The Island shell is an independent implementation informed by boring.notch's pub
 - Local list creation, renaming, deletion, first-use Default Local List creation, and stable automatic colors work without Reminders permission.
 - Local completion retains hidden Completed Reminders, and Local list deletion confirms both Pending and Completed counts.
 - A Local persistence failure leaves iCloud usable and never silently destroys the Local store.
-- Active List switching, compact editing, 200-millisecond completion feedback, and confirmed deletion work.
+- Compact editing, 200-millisecond completion feedback, and confirmed deletion work.
 - External Reminders changes appear after EventKit change notifications.
 - Collapsed, Preview, and Pinned states follow the agreed focus behavior and shortcuts.
 - Initial Setup requires an explicit visibility choice, upgrade prompting preserves existing source state, and Settings can change the per-Mac choice.

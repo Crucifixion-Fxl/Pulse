@@ -28,27 +28,11 @@
 "setup.visibility.choose-first" = "请选择一种显示方式后继续。";
 
 "list.none" = "没有列表";
-"list.switch" = "切换提醒事项列表";
 "list.no-icloud" = "没有 iCloud 列表";
 "list.no-icloud.detail" = "可以在这里新建 iCloud 列表，或到 Apple 提醒事项中创建。";
 "list.open-reminders" = "打开提醒事项";
 "list.check-again" = "重新检查";
-"list.new" = "新建列表";
-"list.new.detail" = "为新的 iCloud 列表设置名称";
 "list.new-icloud" = "新建 iCloud 列表";
-"list.create" = "创建列表";
-"list.rename" = "重命名";
-"list.delete" = "删除列表";
-"list.open" = "打开列表";
-"list.active" = "当前列表";
-"list.name" = "名称";
-"list.name.placeholder" = "列表名称";
-"list.icloud-permission-required" = "请先允许访问提醒事项，再创建 iCloud 列表。";
-"list.delete.title" = "删除这个本地列表？";
-"list.delete.confirm" = "删除列表";
-"list.delete.detail" = "“%@”包含 %d 个未完成事项和 %d 个已完成事项。它们都会被永久删除。";
-"source.icloud" = "iCloud";
-"source.icloud.detail" = "Apple 提醒事项";
 "reminders.remaining" = "还有 %d 项";
 
 "reminder.complete" = "完成 %@";

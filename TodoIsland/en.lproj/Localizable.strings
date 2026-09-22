@@ -28,27 +28,11 @@
 "setup.visibility.choose-first" = "Choose one option to continue.";
 
 "list.none" = "No List";
-"list.switch" = "Switch reminder list";
 "list.no-icloud" = "No iCloud Lists";
 "list.no-icloud.detail" = "Create an iCloud list here, or check Apple Reminders again.";
 "list.open-reminders" = "Open Reminders";
 "list.check-again" = "Check Again";
-"list.new" = "New List";
-"list.new.detail" = "Choose a name for the new iCloud list.";
 "list.new-icloud" = "New iCloud List";
-"list.create" = "Create List";
-"list.rename" = "Rename";
-"list.delete" = "Delete List";
-"list.open" = "Open List";
-"list.active" = "Active List";
-"list.name" = "Name";
-"list.name.placeholder" = "List name";
-"list.icloud-permission-required" = "Allow Reminders access before creating an iCloud list.";
-"list.delete.title" = "Delete this local list?";
-"list.delete.confirm" = "Delete List";
-"list.delete.detail" = "“%@” contains %d pending and %d completed reminders. All of them will be permanently deleted.";
-"source.icloud" = "iCloud";
-"source.icloud.detail" = "Apple Reminders";
 "reminders.remaining" = "%d reminders remaining";
 
 "reminder.complete" = "Complete %@";

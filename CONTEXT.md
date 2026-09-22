@@ -29,7 +29,7 @@ The Reminder Source backed by Apple Reminders and synchronized through iCloud.
 _Avoid_: Cloud mode, Apple source, local source
 
 **Active List**:
-The Reminder List currently presented in the Island. A user can switch the Active List from within the Island.
+The iCloud Reminder List the Island currently tracks. Todo Island picks it automatically; switching and managing lists happens in Apple Reminders.
 _Avoid_: Selected calendar, current category
 
 **Island**:

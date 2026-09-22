@@ -89,10 +89,7 @@ struct IslandRootView: View {
   @EnvironmentObject private var model: AppModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @FocusState private var editorTitleFocused: Bool
-  @FocusState private var listNameFocused: Bool
   @State private var reminderPendingDeletion: ReminderSnapshot?
-  @State private var listPendingRename: ReminderListSnapshot?
-  @State private var listNameDraft = ""
   @State private var selectedSidebarItem: IslandSidebarItem = .reminders
   @State private var hoveredSidebarItem: IslandSidebarItem?
   @State private var hoveredReminderID: String?
@@ -163,32 +160,6 @@ struct IslandRootView: View {
       } message: {
         Text(reminderPendingDeletion?.title ?? "")
       }
-      .confirmationDialog(
-        L10n.text("list.delete.title"),
-        isPresented: Binding(
-          get: { model.listDeletionCandidate != nil },
-          set: { if !$0 { model.cancelListDeletion() } }
-        )
-      ) {
-        if let candidate = model.listDeletionCandidate {
-          Button(L10n.text("list.delete.confirm"), role: .destructive) {
-            Task { await model.confirmListDeletion(candidate) }
-          }
-        }
-        Button(L10n.text("common.cancel"), role: .cancel) {
-          model.cancelListDeletion()
-        }
-      } message: {
-        if let candidate = model.listDeletionCandidate {
-          Text(
-            String(
-              format: L10n.text("list.delete.detail"),
-              candidate.list.title,
-              candidate.pendingCount,
-              candidate.completedCount
-            ))
-        }
-      }
       .alert(
         L10n.text("error.title"),
         isPresented: Binding(
@@ -205,17 +176,6 @@ struct IslandRootView: View {
       }
       .onChange(of: model.editingFocusRequestID) { _, _ in
         Task { @MainActor in editorTitleFocused = true }
-      }
-      .onChange(of: model.requestedListCreationSource) { previousSource, source in
-        guard source != nil else { return }
-        listPendingRename = nil
-        if ListCreationDraftPolicy.shouldResetName(
-          previousSource: previousSource,
-          newSource: source
-        ) {
-          listNameDraft = ""
-        }
-        Task { @MainActor in listNameFocused = true }
       }
       .onChange(of: model.islandState) { _, state in
         if state == .collapsed {
@@ -354,8 +314,6 @@ struct IslandRootView: View {
       }
 
       Spacer(minLength: 0)
-
-      listManagementMenu
     }
     .padding(.top, 4)
     .padding(.bottom, 2)
@@ -368,10 +326,6 @@ struct IslandRootView: View {
     case .reminders:
       if model.needsCollapsedIslandVisibilityChoice {
         initialSetupContent
-      } else if model.requestedListCreationSource != nil {
-        listCreationForm
-      } else if listPendingRename != nil {
-        listRenameForm
       } else if model.canUseActiveList {
         // Both expanded states show the month calendar plus the Day
         // Schedule; the preview picks tighter metrics for its shorter
@@ -382,91 +336,6 @@ struct IslandRootView: View {
       } else {
         lockedContent
       }
-    }
-  }
-
-  /// List switching and management lives at the bottom of the sidebar rail
-  /// since the expanded layout no longer has a header row.
-  private var listManagementMenu: some View {
-    Menu {
-      listMenuContent
-    } label: {
-      Image(systemName: "ellipsis")
-        .font(.system(size: 12.5, weight: .semibold))
-        .foregroundStyle(.white.opacity(0.75))
-        .frame(width: 24, height: 24)
-        .contentShape(Rectangle())
-    }
-    .menuStyle(.borderlessButton)
-    .accessibilityLabel(Text("list.switch"))
-    .disabled(model.needsCollapsedIslandVisibilityChoice)
-  }
-
-  @ViewBuilder
-  private var listMenuContent: some View {
-    Section(L10n.text("source.icloud")) {
-      switch model.iCloudSourceMenuState {
-      case .available:
-        ForEach(model.iCloudLists) { list in
-          listSelectionButton(list)
-        }
-      case .authorizationRequired:
-        Button {
-          restoreICloudAccess()
-        } label: {
-          Label(
-            L10n.text(
-              model.authorization == .notDetermined
-                ? "permission.allow" : "permission.open-settings"),
-            systemImage: "lock.open"
-          )
-        }
-      case .empty:
-        Button {
-          model.requestNewList(source: .iCloud)
-        } label: {
-          Label(L10n.text("list.new-icloud"), systemImage: "plus")
-        }
-        Button {
-          Task { await model.reload() }
-        } label: {
-          Label(L10n.text("list.check-again"), systemImage: "arrow.clockwise")
-        }
-        Button {
-          SystemSettings.openReminders()
-        } label: {
-          Label(L10n.text("list.open-reminders"), systemImage: "list.bullet")
-        }
-      }
-    }
-
-    Divider()
-    Button {
-      listPendingRename = nil
-      model.requestNewList(source: .iCloud)
-    } label: {
-      Label(L10n.text("list.new"), systemImage: "plus")
-    }
-  }
-
-  private func listSelectionButton(_ list: ReminderListSnapshot) -> some View {
-    Button {
-      model.selectList(list.id)
-    } label: {
-      if list.id == model.activeListID {
-        Label(list.title, systemImage: "checkmark")
-      } else {
-        Text(list.title)
-      }
-    }
-    .disabled(list.source == .iCloud && model.authorization != .fullAccess)
-  }
-
-  private func restoreICloudAccess() {
-    if model.authorization == .notDetermined {
-      Task { await model.requestAccess() }
-    } else {
-      SystemSettings.openRemindersPrivacy()
     }
   }
 
@@ -1223,136 +1092,6 @@ struct IslandRootView: View {
     )
   }
 
-  private var listCreationForm: some View {
-    VStack(alignment: .leading, spacing: 6.5) {
-      HStack(spacing: 5.5) {
-        ZStack {
-          Circle().fill(accentColor.opacity(0.18))
-          Image(systemName: "list.bullet.badge.plus")
-            .font(.system(size: 16.2, weight: .semibold))
-            .foregroundStyle(accentColor)
-        }
-        .frame(width: 36, height: 36)
-
-        VStack(alignment: .leading, spacing: 1) {
-          Text("list.new")
-            .font(.system(size: 14.04, weight: .semibold))
-          Text("list.new.detail")
-            .font(.system(size: 11.88))
-            .foregroundStyle(.secondary)
-        }
-      }
-
-      VStack(alignment: .leading, spacing: 3.5) {
-        Text("list.name")
-          .font(.system(size: 11.88).weight(.semibold))
-          .foregroundStyle(.secondary)
-
-        HStack(spacing: 4.5) {
-          Image(systemName: "text.cursor")
-            .font(.system(size: 11.88))
-            .foregroundStyle(listNameFocused ? accentColor : .secondary)
-          TextField(L10n.text("list.name.placeholder"), text: $listNameDraft)
-            .textFieldStyle(.plain)
-            .focused($listNameFocused)
-            .onSubmit { createListFromForm() }
-        }
-        .padding(.horizontal, 5.5)
-        .frame(height: 39)
-        .background {
-          RoundedRectangle(cornerRadius: 11)
-            .fill(.white.opacity(listNameFocused ? 0.09 : 0.065))
-        }
-        .overlay {
-          RoundedRectangle(cornerRadius: 11)
-            .stroke(
-              listNameFocused ? accentColor.opacity(0.75) : .white.opacity(0.10),
-              lineWidth: listNameFocused ? 1.25 : 1
-            )
-        }
-      }
-
-      if model.requestedListCreationSource == .iCloud, model.authorization != .fullAccess {
-        Label("list.icloud-permission-required", systemImage: "exclamationmark.circle.fill")
-          .font(.system(size: 11.88))
-          .foregroundStyle(.orange)
-          .lineLimit(1)
-      }
-
-      Spacer(minLength: 0)
-
-      HStack(spacing: 5) {
-        Spacer()
-        Button(L10n.text("common.cancel")) {
-          model.cancelListCreation()
-          listNameDraft = ""
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
-
-        Button(L10n.text("list.create")) { createListFromForm() }
-          .buttonStyle(.borderedProminent)
-          .controlSize(.large)
-          .tint(accentColor)
-          .keyboardShortcut(.defaultAction)
-          .disabled(
-            listNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-              || (model.requestedListCreationSource == .iCloud
-                && model.authorization != .fullAccess)
-          )
-      }
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(.horizontal, 11)
-    .padding(.vertical, 8.5)
-  }
-
-  private var listRenameForm: some View {
-    VStack(spacing: 7) {
-      Label(L10n.text("list.rename"), systemImage: "pencil")
-        .font(.system(size: 14.04, weight: .semibold))
-      Text(listPendingRename?.title ?? "")
-        .font(.system(size: 11.88))
-        .foregroundStyle(.secondary)
-      TextField(L10n.text("list.name.placeholder"), text: $listNameDraft)
-        .textFieldStyle(.roundedBorder)
-        .focused($listNameFocused)
-        .onSubmit { renameListFromForm() }
-      HStack {
-        Button(L10n.text("common.cancel")) {
-          listPendingRename = nil
-          listNameDraft = ""
-        }
-        Button(L10n.text("common.save")) { renameListFromForm() }
-          .keyboardShortcut(.defaultAction)
-          .disabled(listNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-      }
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(12)
-  }
-
-  private func createListFromForm() {
-    guard let source = model.requestedListCreationSource else { return }
-    let title = listNameDraft
-    Task {
-      if await model.createList(title: title, source: source) {
-        listNameDraft = ""
-      }
-    }
-  }
-
-  private func renameListFromForm() {
-    guard let list = listPendingRename else { return }
-    let title = listNameDraft
-    Task {
-      if await model.renameList(list, title: title) {
-        listPendingRename = nil
-        listNameDraft = ""
-      }
-    }
-  }
-
   private var lockedContent: some View {
     VStack(spacing: 6) {
       Image(systemName: "lock.shield.fill")
@@ -1549,10 +1288,6 @@ struct IslandRootView: View {
     if event.keyCode == 53 {
       if model.editingReminderID != nil {
         model.cancelEditing()
-      } else if model.requestedListCreationSource != nil {
-        model.cancelListCreation()
-      } else if listPendingRename != nil {
-        listPendingRename = nil
       } else {
         model.collapseIsland()
       }
