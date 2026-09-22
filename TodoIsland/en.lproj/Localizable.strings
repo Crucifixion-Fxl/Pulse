@@ -57,7 +57,6 @@
 "source.local.detail" = "Only on this Mac";
 "source.use-local" = "Use Local";
 "reminders.remaining" = "%d reminders remaining";
-"reminders.pending" = "pending";
 
 "reminder.complete" = "Complete %@";
 "reminder.recurring" = "Recurring reminder";
@@ -76,11 +75,6 @@
 "priority.medium" = "Medium";
 "priority.high" = "High";
 
-"quick-add.placeholder" = "New reminder";
-"quick-add.accessibility" = "Quick Add reminder title";
-"quick-add.submit" = "Add reminder";
-"quick-add.new" = "Add Reminder";
-
 "delete.title" = "Delete this reminder?";
 "delete.confirm" = "Delete";
 
@@ -90,7 +84,7 @@
 "calendar.completed" = "Completed";
 "calendar.undated" = "Undated";
 "calendar.empty-day" = "Nothing scheduled";
-"calendar.empty-day.detail" = "Use Quick Add below to create a reminder.";
+"calendar.empty-day.detail" = "Reminders you add in Apple Reminders appear here.";
 "calendar.previous-month" = "Previous month";
 "calendar.next-month" = "Next month";
 

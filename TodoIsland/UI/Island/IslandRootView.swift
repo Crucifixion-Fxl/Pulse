@@ -88,7 +88,6 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
 struct IslandRootView: View {
   @EnvironmentObject private var model: AppModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @FocusState private var quickAddFocused: Bool
   @FocusState private var editorTitleFocused: Bool
   @FocusState private var listNameFocused: Bool
   @State private var reminderPendingDeletion: ReminderSnapshot?
@@ -96,8 +95,6 @@ struct IslandRootView: View {
   @State private var listNameDraft = ""
   @State private var selectedSidebarItem: IslandSidebarItem = .reminders
   @State private var hoveredSidebarItem: IslandSidebarItem?
-  @State private var hoveredChipID: String?
-  @State private var chipPreviewTask: Task<Void, Never>?
   @State private var hoveredReminderID: String?
 
   private var isPinned: Bool { model.islandState == .pinned }
@@ -206,12 +203,6 @@ struct IslandRootView: View {
       .onChange(of: model.editingReminderID) { _, id in
         if id != nil { editorTitleFocused = true }
       }
-      .onChange(of: quickAddFocused) { _, focused in
-        model.setQuickAddActive(focused)
-      }
-      .onChange(of: model.quickAddFocusRequestID) { _, _ in
-        Task { @MainActor in quickAddFocused = true }
-      }
       .onChange(of: model.editingFocusRequestID) { _, _ in
         Task { @MainActor in editorTitleFocused = true }
       }
@@ -229,10 +220,7 @@ struct IslandRootView: View {
       .onChange(of: model.islandState) { _, state in
         if state == .collapsed {
           hoveredSidebarItem = nil
-          hoveredChipID = nil
           hoveredReminderID = nil
-          chipPreviewTask?.cancel()
-          quickAddFocused = false
           editorTitleFocused = false
         }
       }
@@ -325,25 +313,10 @@ struct IslandRootView: View {
         .frame(width: 28)
         .frame(maxHeight: .infinity, alignment: .top)
 
-      VStack(spacing: 0) {
-        header
-        Divider().overlay(ReUITheme.border)
-
-        expandedFeatureContent
-
-        if selectedSidebarItem == .reminders
-          && !model.needsCollapsedIslandVisibilityChoice
-          && model.islandState.showsQuickAdd && model.canUseActiveList
-          && model.requestedListCreationSource == nil && listPendingRename == nil
-        {
-          quickAdd
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 4)
-        }
-      }
-      .font(.system(size: 14.04))
-      .controlSize(.mini)
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+      expandedFeatureContent
+        .font(.system(size: 14.04))
+        .controlSize(.mini)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     .foregroundStyle(.white)
     // Wider than the shoulder inset so trailing content clears the concave
@@ -381,8 +354,11 @@ struct IslandRootView: View {
       }
 
       Spacer(minLength: 0)
+
+      listManagementMenu
     }
     .padding(.top, 4)
+    .padding(.bottom, 2)
     .padding(.horizontal, 0)
   }
 
@@ -417,151 +393,19 @@ struct IslandRootView: View {
     }
   }
 
-  private var header: some View {
-    HStack(spacing: 6) {
-      if hasSwitchableLists {
-        listChipRow
-        listManagementMenu
-      } else {
-        legacyListSwitcherMenu
-        Spacer()
-      }
-      if model.canUseActiveList {
-        remainingCountBadge
-      }
-      if model.isLoading {
-        ProgressView().controlSize(.small)
-      }
-    }
-    .frame(height: 24)
-  }
-
-  private var hasSwitchableLists: Bool {
-    !model.iCloudLists.isEmpty || !model.localLists.isEmpty
-  }
-
-  /// Every Reminder List as a switchable chip so the header row doubles as
-  /// the second-level navigation instead of hiding lists inside the menu.
-  private var listChipRow: some View {
-    ScrollViewReader { proxy in
-      ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 4) {
-          ForEach(model.iCloudLists) { listChip($0) }
-          ForEach(model.localLists) { listChip($0) }
-        }
-        .padding(.vertical, 2)
-      }
-      .onChange(of: model.activeListID) { _, newID in
-        guard let newID else { return }
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
-          proxy.scrollTo(newID, anchor: .center)
-        }
-      }
-    }
-    .disabled(model.needsCollapsedIslandVisibilityChoice)
-  }
-
-  private func listChip(_ list: ReminderListSnapshot) -> some View {
-    let isActive = list.id == model.activeListID
-    let isHovered = hoveredChipID == list.id
-    return Button {
-      model.selectList(list.id)
-    } label: {
-      HStack(spacing: 3.5) {
-        Image(systemName: list.source.symbolName)
-          .font(.system(size: 10.8))
-        Text(list.title)
-          .font(.system(size: 13, weight: .medium))
-          .lineLimit(1)
-      }
-      .padding(.horizontal, 8)
-      .frame(height: 20)
-      .background(
-        Capsule(style: .continuous)
-          .fill(
-            isActive
-              ? accentColor.opacity(0.2)
-              : isHovered ? ReUITheme.itemHover : ReUITheme.item
-          )
-      )
-      .overlay(
-        Capsule(style: .continuous)
-          .strokeBorder(isActive ? accentColor.opacity(0.55) : ReUITheme.subtleBorder, lineWidth: 1)
-      )
-      .foregroundStyle(Color.white.opacity(isActive ? 1 : 0.65))
-      .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovered)
-    }
-    .buttonStyle(.plain)
-    .onHover { hovering in
-      hoveredChipID = hovering ? list.id : (hoveredChipID == list.id ? nil : hoveredChipID)
-      previewListOnDwell(list, hovering: hovering)
-    }
-    .accessibilityLabel(Text(list.title))
-    .accessibilityAddTraits(isActive ? .isSelected : [])
-  }
-
-  /// Gliding across the chips should flow into each list without a click, but
-  /// every switch cancels editing and reloads the store, so require a short
-  /// dwell before committing the hovered list.
-  private func previewListOnDwell(_ list: ReminderListSnapshot, hovering: Bool) {
-    guard hovering, list.id != model.activeListID,
-      !model.needsCollapsedIslandVisibilityChoice
-    else { return }
-    chipPreviewTask?.cancel()
-    let id = list.id
-    chipPreviewTask = Task { @MainActor in
-      try? await Task.sleep(nanoseconds: 140_000_000)
-      guard !Task.isCancelled else { return }
-      model.selectList(id)
-    }
-  }
-
+  /// List switching and management lives at the bottom of the sidebar rail
+  /// since the expanded layout no longer has a header row.
   private var listManagementMenu: some View {
     Menu {
       listMenuContent
     } label: {
       Image(systemName: "ellipsis")
-        .font(.system(size: 10.8, weight: .semibold))
+        .font(.system(size: 12.5, weight: .semibold))
         .foregroundStyle(.white.opacity(0.75))
-        .frame(width: 18, height: 18)
+        .frame(width: 24, height: 24)
         .contentShape(Rectangle())
     }
     .menuStyle(.borderlessButton)
-    .accessibilityLabel(Text("list.switch"))
-    .disabled(model.needsCollapsedIslandVisibilityChoice)
-  }
-
-  /// Fallback switcher for states without chips: no lists yet or a locked
-  /// iCloud Source needing the recovery actions front and center.
-  private var legacyListSwitcherMenu: some View {
-    Menu {
-      listMenuContent
-    } label: {
-      HStack(spacing: 3.5) {
-        Circle().fill(accentColor).frame(width: 3.5, height: 3.5)
-        if model.shouldShowAuthorizationLockInHeader {
-          Image(systemName: "lock.fill")
-            .font(.system(size: 14.04, weight: .semibold))
-        } else if let activeList = model.activeList {
-          Image(systemName: activeList.source.symbolName)
-            .font(.system(size: 11.88))
-            .foregroundStyle(.secondary)
-        }
-        if !model.shouldShowAuthorizationLockInHeader {
-          Text(model.activeList?.title ?? L10n.text("list.none"))
-            .font(.system(size: 15.12, weight: .semibold, design: .rounded))
-            .lineLimit(1)
-        }
-        if !model.shouldShowAuthorizationLockInHeader {
-          Image(systemName: "chevron.down")
-            .font(.system(size: 10.8))
-            .foregroundStyle(.secondary)
-        }
-      }
-    }
-    .menuStyle(.borderlessButton)
-    .padding(.horizontal, 4.5)
-    .padding(.vertical, 2.5)
     .accessibilityLabel(Text("list.switch"))
     .disabled(model.needsCollapsedIslandVisibilityChoice)
   }
@@ -644,26 +488,6 @@ struct IslandRootView: View {
     } label: {
       Label(L10n.text("list.new"), systemImage: "plus")
     }
-  }
-
-  private var remainingCountBadge: some View {
-    HStack(spacing: 4) {
-      Circle().fill(accentColor).frame(width: 5, height: 5)
-      Text("\(model.remainingCount)")
-        .font(.system(size: 11.5, weight: .bold, design: .rounded))
-        .monospacedDigit()
-        .minimumScaleFactor(0.6)
-      Text("reminders.pending")
-        .font(.system(size: 10.5, weight: .medium))
-        .foregroundStyle(ReUITheme.muted)
-    }
-    .padding(.horizontal, 7)
-    .frame(height: 20)
-    .background(Capsule(style: .continuous).fill(ReUITheme.item))
-    .overlay(Capsule(style: .continuous).stroke(ReUITheme.border, lineWidth: 1))
-    .foregroundStyle(accentColor)
-    .accessibilityLabel(
-      Text(String(format: L10n.text("reminders.remaining"), model.remainingCount)))
   }
 
   private func listSelectionButton(_ list: ReminderListSnapshot) -> some View {
@@ -802,35 +626,35 @@ struct IslandRootView: View {
     let rowPitch: CGFloat
 
     static let regular = ScheduleMetrics(
-      paneWidth: 172,
-      paneSpacing: 10,
-      titleSize: 12.5,
-      stepperSide: 16,
-      weekdaySize: 9.5,
-      daySize: 10.8,
-      circleSize: 19,
-      cellMinHeight: 24,
-      cellStackSpacing: 1.5,
-      weekSpacing: 1.5,
-      dotSize: 3,
-      dayTitleSize: 12.5,
+      paneWidth: 216,
+      paneSpacing: 12,
+      titleSize: 14,
+      stepperSide: 18,
+      weekdaySize: 11,
+      daySize: 12.5,
+      circleSize: 24,
+      cellMinHeight: 30,
+      cellStackSpacing: 2,
+      weekSpacing: 2,
+      dotSize: 3.5,
+      dayTitleSize: 14,
       rowPitch: 46
     )
 
     static let compact = ScheduleMetrics(
-      paneWidth: 148,
-      paneSpacing: 8,
-      titleSize: 11.5,
-      stepperSide: 14,
-      weekdaySize: 8.5,
-      daySize: 9.8,
-      circleSize: 15,
-      cellMinHeight: 17,
-      cellStackSpacing: 1,
-      weekSpacing: 1,
-      dotSize: 2.5,
-      dayTitleSize: 11.5,
-      rowPitch: 40
+      paneWidth: 190,
+      paneSpacing: 10,
+      titleSize: 12.5,
+      stepperSide: 16,
+      weekdaySize: 9.5,
+      daySize: 11,
+      circleSize: 19,
+      cellMinHeight: 22,
+      cellStackSpacing: 1.5,
+      weekSpacing: 1.5,
+      dotSize: 3,
+      dayTitleSize: 12.5,
+      rowPitch: 44
     )
   }
 
@@ -1437,74 +1261,6 @@ struct IslandRootView: View {
     )
   }
 
-  /// Clicking Quick Add in the preview pins the Island and focuses the field.
-  private func focusQuickAdd() {
-    model.activateQuickAdd()
-  }
-
-  private var quickAdd: some View {
-    HStack(spacing: 4) {
-      Image(systemName: "plus")
-        .font(.system(size: 12.96, weight: .bold))
-        .frame(width: 11, height: 11)
-        .background(accentColor.opacity(0.16), in: Circle())
-        .foregroundStyle(accentColor)
-      TextField("quick-add.placeholder", text: $model.quickAddTitle)
-        .textFieldStyle(.plain)
-        .focused($quickAddFocused)
-        .onSubmit { submitQuickAdd() }
-        .accessibilityLabel(Text("quick-add.accessibility"))
-        .accessibilityHidden(!isPinned)
-        .overlay {
-          if !isPinned {
-            Button(action: focusQuickAdd) {
-              Color.clear
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("quick-add.accessibility"))
-          }
-        }
-      Button {
-        submitQuickAdd()
-      } label: {
-        Image(systemName: "arrow.up")
-          .font(.system(size: 11.88, weight: .bold))
-          .frame(width: 11.5, height: 11.5)
-          .background(
-            model.quickAddTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-              ? .white.opacity(0.08) : accentColor,
-            in: Circle()
-          )
-          .foregroundStyle(
-            model.quickAddTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-              ? Color.secondary : Color.black
-          )
-      }
-      .buttonStyle(.plain)
-      .foregroundStyle(accentColor)
-      .disabled(model.quickAddTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-      .accessibilityLabel(Text("quick-add.submit"))
-    }
-    .padding(.horizontal, 5)
-    .frame(height: 20)
-    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(ReUITheme.item))
-    .overlay(alignment: .center) {
-      RoundedRectangle(cornerRadius: 13, style: .continuous)
-        .stroke(
-          quickAddFocused ? accentColor.opacity(0.72) : ReUITheme.border,
-          lineWidth: 1
-        )
-        .allowsHitTesting(false)
-    }
-  }
-
-  private func submitQuickAdd() {
-    model.createQuickReminder()
-    model.setQuickAddActive(false)
-    quickAddFocused = false
-  }
-
   private var listCreationForm: some View {
     VStack(alignment: .leading, spacing: 6.5) {
       HStack(spacing: 5.5) {
@@ -1961,13 +1717,6 @@ struct IslandRootView: View {
     if model.needsCollapsedIslandVisibilityChoice {
       guard event.keyCode == 53 else { return false }
       model.collapseIsland()
-      return true
-    }
-
-    if event.modifierFlags.contains(.command),
-      event.charactersIgnoringModifiers?.lowercased() == "n"
-    {
-      quickAddFocused = true
       return true
     }
 

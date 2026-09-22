@@ -12,10 +12,6 @@ enum IslandPresentationState: Equatable, Sendable {
   case preview
   case pinned
 
-  var showsQuickAdd: Bool {
-    self != .collapsed
-  }
-
   var showsAuthorizationActions: Bool {
     self != .collapsed
   }

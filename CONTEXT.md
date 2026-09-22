@@ -73,20 +73,16 @@ The single display that currently hosts the Island. Todo Island determines it fr
 _Avoid_: Selected Display, main monitor, primary screen
 
 **Island Preview**:
-The expanded Island shown while the pointer hovers over its collapsed surface. It supports pointer-based Reminder actions without taking keyboard focus and closes 500 milliseconds after the pointer leaves. Quick Add remains visible; clicking it converts the Preview to a Pinned Island for text input.
+The expanded Island shown while the pointer hovers over its collapsed surface. It supports pointer-based Reminder actions without taking keyboard focus and closes 500 milliseconds after the pointer leaves.
 _Avoid_: Hover mode, passive popup
 
 **Pinned Island**:
-The expanded, interactive Island entered by clicking it. It takes keyboard focus and collapses 200 milliseconds after the pointer leaves an Active List. An unfinished Quick Add or Reminder edit is preserved, and returning the pointer reopens the Pinned Island with its editing focus restored.
+The expanded, interactive Island entered by clicking it. It takes keyboard focus and collapses 200 milliseconds after the pointer leaves an Active List. An unfinished Reminder edit is preserved, and returning the pointer reopens the Pinned Island with its editing focus restored.
 _Avoid_: Focused popup
 
 **Locked iCloud Source**:
 An iCloud Source that cannot present or modify Reminders because Apple Reminders access is unavailable. The Island keeps Local Source navigation available while offering the appropriate iCloud authorization or recovery action.
 _Avoid_: Locked Island, onboarding, permission page
-
-**Quick Add**:
-The compact input in a Pinned Island that creates a Pending Reminder from a title alone in the Active List. A Quick Add Reminder initially has no Due Date or Priority.
-_Avoid_: New-task box, composer
 
 **Due Date**:
 The optional calendar date on which a Reminder becomes due. It may additionally specify a particular time.
@@ -117,7 +113,7 @@ A Reminder whose repetition rule is managed in iCloud Reminders. Todo Island can
 _Avoid_: Repeating task, recurrence item
 
 **All Done**:
-The state of an Active List that contains no Pending Reminders. Quick Add remains available.
+The state of an Active List that contains no Pending Reminders.
 _Avoid_: Empty list, zero state
 
 **Month Calendar**:

@@ -38,16 +38,16 @@ final class LocalSourceAppModelTests: XCTestCase {
     XCTAssertEqual(model.activeList?.source, .local)
     XCTAssertTrue(model.canUseActiveList)
 
-    model.quickAddTitle = "Local task"
-    model.createQuickReminder()
-    try await Task.sleep(for: .milliseconds(50))
+    let listID = try XCTUnwrap(model.activeListID)
+    try await store.createReminder(title: "Local task", in: listID, dueComponents: nil)
+    await model.reload()
 
     XCTAssertEqual(model.reminders.map(\.title), ["Local task"])
     XCTAssertEqual(store.createdReminderTitles, ["Local task"])
   }
 
   @MainActor
-  func testQuickAddReminderStaysUndatedAndJoinsDayScheduleUndatedSection() async throws {
+  func testUndatedReminderJoinsDayScheduleUndatedSection() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)
     defer { defaults.removePersistentDomain(forName: #function) }
@@ -56,9 +56,9 @@ final class LocalSourceAppModelTests: XCTestCase {
     let model = AppModel(store: store, defaults: defaults)
     await model.start()
 
-    model.quickAddTitle = "Undated task"
-    model.createQuickReminder()
-    try await Task.sleep(for: .milliseconds(50))
+    let listID = try XCTUnwrap(model.activeListID)
+    try await store.createReminder(title: "Undated task", in: listID, dueComponents: nil)
+    await model.reload()
 
     XCTAssertTrue(model.monthReminders.isEmpty)
     XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)

@@ -57,7 +57,6 @@
 "source.local.detail" = "仅保存在这台 Mac";
 "source.use-local" = "使用本地";
 "reminders.remaining" = "还有 %d 项";
-"reminders.pending" = "未完成";
 
 "reminder.complete" = "完成 %@";
 "reminder.recurring" = "重复提醒事项";
@@ -76,11 +75,6 @@
 "priority.medium" = "中";
 "priority.high" = "高";
 
-"quick-add.placeholder" = "新提醒事项";
-"quick-add.accessibility" = "快速添加提醒事项标题";
-"quick-add.submit" = "添加提醒事项";
-"quick-add.new" = "新增提醒事项";
-
 "delete.title" = "删除这个提醒事项？";
 "delete.confirm" = "删除";
 
@@ -90,7 +84,7 @@
 "calendar.completed" = "已完成";
 "calendar.undated" = "未安排日期";
 "calendar.empty-day" = "这一天没有事项";
-"calendar.empty-day.detail" = "使用下方快速添加创建提醒事项。";
+"calendar.empty-day.detail" = "在 Apple 提醒事项中添加的事项会显示在这里。";
 "calendar.previous-month" = "上个月";
 "calendar.next-month" = "下个月";
 

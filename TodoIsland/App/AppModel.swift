@@ -26,7 +26,6 @@ final class AppModel: ObservableObject {
   @Published private(set) var listDeletionCandidate: ReminderListDeletionSummary?
   @Published private(set) var preferredEmptySource: ReminderSource?
   @Published var requestedListCreationSource: ReminderSource?
-  @Published private(set) var quickAddFocusRequestID = UUID()
   @Published private(set) var editingFocusRequestID = UUID()
   @Published private(set) var collapsedIslandVisibility: CollapsedIslandVisibility?
   @Published private(set) var isCollapsedIslandVisible: Bool
@@ -39,7 +38,6 @@ final class AppModel: ObservableObject {
   @Published var selectedReminderID: String?
   @Published var editingReminderID: String?
   @Published var draft: ReminderDraft?
-  @Published var quickAddTitle = ""
 
   private let store: ReminderStore
   private let defaults: UserDefaults
@@ -47,11 +45,9 @@ final class AppModel: ObservableObject {
   private var scheduleTask: Task<Void, Never>?
   private var hoverTask: Task<Void, Never>?
   private var isPointerInsideIsland = false
-  private var isQuickAddActive = false
   private var suspendedEditingFocus: SuspendedEditingFocus?
 
   private enum SuspendedEditingFocus {
-    case quickAdd
     case reminderEditor
   }
 
@@ -284,24 +280,6 @@ final class AppModel: ObservableObject {
     }
   }
 
-  func createQuickReminder() {
-    let title = quickAddTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard canUseActiveList, !title.isEmpty, let activeListID else { return }
-    quickAddTitle = ""
-
-    Task {
-      do {
-        // Quick Add reminders stay undated (see CONTEXT.md) and surface in
-        // the Day Schedule's Undated section.
-        try await store.createReminder(title: title, in: activeListID, dueComponents: nil)
-        await reload()
-      } catch {
-        quickAddTitle = title
-        present(error)
-      }
-    }
-  }
-
   func beginEditing(_ reminder: ReminderSnapshot) {
     guard canAccess(source: reminder.source) else { return }
     selectedReminderID = reminder.id
@@ -440,7 +418,6 @@ final class AppModel: ObservableObject {
         preferredEmptySource = nil
         selectedReminderID = nil
         reminders = []
-        quickAddFocusRequestID = UUID()
       }
       return activeListID == list.id
     } catch {
@@ -559,35 +536,19 @@ final class AppModel: ObservableObject {
     }
   }
 
-  func setQuickAddActive(_ active: Bool) {
-    guard isQuickAddActive != active else { return }
-    isQuickAddActive = active
-  }
-
-  func activateQuickAdd() {
-    pinIsland()
-    quickAddFocusRequestID = UUID()
-  }
-
   func pinIsland() {
     hoverTask?.cancel()
     showCollapsedIsland()
     islandState = .pinned
-    guard let suspendedEditingFocus else { return }
-    self.suspendedEditingFocus = nil
-    switch suspendedEditingFocus {
-    case .quickAdd:
-      quickAddFocusRequestID = UUID()
-    case .reminderEditor:
-      editingFocusRequestID = UUID()
-    }
+    guard suspendedEditingFocus != nil else { return }
+    suspendedEditingFocus = nil
+    editingFocusRequestID = UUID()
   }
 
   func collapseIsland() {
     hoverTask?.cancel()
     suspendedEditingFocus = nil
     isPointerInsideIsland = false
-    isQuickAddActive = false
     if editingReminderID == nil
       || reminders.first(where: { $0.id == editingReminderID }).map({ canAccess(source: $0.source) })
         == true
@@ -674,17 +635,12 @@ final class AppModel: ObservableObject {
   }
 
   private func suspendPinnedIsland() {
-    if isQuickAddActive
-      || !quickAddTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    {
-      suspendedEditingFocus = .quickAdd
-    } else if editingReminderID != nil, draft != nil {
+    if editingReminderID != nil, draft != nil {
       suspendedEditingFocus = .reminderEditor
     } else {
       suspendedEditingFocus = nil
     }
 
-    isQuickAddActive = false
     islandState = .collapsed
     reconcileCollapsedIslandVisibility(hideImmediately: true)
   }

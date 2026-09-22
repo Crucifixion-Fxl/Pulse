@@ -80,7 +80,7 @@ final class DisplayGeometryTests: XCTestCase {
     )
   }
 
-  func testHoverPreviewReservesHeightForAllDoneContentAndQuickAdd() {
+  func testHoverPreviewReservesHeightForCompactCalendarAndDaySchedule() {
     let display = DisplayMetrics(
       frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
       visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 950),
