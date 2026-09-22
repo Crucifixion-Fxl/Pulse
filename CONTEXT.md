@@ -117,9 +117,9 @@ The state of an Active List that contains no Pending Reminders.
 _Avoid_: Empty list, zero state
 
 **Month Calendar**:
-The grid of one calendar month in the Pinned Island's content area, with a marker for each date that contains Reminders, month navigation, and the system calendar's first weekday. Adjacent-month filler days complete its fixed six-week grid.
+The grid of one calendar month in the expanded Island's content area, with a marker for each date that contains Reminders, month navigation, and the system calendar's first weekday. Adjacent-month filler days complete its fixed six-week grid.
 _Avoid_: Calendar view, date picker
 
 **Day Schedule**:
-The Reminders due on the selected date, aggregated across every accessible Reminder List and grouped into Pending, Completed, and Undated sections, with each row tagged by its owning Reminder List.
+The Reminders due on the selected date, aggregated across every accessible Reminder List: Pending Reminders first, then Completed ones due that day, then Undated ones, with each row tagged by its owning Reminder List.
 _Avoid_: Day view, daily list, agenda

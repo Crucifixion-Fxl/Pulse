@@ -793,59 +793,50 @@ struct IslandRootView: View {
     if schedule.pending.isEmpty && schedule.completed.isEmpty && undated.isEmpty {
       emptyDaySchedule
     } else {
-      VStack(alignment: .leading, spacing: 0) {
-        Text(dayScheduleTitle(for: schedule.date))
-          .font(.system(size: metrics.dayTitleSize, weight: .semibold))
-          .lineLimit(1)
-          .padding(.top, 2)
-          .padding(.bottom, 3)
-
-        ScrollViewReader { proxy in
-          ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: 0) {
-              ForEach(schedule.pending) { reminder in
-                dayRowWithEditor(reminder, isCompleted: false, metrics: metrics)
-              }
-
-              if !schedule.completed.isEmpty {
-                daySectionHeader("calendar.completed", metrics: metrics)
-                ForEach(schedule.completed) { reminder in
-                  dayRowWithEditor(reminder, isCompleted: true, metrics: metrics)
-                }
-              }
-
-              if !undated.isEmpty {
-                daySectionHeader("calendar.undated", metrics: metrics)
-                ForEach(undated) { reminder in
-                  dayRowWithEditor(reminder, isCompleted: false, metrics: metrics)
-                }
-              }
+      // No day title or section headers: the calendar already shows the
+      // selected date, completed rows are struck through and muted, and
+      // undated rows carry their own tag.
+      ScrollViewReader { proxy in
+        ScrollView(.vertical, showsIndicators: false) {
+          LazyVStack(spacing: 0) {
+            ForEach(schedule.pending) { reminder in
+              dayRowWithEditor(reminder, isCompleted: false, metrics: metrics)
             }
-            .padding(.vertical, 2)
-          }
-          .scrollBounceBehavior(.basedOnSize)
-          .onChange(of: model.selectedReminderID) { _, id in
-            guard let id else { return }
-            withAnimation(reduceMotion ? nil : .smooth(duration: 0.22, extraBounce: 0)) {
-              proxy.scrollTo(id, anchor: .center)
+
+            ForEach(schedule.completed) { reminder in
+              dayRowWithEditor(reminder, isCompleted: true, metrics: metrics)
+                .padding(.top, reminder.id == schedule.completed.first?.id ? 3 : 0)
+            }
+
+            ForEach(undated) { reminder in
+              dayRowWithEditor(reminder, isCompleted: false, metrics: metrics)
+                .padding(.top, reminder.id == undated.first?.id ? 3 : 0)
             }
           }
-          .animation(
-            reduceMotion ? nil : .smooth(duration: 0.26, extraBounce: 0),
-            value: model.visibleScheduleReminders.map(\.id)
-          )
+          .padding(.vertical, 2)
         }
-        .clipped()
-        .overlay(alignment: .top) {
-          LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-            .frame(height: 14)
-            .allowsHitTesting(false)
+        .scrollBounceBehavior(.basedOnSize)
+        .onChange(of: model.selectedReminderID) { _, id in
+          guard let id else { return }
+          withAnimation(reduceMotion ? nil : .smooth(duration: 0.22, extraBounce: 0)) {
+            proxy.scrollTo(id, anchor: .center)
+          }
         }
-        .overlay(alignment: .bottom) {
-          LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-            .frame(height: 18)
-            .allowsHitTesting(false)
-        }
+        .animation(
+          reduceMotion ? nil : .smooth(duration: 0.26, extraBounce: 0),
+          value: model.visibleScheduleReminders.map(\.id)
+        )
+      }
+      .clipped()
+      .overlay(alignment: .top) {
+        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+          .frame(height: 14)
+          .allowsHitTesting(false)
+      }
+      .overlay(alignment: .bottom) {
+        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+          .frame(height: 18)
+          .allowsHitTesting(false)
       }
     }
   }
@@ -868,21 +859,6 @@ struct IslandRootView: View {
         .id("editor-\(reminder.id)")
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
-  }
-
-  private func daySectionHeader(
-    _ titleKey: LocalizedStringKey,
-    metrics: ScheduleMetrics
-  ) -> some View {
-    HStack(spacing: 3) {
-      Text(titleKey)
-        .font(.system(size: metrics.rowDetailSize, weight: .semibold))
-        .foregroundStyle(ReUITheme.muted)
-      Spacer()
-    }
-    .padding(.top, 4)
-    .padding(.bottom, 2)
-    .accessibilityAddTraits(.isHeader)
   }
 
   private var emptyDaySchedule: some View {
@@ -1060,15 +1036,6 @@ struct IslandRootView: View {
   private func circleColor(isCompleted: Bool, isCompleting: Bool) -> Color {
     if isCompleting { return isCompleted ? ReUITheme.muted : .green }
     return isCompleted ? ReUITheme.muted : accentColor
-  }
-
-  private func dayScheduleTitle(for date: Date) -> String {
-    let calendar = Calendar.current
-    if calendar.isDateInToday(date) { return L10n.text("date.today") }
-    let formatter = DateFormatter()
-    formatter.locale = .current
-    formatter.setLocalizedDateFormatFromTemplate("MMMd EEEE")
-    return formatter.string(from: date)
   }
 
   private func dueTimeLabel(for reminder: ReminderSnapshot) -> String? {

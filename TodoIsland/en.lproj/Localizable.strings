@@ -81,7 +81,6 @@
 "all-done.detail" = "There are no pending reminders in this list.";
 "date.today" = "Today";
 
-"calendar.completed" = "Completed";
 "calendar.undated" = "Undated";
 "calendar.empty-day" = "Nothing scheduled";
 "calendar.empty-day.detail" = "Reminders you add in Apple Reminders appear here.";

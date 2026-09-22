@@ -81,7 +81,6 @@
 "all-done.detail" = "这个列表没有未完成事项。";
 "date.today" = "今天";
 
-"calendar.completed" = "已完成";
 "calendar.undated" = "未安排日期";
 "calendar.empty-day" = "这一天没有事项";
 "calendar.empty-day.detail" = "在 Apple 提醒事项中添加的事项会显示在这里。";
