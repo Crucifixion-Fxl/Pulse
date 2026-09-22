@@ -138,6 +138,32 @@ final class EventKitReminderStore: ReminderBackend {
     }
   }
 
+  func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] {
+    let calendars = eventStore.calendars(for: .reminder).filter(Self.isICloudCalendar)
+    guard !calendars.isEmpty else { return [] }
+    let predicate = eventStore.predicateForIncompleteReminders(
+      withDueDateStarting: nil,
+      ending: date,
+      calendars: calendars
+    )
+
+    return try await withCheckedThrowingContinuation { continuation in
+      eventStore.fetchReminders(matching: predicate) { reminders in
+        DispatchQueue.main.async {
+          let calendar = Calendar.current
+          let snapshots = (reminders ?? []).filter { reminder in
+            guard let components = reminder.dueDateComponents,
+              let due = calendar.date(from: components)
+            else { return false }
+            return due < date
+          }
+          .map(Self.snapshot)
+          continuation.resume(returning: snapshots)
+        }
+      }
+    }
+  }
+
   func createReminder(
     title: String,
     in listID: String,

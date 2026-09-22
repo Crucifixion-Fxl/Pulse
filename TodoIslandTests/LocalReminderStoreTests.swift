@@ -114,6 +114,36 @@ final class LocalReminderStoreTests: XCTestCase {
   }
 
   @MainActor
+  func testOverdueFetchReturnsOnlyPendingDatedRemindersBeforeTheCutoff() async throws {
+    let store = try LocalReminderStore(isStoredInMemoryOnly: true)
+    let list = try await store.createList(title: "Personal")
+
+    try await store.createReminder(
+      title: "Overdue",
+      in: list.id,
+      dueComponents: DateComponents(year: 2026, month: 9, day: 20, hour: 9)
+    )
+    try await store.createReminder(
+      title: "Later",
+      in: list.id,
+      dueComponents: DateComponents(year: 2026, month: 10, day: 5, hour: 9)
+    )
+    try await store.createReminder(title: "Undated", in: list.id, dueComponents: nil)
+    try await store.createReminder(
+      title: "Done",
+      in: list.id,
+      dueComponents: DateComponents(year: 2026, month: 9, day: 18, hour: 8)
+    )
+    let pending = try await store.fetchPendingReminders(in: list.id)
+    let done = try XCTUnwrap(pending.first { $0.title == "Done" })
+    try await store.setCompleted(true, reminderID: done.id)
+
+    let cutoff = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 1))!
+    let overdue = try await store.fetchOverduePendingReminders(before: cutoff)
+    XCTAssertEqual(overdue.map(\.title), ["Overdue"])
+  }
+
+  @MainActor
   func testSourceAwareDayFetchNamespacesDatedReminders() async throws {
     let local = try LocalReminderStore(isStoredInMemoryOnly: true)
     let store = SourceAwareReminderStore(localStoreFactory: { local })

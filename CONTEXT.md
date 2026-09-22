@@ -113,5 +113,5 @@ The grid of one calendar month in the expanded Island's content area, with a mar
 _Avoid_: Calendar view, date picker
 
 **Day Schedule**:
-The Reminders due on the selected date, aggregated across every accessible Reminder List: Pending Reminders first, then Completed ones due that day, then Undated ones, with each row tagged by its owning Reminder List.
+The Reminders due on the selected date, aggregated across every accessible Reminder List: Pending Reminders first, then Completed ones due that day, then Undated ones, with each row tagged by its owning Reminder List. Pending Reminders due before the current day flow into the current day until completed.
 _Avoid_: Day view, daily list, agenda

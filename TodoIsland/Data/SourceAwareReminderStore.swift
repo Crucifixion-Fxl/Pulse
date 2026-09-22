@@ -97,6 +97,21 @@ final class SourceAwareReminderStore: ReminderStore {
     return reminders
   }
 
+  func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] {
+    var reminders: [ReminderSnapshot] = []
+    if authorizationStatus() == .fullAccess,
+      let overdue = try? await iCloudStore.fetchOverduePendingReminders(before: date)
+    {
+      reminders += overdue.map(Self.namespace)
+    }
+    if let localStore,
+      let overdue = try? await localStore.fetchOverduePendingReminders(before: date)
+    {
+      reminders += overdue.map(Self.namespace)
+    }
+    return reminders
+  }
+
   func createReminder(
     title: String,
     in listID: String,

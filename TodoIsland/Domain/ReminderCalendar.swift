@@ -70,16 +70,29 @@ enum ReminderSchedule {
   static func schedule(
     on day: Date,
     in reminders: [ReminderSnapshot],
-    calendar: Calendar = .current
+    calendar: Calendar = .current,
+    now: Date = Date()
   ) -> DaySchedule {
     let target = calendar.startOfDay(for: day)
+    let today = calendar.startOfDay(for: now)
     let dueThatDay = reminders.filter { reminder in
       guard let due = reminder.dueDate(in: calendar) else { return false }
       return calendar.isDate(due, inSameDayAs: target)
     }
+    var pending = dueThatDay.filter { !$0.isCompleted }
+    // Overdue pending Reminders flow forward: they greet the user on the
+    // current day until completed, instead of staying stuck on past dates.
+    if target == today {
+      pending += reminders.filter { reminder in
+        guard !reminder.isCompleted, let due = reminder.dueDate(in: calendar) else {
+          return false
+        }
+        return calendar.startOfDay(for: due) < today
+      }
+    }
     return DaySchedule(
       date: target,
-      pending: ReminderSorter.sorted(dueThatDay.filter { !$0.isCompleted }, calendar: calendar),
+      pending: ReminderSorter.sorted(pending, now: now, calendar: calendar),
       completed: ReminderSorter.sorted(dueThatDay.filter(\.isCompleted), calendar: calendar)
     )
   }

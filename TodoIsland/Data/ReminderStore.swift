@@ -10,6 +10,7 @@ protocol ReminderStore: AnyObject {
   func fetchPendingReminders(in listID: String) async throws -> [ReminderSnapshot]
   func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot]
   func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot]
+  func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot]
   func createReminder(
     title: String,
     in listID: String,

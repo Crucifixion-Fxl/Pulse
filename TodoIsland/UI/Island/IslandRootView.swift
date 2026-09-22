@@ -422,7 +422,8 @@ struct IslandRootView: View {
     let metrics = ScheduleMetrics.regular
 
     return HStack(alignment: .top, spacing: metrics.paneSpacing) {
-      monthCalendarPane(metrics: metrics)
+      monthCalendarPane(schedule: schedule, metrics: metrics)
+        .frame(maxHeight: .infinity, alignment: .top)
         .frame(width: metrics.paneWidth, alignment: .top)
 
       daySchedulePane(schedule: schedule, undated: undated, metrics: metrics)
@@ -477,13 +478,17 @@ struct IslandRootView: View {
     )
   }
 
-  private func monthCalendarPane(metrics: ScheduleMetrics) -> some View {
+  private func monthCalendarPane(
+    schedule: ReminderSchedule.DaySchedule,
+    metrics: ScheduleMetrics
+  ) -> some View {
     let calendar = Calendar.current
     let grid = MonthCalendar(containing: model.selectedDay, calendar: calendar)
     let counts = ReminderSchedule.dayCounts(in: model.monthReminders, calendar: calendar)
     let today = calendar.startOfDay(for: Date())
 
-    return VStack(spacing: 3) {
+    return VStack(spacing: 0) {
+      VStack(spacing: 3) {
       Text(grid.monthTitle)
         .font(.system(size: metrics.titleSize, weight: .semibold))
         .lineLimit(1)
@@ -512,7 +517,76 @@ struct IslandRootView: View {
           }
         }
       }
+      }
+
+      Spacer(minLength: 14)
+
+      dayProgressSection(schedule: schedule, metrics: metrics)
     }
+  }
+
+  private struct DayProgressRow: Identifiable {
+    let list: ReminderListSnapshot
+    let total: Int
+    let completed: Int
+    var id: String { list.id }
+  }
+
+  /// Per-list completion progress for the selected day, mirroring the rows
+  /// shown in the Day Schedule.
+  private func dayProgressSection(
+    schedule: ReminderSchedule.DaySchedule,
+    metrics: ScheduleMetrics
+  ) -> some View {
+    let rows = dayProgressRows(schedule: schedule)
+    return VStack(alignment: .leading, spacing: 8) {
+      ForEach(rows) { row in
+        let accent = listAccent(for: row.list)
+        let fraction = row.total > 0 ? Double(row.completed) / Double(row.total) : 0
+        let isComplete = row.completed == row.total
+        VStack(alignment: .leading, spacing: 3.5) {
+          HStack(spacing: 3) {
+            Circle().fill(accent).frame(width: 3.5, height: 3.5)
+            Text(row.list.title)
+              .font(.system(size: metrics.rowDetailSize, weight: .medium))
+              .foregroundStyle(.white.opacity(0.85))
+              .lineLimit(1)
+              .truncationMode(.tail)
+            Spacer(minLength: 4)
+            Text("\(row.completed)/\(row.total)")
+              .font(.system(size: metrics.rowDetailSize, weight: .semibold, design: .rounded))
+              .monospacedDigit()
+              .foregroundStyle(isComplete ? Color.green : ReUITheme.muted)
+          }
+          GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+              Capsule(style: .continuous).fill(Color.white.opacity(0.10))
+              Capsule(style: .continuous)
+                .fill(isComplete ? Color.green : accent)
+                .frame(width: max(4, proxy.size.width * fraction))
+            }
+          }
+          .frame(height: 5)
+        }
+      }
+    }
+  }
+
+  private func dayProgressRows(
+    schedule: ReminderSchedule.DaySchedule
+  ) -> [DayProgressRow] {
+    var counts: [String: (total: Int, completed: Int)] = [:]
+    for reminder in schedule.pending + schedule.completed {
+      let entry = counts[reminder.listID] ?? (0, 0)
+      counts[reminder.listID] = reminder.isCompleted
+        ? (entry.total + 1, entry.completed + 1)
+        : (entry.total + 1, entry.completed)
+    }
+    return counts.compactMap { listID, count in
+      guard let list = model.lists.first(where: { $0.id == listID }) else { return nil }
+      return DayProgressRow(list: list, total: count.total, completed: count.completed)
+    }
+    .sorted { $0.list.title.localizedStandardCompare($1.list.title) == .orderedAscending }
   }
 
   private func calendarDayCell(
@@ -692,7 +766,11 @@ struct IslandRootView: View {
           .strikethrough(isCompleted, color: .white.opacity(0.4))
           .foregroundStyle(isCompleted ? ReUITheme.muted : .primary)
           .lineLimit(1)
-        if let time = dueTimeLabel(for: reminder) {
+        if let overdue = overdueDateLabel(for: reminder, isCompleted: isCompleted) {
+          Text(overdue)
+            .font(.system(size: metrics.rowDetailSize))
+            .foregroundStyle(.red)
+        } else if let time = dueTimeLabel(for: reminder) {
           Text(time)
             .font(.system(size: metrics.rowDetailSize))
             .foregroundStyle(ReUITheme.muted)
@@ -817,6 +895,20 @@ struct IslandRootView: View {
   private func circleColor(isCompleted: Bool, isCompleting: Bool) -> Color {
     if isCompleting { return isCompleted ? ReUITheme.muted : .green }
     return isCompleted ? ReUITheme.muted : accentColor
+  }
+
+  /// Carried-over rows show how old the reminder is, in red, instead of a
+  /// due time.
+  private func overdueDateLabel(for reminder: ReminderSnapshot, isCompleted: Bool) -> String? {
+    guard !isCompleted, reminder.dueDateComponents != nil else { return nil }
+    let calendar = Calendar.current
+    guard let due = reminder.dueDate(in: calendar),
+      calendar.startOfDay(for: due) < calendar.startOfDay(for: model.selectedDay)
+    else { return nil }
+    let formatter = DateFormatter()
+    formatter.locale = .current
+    formatter.setLocalizedDateFormatFromTemplate("Md")
+    return formatter.string(from: due)
   }
 
   private func dueTimeLabel(for reminder: ReminderSnapshot) -> String? {

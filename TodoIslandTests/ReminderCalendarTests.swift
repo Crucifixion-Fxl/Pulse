@@ -89,6 +89,37 @@ final class ReminderCalendarTests: XCTestCase {
     XCTAssertEqual(schedule.completed.map(\.id), ["done"])
   }
 
+  func testOverduePendingRemindersCarryIntoToday() {
+    let calendar = self.calendar
+    let now = calendar.date(from: date(2026, 9, 22, hour: 10))!
+    let yesterday = calendar.date(from: date(2026, 9, 21, hour: 9))!
+    let future = calendar.date(from: date(2026, 9, 23))!
+
+    let dueToday = reminder("due-today", due: date(2026, 9, 22, hour: 8))
+    let overdue = reminder("overdue", due: date(2026, 9, 21, hour: 9))
+    let oldCompleted = reminder("old-done", due: date(2026, 9, 15), isCompleted: true)
+    let undated = reminder("undated", due: nil)
+    let reminders = [dueToday, overdue, oldCompleted, undated]
+
+    let todaySchedule = ReminderSchedule.schedule(
+      on: now, in: reminders, calendar: calendar, now: now
+    )
+    // Overdue items sort ahead of today's own reminders.
+    XCTAssertEqual(todaySchedule.pending.map(\.id), ["overdue", "due-today"])
+    XCTAssertTrue(todaySchedule.completed.isEmpty)
+
+    let pastSchedule = ReminderSchedule.schedule(
+      on: yesterday, in: reminders, calendar: calendar, now: now
+    )
+    XCTAssertEqual(pastSchedule.pending.map(\.id), ["overdue"])
+
+    let futureSchedule = ReminderSchedule.schedule(
+      on: future, in: reminders, calendar: calendar, now: now
+    )
+    XCTAssertTrue(futureSchedule.pending.isEmpty)
+    XCTAssertTrue(futureSchedule.completed.isEmpty)
+  }
+
   func testDayCountsSummarizePendingAndCompletedPerDay() {
     let calendar = self.calendar
     let september22 = calendar.date(from: date(2026, 9, 22))!

@@ -155,6 +155,15 @@ final class LocalReminderStore: ReminderBackend {
       .map(Self.snapshot)
   }
 
+  func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] {
+    try context.fetch(FetchDescriptor<ReminderRecord>())
+      .filter { record in
+        guard !record.isCompleted, let dueDate = record.dueDate else { return false }
+        return dueDate < date
+      }
+      .map(Self.snapshot)
+  }
+
   func createReminder(
     title: String,
     in listID: String,

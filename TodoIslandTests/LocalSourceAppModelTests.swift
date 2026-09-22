@@ -67,6 +67,32 @@ final class LocalSourceAppModelTests: XCTestCase {
   }
 
   @MainActor
+  func testOverduePendingRemindersFlowIntoTodaySchedule() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    let listID = try XCTUnwrap(model.activeListID)
+
+    let calendar = Calendar.current
+    let oldDate = calendar.date(byAdding: .month, value: -1, to: model.selectedDay)!
+    try await store.createReminder(
+      title: "Old task",
+      in: listID,
+      dueComponents: calendar.dateComponents([.year, .month, .day], from: oldDate)
+    )
+    await model.reload()
+
+    XCTAssertTrue(model.monthReminders.isEmpty)
+    XCTAssertEqual(model.overdueReminders.map(\.title), ["Old task"])
+    XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["Old task"])
+    XCTAssertEqual(model.visibleScheduleReminders.map(\.title), ["Old task"])
+  }
+
+  @MainActor
   func testCompletingDayItemMarksItCompletedInSchedule() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)
@@ -223,6 +249,15 @@ private final class LocalOnlyTestReminderStore: ReminderStore {
 
   func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] {
     reminders.filter { $0.dueDateComponents == nil }
+  }
+
+  func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] {
+    reminders.filter { reminder in
+      guard !reminder.isCompleted,
+        let due = reminder.dueDateComponents.flatMap({ Calendar.current.date(from: $0) })
+      else { return false }
+      return due < date
+    }
   }
 
   func createReminder(

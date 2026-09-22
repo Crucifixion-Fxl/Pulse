@@ -15,6 +15,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var reminders: [ReminderSnapshot] = []
   @Published private(set) var monthReminders: [ReminderSnapshot] = []
   @Published private(set) var undatedReminders: [ReminderSnapshot] = []
+  @Published private(set) var overdueReminders: [ReminderSnapshot] = []
   @Published private(set) var selectedDay: Date = Calendar.current.startOfDay(for: Date())
   @Published private(set) var islandState: IslandPresentationState = .collapsed
   @Published private(set) var isLoading = false
@@ -104,7 +105,9 @@ final class AppModel: ObservableObject {
   var nextReminder: ReminderSnapshot? { reminders.first }
   var remainingCount: Int { reminders.count }
   var selectedDaySchedule: ReminderSchedule.DaySchedule {
-    ReminderSchedule.schedule(on: selectedDay, in: monthReminders)
+    // Overdue entries only land on the current day; the schedule decides
+    // how they merge with that day's own reminders.
+    ReminderSchedule.schedule(on: selectedDay, in: monthReminders + overdueReminders)
   }
   /// Every Reminder the Day Schedule pane can display, in display order.
   var visibleScheduleReminders: [ReminderSnapshot] {
@@ -271,9 +274,11 @@ final class AppModel: ObservableObject {
     let dated =
       (try? await store.fetchReminders(dueFrom: interval.start, through: interval.end)) ?? []
     let undated = (try? await store.fetchUndatedPendingReminders()) ?? []
+    let overdue = (try? await store.fetchOverduePendingReminders(before: interval.start)) ?? []
     guard !Task.isCancelled else { return }
     monthReminders = dated
     undatedReminders = ReminderSorter.sorted(undated)
+    overdueReminders = overdue
     let navigable = keyboardNavigableReminders
     if !navigable.contains(where: { $0.id == selectedReminderID }) {
       selectedReminderID = navigable.first?.id

@@ -12,6 +12,9 @@ protocol ReminderBackend: AnyObject {
   func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot]
   /// Pending Reminders without a Due Date, across every accessible list.
   func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot]
+  /// Pending, dated Reminders due strictly before the given instant, across
+  /// every accessible list, feeding the overdue carry-over.
+  func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot]
   func createReminder(
     title: String,
     in listID: String,
