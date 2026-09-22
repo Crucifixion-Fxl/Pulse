@@ -117,7 +117,7 @@ A Reminder whose repetition rule is managed in iCloud Reminders. Todo Island can
 _Avoid_: Repeating task, recurrence item
 
 **All Done**:
-The state of an Active List that contains no Pending Reminders. The Island remains available for Quick Add while showing this state.
+The state of an Active List that contains no Pending Reminders. Quick Add remains available.
 _Avoid_: Empty list, zero state
 
 **Month Calendar**:

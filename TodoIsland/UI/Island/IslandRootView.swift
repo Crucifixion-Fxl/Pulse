@@ -397,13 +397,10 @@ struct IslandRootView: View {
       } else if listPendingRename != nil {
         listRenameForm
       } else if model.canUseActiveList {
-        // The Island Preview keeps the compact pending list; the Pinned
-        // Island's content area is the month calendar plus the Day Schedule.
-        if model.islandState == .preview {
-          reminderContent
-        } else {
-          calendarDayContent
-        }
+        // Both expanded states show the month calendar plus the Day
+        // Schedule; the preview picks tighter metrics for its shorter
+        // surface.
+        calendarDayContent
       } else if model.preferredEmptySource == .local,
         model.localStoreAvailability == .available
       {
@@ -765,90 +762,79 @@ struct IslandRootView: View {
     .buttonStyle(.plain)
   }
 
-  @ViewBuilder
-  private var reminderContent: some View {
-    if model.lists.isEmpty {
-      noListsContent
-    } else if model.reminders.isEmpty {
-      allDoneContent
-    } else {
-      reminderList
-    }
-  }
-
-  /// ReUI-style item list backed by the native macOS scroll container. Using
-  /// ScrollView here keeps trackpad, mouse-wheel, keyboard, and accessibility
-  /// scrolling on the same reliable event path while the item rows retain
-  /// their animated hover and selection treatment.
-  private var reminderList: some View {
-    ScrollViewReader { proxy in
-      ScrollView(.vertical, showsIndicators: false) {
-        LazyVStack(spacing: 0) {
-          ForEach(model.reminders) { reminder in
-            reminderRow(reminder)
-              .frame(height: reminderRowPitch)
-              .id(reminder.id)
-              .transition(.opacity.combined(with: .move(edge: .top)))
-
-            if model.editingReminderID == reminder.id, let draft = model.draft {
-              reminderEditor(draft)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 4)
-                .id("editor-\(reminder.id)")
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-          }
-        }
-        .padding(.vertical, 2)
-      }
-      .scrollBounceBehavior(.basedOnSize)
-      .onChange(of: model.selectedReminderID) { _, id in
-        guard let id else { return }
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.22, extraBounce: 0)) {
-          proxy.scrollTo(id, anchor: .center)
-        }
-      }
-      .animation(
-        reduceMotion ? nil : .smooth(duration: 0.26, extraBounce: 0),
-        value: model.reminders.map(\.id)
-      )
-    }
-    .clipped()
-    // Content fading into the black surface at the scroll edges keeps
-    // scrolling feeling fluid instead of hard-clipped.
-    .overlay(alignment: .top) {
-      LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-        .frame(height: 16)
-        .allowsHitTesting(false)
-    }
-    .overlay(alignment: .bottom) {
-      LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-        .frame(height: 20)
-        .allowsHitTesting(false)
-    }
-  }
-
-  private let reminderRowPitch: CGFloat = 46
-
-  // MARK: Day Schedule (Pinned Island content area)
-
-  private let calendarPaneWidth: CGFloat = 172
+  // MARK: Day Schedule (expanded content area)
 
   private var calendarDayContent: some View {
     let schedule = model.selectedDaySchedule
     let undated = model.undatedReminders
+    let metrics = scheduleMetrics
 
-    return HStack(alignment: .top, spacing: 10) {
-      monthCalendarPane
-        .frame(width: calendarPaneWidth, alignment: .top)
+    return HStack(alignment: .top, spacing: metrics.paneSpacing) {
+      monthCalendarPane(metrics: metrics)
+        .frame(width: metrics.paneWidth, alignment: .top)
 
-      daySchedulePane(schedule: schedule, undated: undated)
+      daySchedulePane(schedule: schedule, undated: undated, metrics: metrics)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
 
-  private var monthCalendarPane: some View {
+  /// The hover preview and the pinned island share one calendar layout; the
+  /// preview's shorter surface uses tighter metrics instead of a second
+  /// layout path.
+  private var scheduleMetrics: ScheduleMetrics {
+    model.islandState == .preview ? .compact : .regular
+  }
+
+  private struct ScheduleMetrics {
+    let paneWidth: CGFloat
+    let paneSpacing: CGFloat
+    let titleSize: CGFloat
+    let stepperSide: CGFloat
+    let weekdaySize: CGFloat
+    let daySize: CGFloat
+    let circleSize: CGFloat
+    let cellMinHeight: CGFloat
+    let cellStackSpacing: CGFloat
+    let weekSpacing: CGFloat
+    let dotSize: CGFloat
+    let dayTitleSize: CGFloat
+    let rowPitch: CGFloat
+
+    static let regular = ScheduleMetrics(
+      paneWidth: 172,
+      paneSpacing: 10,
+      titleSize: 12.5,
+      stepperSide: 16,
+      weekdaySize: 9.5,
+      daySize: 10.8,
+      circleSize: 19,
+      cellMinHeight: 24,
+      cellStackSpacing: 1.5,
+      weekSpacing: 1.5,
+      dotSize: 3,
+      dayTitleSize: 12.5,
+      rowPitch: 46
+    )
+
+    static let compact = ScheduleMetrics(
+      paneWidth: 148,
+      paneSpacing: 8,
+      titleSize: 11.5,
+      stepperSide: 14,
+      weekdaySize: 8.5,
+      daySize: 9.8,
+      circleSize: 15,
+      cellMinHeight: 17,
+      cellStackSpacing: 1,
+      weekSpacing: 1,
+      dotSize: 2.5,
+      dayTitleSize: 11.5,
+      rowPitch: 40
+    )
+  }
+
+  private func monthCalendarPane(metrics: ScheduleMetrics) -> some View {
     let calendar = Calendar.current
     let grid = MonthCalendar(containing: model.selectedDay, calendar: calendar)
     let counts = ReminderSchedule.dayCounts(in: model.monthReminders, calendar: calendar)
@@ -857,13 +843,14 @@ struct IslandRootView: View {
     return VStack(spacing: 3) {
       HStack(spacing: 3) {
         Text(grid.monthTitle)
-          .font(.system(size: 12.5, weight: .semibold))
+          .font(.system(size: metrics.titleSize, weight: .semibold))
           .lineLimit(1)
+          .minimumScaleFactor(0.8)
         Spacer(minLength: 2)
-        monthStepper(labelKey: "calendar.previous-month", systemName: "chevron.left") {
+        monthStepper(metrics: metrics, labelKey: "calendar.previous-month", systemName: "chevron.left") {
           shiftMonth(-1)
         }
-        monthStepper(labelKey: "calendar.next-month", systemName: "chevron.right") {
+        monthStepper(metrics: metrics, labelKey: "calendar.next-month", systemName: "chevron.right") {
           shiftMonth(1)
         }
       }
@@ -871,18 +858,18 @@ struct IslandRootView: View {
       HStack(spacing: 0) {
         ForEach(grid.weekdaySymbols, id: \.self) { symbol in
           Text(symbol)
-            .font(.system(size: 9.5, weight: .medium))
+            .font(.system(size: metrics.weekdaySize, weight: .medium))
             .foregroundStyle(ReUITheme.muted)
             .frame(maxWidth: .infinity)
         }
       }
 
-      VStack(spacing: 1.5) {
+      VStack(spacing: metrics.weekSpacing) {
         ForEach(0..<(MonthCalendar.totalDayCount / 7), id: \.self) { week in
           HStack(spacing: 0) {
             ForEach(0..<7, id: \.self) { weekday in
               if let day = grid.day(at: week * 7 + weekday) {
-                calendarDayCell(day, today: today, counts: counts)
+                calendarDayCell(day, today: today, counts: counts, metrics: metrics)
               }
             }
           }
@@ -893,15 +880,16 @@ struct IslandRootView: View {
   }
 
   private func monthStepper(
+    metrics: ScheduleMetrics,
     labelKey: LocalizedStringKey,
     systemName: String,
     action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
       Image(systemName: systemName)
-        .font(.system(size: 9.5, weight: .bold))
+        .font(.system(size: metrics.weekdaySize, weight: .bold))
         .foregroundStyle(.white.opacity(0.7))
-        .frame(width: 16, height: 16)
+        .frame(width: metrics.stepperSide, height: metrics.stepperSide)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
@@ -911,7 +899,8 @@ struct IslandRootView: View {
   private func calendarDayCell(
     _ day: MonthCalendar.Day,
     today: Date,
-    counts: [Date: ReminderSchedule.DayCounts]
+    counts: [Date: ReminderSchedule.DayCounts],
+    metrics: ScheduleMetrics
   ) -> some View {
     let calendar = Calendar.current
     let dayDate = day.date
@@ -922,13 +911,13 @@ struct IslandRootView: View {
     return Button {
       model.selectDay(dayDate)
     } label: {
-      VStack(spacing: 1.5) {
+      VStack(spacing: metrics.cellStackSpacing) {
         Text("\(calendar.component(.day, from: dayDate))")
-          .font(.system(size: 10.8, weight: isSelected || isToday ? .semibold : .regular))
+          .font(.system(size: metrics.daySize, weight: isSelected || isToday ? .semibold : .regular))
           .foregroundStyle(
             dayCellTextColor(isSelected: isSelected, isToday: isToday, isInMonth: day.isInMonth)
           )
-          .frame(width: 19, height: 19)
+          .frame(width: metrics.circleSize, height: metrics.circleSize)
           .background {
             if isSelected {
               Circle().fill(accentColor)
@@ -940,10 +929,10 @@ struct IslandRootView: View {
         // ones remain on that date.
         Circle()
           .fill(dayCounts.pending > 0 ? accentColor : Color.white.opacity(0.42))
-          .frame(width: 3, height: 3)
+          .frame(width: metrics.dotSize, height: metrics.dotSize)
           .opacity(dayCounts.isEmpty ? 0 : 1)
       }
-      .frame(maxWidth: .infinity, minHeight: 24)
+      .frame(maxWidth: .infinity, minHeight: metrics.cellMinHeight)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
@@ -960,14 +949,15 @@ struct IslandRootView: View {
   @ViewBuilder
   private func daySchedulePane(
     schedule: ReminderSchedule.DaySchedule,
-    undated: [ReminderSnapshot]
+    undated: [ReminderSnapshot],
+    metrics: ScheduleMetrics
   ) -> some View {
     if schedule.pending.isEmpty && schedule.completed.isEmpty && undated.isEmpty {
       emptyDaySchedule
     } else {
       VStack(alignment: .leading, spacing: 0) {
         Text(dayScheduleTitle(for: schedule.date))
-          .font(.system(size: 12.5, weight: .semibold))
+          .font(.system(size: metrics.dayTitleSize, weight: .semibold))
           .lineLimit(1)
           .padding(.top, 2)
           .padding(.bottom, 3)
@@ -976,20 +966,20 @@ struct IslandRootView: View {
           ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 0) {
               ForEach(schedule.pending) { reminder in
-                dayRowWithEditor(reminder, isCompleted: false)
+                dayRowWithEditor(reminder, isCompleted: false, metrics: metrics)
               }
 
               if !schedule.completed.isEmpty {
                 daySectionHeader("calendar.completed")
                 ForEach(schedule.completed) { reminder in
-                  dayRowWithEditor(reminder, isCompleted: true)
+                  dayRowWithEditor(reminder, isCompleted: true, metrics: metrics)
                 }
               }
 
               if !undated.isEmpty {
                 daySectionHeader("calendar.undated")
                 ForEach(undated) { reminder in
-                  dayRowWithEditor(reminder, isCompleted: false)
+                  dayRowWithEditor(reminder, isCompleted: false, metrics: metrics)
                 }
               }
             }
@@ -1023,9 +1013,13 @@ struct IslandRootView: View {
   }
 
   @ViewBuilder
-  private func dayRowWithEditor(_ reminder: ReminderSnapshot, isCompleted: Bool) -> some View {
+  private func dayRowWithEditor(
+    _ reminder: ReminderSnapshot,
+    isCompleted: Bool,
+    metrics: ScheduleMetrics
+  ) -> some View {
     dayRow(reminder, isCompleted: isCompleted)
-      .frame(height: reminderRowPitch)
+      .frame(height: metrics.rowPitch)
       .id(reminder.id)
       .transition(.opacity.combined(with: .move(edge: .top)))
 
@@ -1247,106 +1241,6 @@ struct IslandRootView: View {
     return ReUITheme.item
   }
 
-  private func reminderRow(_ reminder: ReminderSnapshot) -> some View {
-    let isCompleting = model.completingReminderIDs.contains(reminder.id)
-
-    return HStack(spacing: 5) {
-      Button {
-        model.complete(reminder)
-      } label: {
-        Image(systemName: isCompleting ? "checkmark.circle.fill" : "circle")
-          .font(.system(size: 17.5, weight: .medium))
-          .foregroundStyle(isCompleting ? Color.green : accentColor)
-      }
-      .buttonStyle(.plain)
-      .disabled(isCompleting)
-      .accessibilityLabel(Text(String(format: L10n.text("reminder.complete"), reminder.title)))
-
-      VStack(alignment: .leading, spacing: 1) {
-        HStack(spacing: 2.5) {
-          Text(reminder.title)
-            .font(.system(size: 14.04, weight: .medium))
-            .lineLimit(1)
-          if reminder.isRecurring {
-            Image(systemName: "repeat")
-              .font(.system(size: 10.8))
-              .foregroundStyle(ReUITheme.muted)
-              .accessibilityLabel(Text("reminder.recurring"))
-          }
-        }
-
-        if let due = dueLabel(for: reminder) {
-          Text(due.text)
-            .font(.system(size: 11.88))
-            .foregroundStyle(due.isOverdue ? .red : ReUITheme.muted)
-        }
-      }
-
-      Spacer(minLength: 4)
-
-      if reminder.priority != .none {
-        Image(systemName: prioritySymbol(reminder.priority))
-          .font(.system(size: 11.88))
-          .padding(.horizontal, 5)
-          .padding(.vertical, 2)
-          .background(Capsule(style: .continuous).fill(priorityColor(reminder.priority).opacity(0.14)))
-          .overlay(Capsule(style: .continuous).stroke(priorityColor(reminder.priority).opacity(0.28), lineWidth: 1))
-          .foregroundStyle(priorityColor(reminder.priority))
-          .accessibilityLabel(priorityLabel(reminder.priority))
-      }
-
-      if isPinned {
-        Menu {
-          Button(L10n.text("reminder.edit")) { model.beginEditing(reminder) }
-          Divider()
-          Button(L10n.text("reminder.delete"), role: .destructive) {
-            reminderPendingDeletion = reminder
-          }
-        } label: {
-          Image(systemName: "ellipsis")
-            .frame(width: 11, height: 11)
-        }
-        .menuStyle(.borderlessButton)
-        .accessibilityLabel(Text(String(format: L10n.text("reminder.actions"), reminder.title)))
-      }
-    }
-    .padding(.horizontal, 5.5)
-    .padding(.vertical, 4)
-    .background {
-      RoundedRectangle(cornerRadius: 11, style: .continuous)
-        .fill(rowFill(isSelected: model.selectedReminderID == reminder.id, isHovered: hoveredReminderID == reminder.id))
-    }
-    .overlay {
-      RoundedRectangle(cornerRadius: 11, style: .continuous)
-        .stroke(
-          model.selectedReminderID == reminder.id
-            ? accentColor.opacity(0.62) : ReUITheme.subtleBorder,
-          lineWidth: 1
-        )
-    }
-    .animation(
-      reduceMotion ? nil : .smooth(duration: 0.18, extraBounce: 0),
-      value: model.selectedReminderID == reminder.id
-    )
-    .animation(
-      reduceMotion ? nil : .easeOut(duration: 0.12),
-      value: hoveredReminderID == reminder.id
-    )
-    .onHover { hovering in
-      hoveredReminderID = hovering ? reminder.id : (hoveredReminderID == reminder.id ? nil : hoveredReminderID)
-    }
-    .contentShape(Rectangle())
-    .onTapGesture {
-      guard isPinned else { return }
-      model.selectedReminderID = reminder.id
-    }
-    .onTapGesture(count: 2) {
-      guard isPinned else { return }
-      model.beginEditing(reminder)
-    }
-    .accessibilityElement(children: .contain)
-  }
-
   private func reminderEditor(_ draft: ReminderDraft) -> some View {
     VStack(alignment: .leading, spacing: 5.5) {
       HStack(spacing: 4) {
@@ -1543,6 +1437,11 @@ struct IslandRootView: View {
     )
   }
 
+  /// Clicking Quick Add in the preview pins the Island and focuses the field.
+  private func focusQuickAdd() {
+    model.activateQuickAdd()
+  }
+
   private var quickAdd: some View {
     HStack(spacing: 4) {
       Image(systemName: "plus")
@@ -1604,31 +1503,6 @@ struct IslandRootView: View {
     model.createQuickReminder()
     model.setQuickAddActive(false)
     quickAddFocused = false
-  }
-
-  private var allDoneContent: some View {
-    VStack(spacing: 5) {
-      Image(systemName: "checkmark.circle.fill")
-        .font(.system(size: 18))
-        .foregroundStyle(accentColor)
-      Text("island.all-done").font(.system(size: 14.04, weight: .semibold))
-      Text("all-done.detail")
-        .font(.system(size: 11.88))
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.center)
-      Button(action: focusQuickAdd) {
-        Label("quick-add.new", systemImage: "plus")
-      }
-      .buttonStyle(.borderedProminent)
-      .tint(accentColor)
-      .padding(.top, 1)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(10)
-  }
-
-  private func focusQuickAdd() {
-    model.activateQuickAdd()
   }
 
   private var listCreationForm: some View {
@@ -2052,21 +1926,6 @@ struct IslandRootView: View {
       dampingFraction: motion.dampingFraction,
       blendDuration: 0.04
     )
-  }
-
-  private func dueLabel(for reminder: ReminderSnapshot) -> (text: String, isOverdue: Bool)? {
-    guard let date = reminder.dueDate(in: .current) else { return nil }
-    let calendar = Calendar.current
-    let isOverdue = calendar.startOfDay(for: date) < calendar.startOfDay(for: Date())
-    let formatter = DateFormatter()
-    formatter.locale = .current
-    formatter.dateStyle = calendar.isDateInToday(date) ? .none : .medium
-    formatter.timeStyle = reminder.dueDateComponents?.hour == nil ? .none : .short
-    let value =
-      calendar.isDateInToday(date) && reminder.dueDateComponents?.hour == nil
-      ? L10n.text("date.today")
-      : formatter.string(from: date)
-    return (value, isOverdue)
   }
 
   private func prioritySymbol(_ priority: ReminderPriority) -> String {
