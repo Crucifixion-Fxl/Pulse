@@ -624,6 +624,7 @@ struct IslandRootView: View {
     let dotSize: CGFloat
     let dayTitleSize: CGFloat
     let rowPitch: CGFloat
+    let headerBottomPadding: CGFloat
 
     static let regular = ScheduleMetrics(
       paneWidth: 216,
@@ -638,7 +639,8 @@ struct IslandRootView: View {
       weekSpacing: 2,
       dotSize: 3.5,
       dayTitleSize: 14,
-      rowPitch: 46
+      rowPitch: 46,
+      headerBottomPadding: 7
     )
 
     static let compact = ScheduleMetrics(
@@ -654,7 +656,8 @@ struct IslandRootView: View {
       weekSpacing: 1.5,
       dotSize: 3,
       dayTitleSize: 12.5,
-      rowPitch: 44
+      rowPitch: 44,
+      headerBottomPadding: 5
     )
   }
 
@@ -666,18 +669,20 @@ struct IslandRootView: View {
 
     return VStack(spacing: 3) {
       HStack(spacing: 3) {
+        monthStepper(metrics: metrics, labelKey: "calendar.previous-month", systemName: "chevron.left") {
+          shiftMonth(-1)
+        }
+        Spacer(minLength: 2)
         Text(grid.monthTitle)
           .font(.system(size: metrics.titleSize, weight: .semibold))
           .lineLimit(1)
           .minimumScaleFactor(0.8)
         Spacer(minLength: 2)
-        monthStepper(metrics: metrics, labelKey: "calendar.previous-month", systemName: "chevron.left") {
-          shiftMonth(-1)
-        }
         monthStepper(metrics: metrics, labelKey: "calendar.next-month", systemName: "chevron.right") {
           shiftMonth(1)
         }
       }
+      .padding(.bottom, metrics.headerBottomPadding)
 
       HStack(spacing: 0) {
         ForEach(grid.weekdaySymbols, id: \.self) { symbol in
