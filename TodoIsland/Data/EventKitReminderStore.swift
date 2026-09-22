@@ -94,7 +94,55 @@ final class EventKitReminderStore: ReminderBackend {
     }
   }
 
-  func createReminder(title: String, in listID: String) async throws {
+  /// macOS has no due-date-ranged predicate that includes completed
+  /// reminders, so this fetches the calendars' reminders and filters by Due
+  /// Date here, using the same calendar the Day Schedule groups with.
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] {
+    let calendars = eventStore.calendars(for: .reminder).filter(Self.isICloudCalendar)
+    guard !calendars.isEmpty else { return [] }
+    let predicate = eventStore.predicateForReminders(in: calendars)
+
+    return try await withCheckedThrowingContinuation { continuation in
+      eventStore.fetchReminders(matching: predicate) { reminders in
+        DispatchQueue.main.async {
+          let calendar = Calendar.current
+          let snapshots = (reminders ?? []).filter { reminder in
+            guard let due = reminder.dueDateComponents.flatMap({ calendar.date(from: $0) }) else {
+              return false
+            }
+            return due >= dueFrom && due <= through
+          }
+          .map(Self.snapshot)
+          continuation.resume(returning: snapshots)
+        }
+      }
+    }
+  }
+
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] {
+    let calendars = eventStore.calendars(for: .reminder).filter(Self.isICloudCalendar)
+    guard !calendars.isEmpty else { return [] }
+    let predicate = eventStore.predicateForIncompleteReminders(
+      withDueDateStarting: nil,
+      ending: nil,
+      calendars: calendars
+    )
+
+    return try await withCheckedThrowingContinuation { continuation in
+      eventStore.fetchReminders(matching: predicate) { reminders in
+        DispatchQueue.main.async {
+          let snapshots = (reminders ?? []).filter { $0.dueDateComponents == nil }.map(Self.snapshot)
+          continuation.resume(returning: snapshots)
+        }
+      }
+    }
+  }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {
     let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !normalized.isEmpty else { throw ReminderStoreError.emptyTitle }
     guard let calendar = reminderCalendar(id: listID) else {
@@ -104,6 +152,7 @@ final class EventKitReminderStore: ReminderBackend {
     let reminder = EKReminder(eventStore: eventStore)
     reminder.calendar = calendar
     reminder.title = normalized
+    reminder.dueDateComponents = dueComponents
     reminder.priority = ReminderPriority.none.rawValue
     try eventStore.save(reminder, commit: true)
   }
@@ -169,7 +218,8 @@ final class EventKitReminderStore: ReminderBackend {
       title: reminder.title,
       dueDateComponents: reminder.dueDateComponents,
       priority: ReminderPriority(eventKitValue: reminder.priority),
-      isRecurring: !(reminder.recurrenceRules?.isEmpty ?? true)
+      isRecurring: !(reminder.recurrenceRules?.isEmpty ?? true),
+      isCompleted: reminder.isCompleted
     )
   }
 

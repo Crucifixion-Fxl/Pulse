@@ -36,9 +36,11 @@ struct IslandMotionProfile: Equatable, Sendable {
   let response: Double
   let dampingFraction: Double
 
-  static let opening = IslandMotionProfile(response: 0.34, dampingFraction: 0.96)
-  static let pinning = IslandMotionProfile(response: 0.26, dampingFraction: 0.98)
-  static let closing = IslandMotionProfile(response: 0.30, dampingFraction: 1.0)
+  // The reference surface expands with a single elastic wobble before
+  // settling, and closes without overshoot.
+  static let opening = IslandMotionProfile(response: 0.5, dampingFraction: 0.68)
+  static let pinning = IslandMotionProfile(response: 0.44, dampingFraction: 0.75)
+  static let closing = IslandMotionProfile(response: 0.24, dampingFraction: 1.0)
 }
 
 struct IslandStateMachine: Equatable, Sendable {

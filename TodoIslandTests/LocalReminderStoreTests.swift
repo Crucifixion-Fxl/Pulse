@@ -12,7 +12,7 @@ final class LocalReminderStoreTests: XCTestCase {
     let initialLists = try await store.fetchLists()
     XCTAssertEqual(initialLists, [list])
 
-    try await store.createReminder(title: "Buy coffee", in: list.id)
+    try await store.createReminder(title: "Buy coffee", in: list.id, dueComponents: nil)
     var pending = try await store.fetchPendingReminders(in: list.id)
     var reminder = try XCTUnwrap(pending.first)
     XCTAssertEqual(reminder.source, .local)
@@ -78,11 +78,61 @@ final class LocalReminderStoreTests: XCTestCase {
     let list = try await store.createList(title: "Private", source: .local)
     XCTAssertEqual(ReminderStoreIdentity.split(list.id)?.source, .local)
 
-    try await store.createReminder(title: "Only here", in: list.id)
+    try await store.createReminder(title: "Only here", in: list.id, dueComponents: nil)
     let reminders = try await store.fetchPendingReminders(in: list.id)
 
     XCTAssertEqual(reminders.map(\.title), ["Only here"])
     XCTAssertEqual(reminders.first?.source, .local)
     XCTAssertEqual(ReminderStoreIdentity.split(reminders.first?.id ?? "")?.source, .local)
+  }
+
+  @MainActor
+  func testDayRangeFetchIncludesCompletedAndExcludesUndated() async throws {
+    let store = try LocalReminderStore(isStoredInMemoryOnly: true)
+    let list = try await store.createList(title: "Personal")
+
+    try await store.createReminder(title: "Undated", in: list.id, dueComponents: nil)
+    try await store.createReminder(
+      title: "Dated",
+      in: list.id,
+      dueComponents: DateComponents(year: 2026, month: 9, day: 22, hour: 8)
+    )
+    let pending = try await store.fetchPendingReminders(in: list.id)
+    let dated = try XCTUnwrap(pending.first { $0.title == "Dated" })
+    try await store.setCompleted(true, reminderID: dated.id)
+
+    let calendar = Calendar.current
+    let dayStart = calendar.date(from: DateComponents(year: 2026, month: 9, day: 22))!
+    let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+
+    let dayReminders = try await store.fetchReminders(dueFrom: dayStart, through: dayEnd)
+    XCTAssertEqual(dayReminders.map(\.title), ["Dated"])
+    XCTAssertTrue(try XCTUnwrap(dayReminders.first).isCompleted)
+
+    let undated = try await store.fetchUndatedPendingReminders()
+    XCTAssertEqual(undated.map(\.title), ["Undated"])
+  }
+
+  @MainActor
+  func testSourceAwareDayFetchNamespacesDatedReminders() async throws {
+    let local = try LocalReminderStore(isStoredInMemoryOnly: true)
+    let store = SourceAwareReminderStore(localStoreFactory: { local })
+    let list = try await store.createList(title: "Private", source: .local)
+
+    try await store.createReminder(
+      title: "Scheduled",
+      in: list.id,
+      dueComponents: DateComponents(year: 2026, month: 9, day: 22, hour: 9)
+    )
+
+    let calendar = Calendar.current
+    let dayStart = calendar.date(from: DateComponents(year: 2026, month: 9, day: 22))!
+    let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+
+    let reminders = try await store.fetchReminders(dueFrom: dayStart, through: dayEnd)
+    XCTAssertEqual(reminders.map(\.title), ["Scheduled"])
+    XCTAssertEqual(ReminderStoreIdentity.split(reminders.first?.id ?? "")?.source, .local)
+    let undated = try await store.fetchUndatedPendingReminders()
+    XCTAssertTrue(undated.isEmpty)
   }
 }

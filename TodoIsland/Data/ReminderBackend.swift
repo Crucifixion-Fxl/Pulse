@@ -7,7 +7,16 @@ protocol ReminderBackend: AnyObject {
 
   func fetchLists() async throws -> [ReminderListSnapshot]
   func fetchPendingReminders(in listID: String) async throws -> [ReminderSnapshot]
-  func createReminder(title: String, in listID: String) async throws
+  /// Dated Reminders due within the closed range, including Completed ones,
+  /// for the month calendar surface.
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot]
+  /// Pending Reminders without a Due Date, across every accessible list.
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot]
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws
   func updateReminder(id: String, from draft: ReminderDraft) async throws
   func setCompleted(_ completed: Bool, reminderID: String) async throws
   func deleteReminder(id: String) async throws

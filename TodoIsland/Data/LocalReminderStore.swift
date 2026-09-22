@@ -140,12 +140,37 @@ final class LocalReminderStore: ReminderBackend {
       .map(Self.snapshot)
   }
 
-  func createReminder(title: String, in listID: String) async throws {
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] {
+    try context.fetch(FetchDescriptor<ReminderRecord>())
+      .filter { record in
+        guard let dueDate = record.dueDate else { return false }
+        return dueDate >= dueFrom && dueDate <= through
+      }
+      .map(Self.snapshot)
+  }
+
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] {
+    try context.fetch(FetchDescriptor<ReminderRecord>())
+      .filter { $0.dueDate == nil && !$0.isCompleted }
+      .map(Self.snapshot)
+  }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {
     let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !normalized.isEmpty else { throw ReminderStoreError.emptyTitle }
     guard let list = try list(id: listID) else { throw ReminderStoreError.listNotFound }
 
-    context.insert(ReminderRecord(title: normalized, list: list))
+    let record = ReminderRecord(title: normalized, list: list)
+    if let dueComponents {
+      record.dueDate = Calendar.current.date(from: dueComponents)
+      record.includesTime = dueComponents.hour != nil
+      record.dueTimeZoneIdentifier = dueComponents.timeZone?.identifier
+    }
+    context.insert(record)
     try save()
   }
 
@@ -285,7 +310,8 @@ final class LocalReminderStore: ReminderBackend {
       title: reminder.title,
       dueDateComponents: components,
       priority: ReminderPriority(rawValue: reminder.priorityRawValue) ?? .none,
-      isRecurring: false
+      isRecurring: false,
+      isCompleted: reminder.isCompleted
     )
   }
 

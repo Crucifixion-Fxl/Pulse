@@ -232,7 +232,14 @@ private final class VisibilityTestReminderStore: ReminderStore {
   }
 
   func fetchPendingReminders(in listID: String) async throws -> [ReminderSnapshot] { [] }
-  func createReminder(title: String, in listID: String) async throws {}
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {}
   func updateReminder(id: String, from draft: ReminderDraft) async throws {}
   func setCompleted(_ completed: Bool, reminderID: String) async throws {}
   func deleteReminder(id: String) async throws {}

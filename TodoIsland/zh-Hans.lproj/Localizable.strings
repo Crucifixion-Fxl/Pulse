@@ -57,9 +57,11 @@
 "source.local.detail" = "仅保存在这台 Mac";
 "source.use-local" = "使用本地";
 "reminders.remaining" = "还有 %d 项";
+"reminders.pending" = "未完成";
 
 "reminder.complete" = "完成 %@";
 "reminder.recurring" = "重复提醒事项";
+"reminder.reopen" = "重新打开 %@";
 "reminder.edit" = "编辑";
 "reminder.delete" = "删除";
 "reminder.actions" = "%@ 的操作";
@@ -84,6 +86,13 @@
 
 "all-done.detail" = "这个列表没有未完成事项。";
 "date.today" = "今天";
+
+"calendar.completed" = "已完成";
+"calendar.undated" = "未安排日期";
+"calendar.empty-day" = "这一天没有事项";
+"calendar.empty-day.detail" = "使用下方快速添加创建提醒事项。";
+"calendar.previous-month" = "上个月";
+"calendar.next-month" = "下个月";
 
 "permission.required" = "需要提醒事项权限";
 "permission.required.detail" = "Apple 没有提供只读提醒事项权限。Todo Island 只使用完整权限来显示和管理你选择的 iCloud 提醒事项。";
@@ -120,3 +129,4 @@
 "menu.settings" = "设置…";
 "menu.about" = "关于 Todo Island";
 "menu.quit" = "退出 Todo Island";
+"sidebar.reminders" = "提醒事项";

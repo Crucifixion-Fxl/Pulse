@@ -1,12 +1,87 @@
 import AppKit
 import SwiftUI
 
+/// Full-width top lip with concave shoulders that flow inward into the sides.
+/// All coordinates come from the current animated bounds, preserving symmetry.
+struct IslandSurfaceShape: Shape {
+  var shoulderInset: CGFloat
+  var topShoulderDepth: CGFloat
+  var bottomRadius: CGFloat
+
+  var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
+    get { AnimatablePair(shoulderInset, AnimatablePair(topShoulderDepth, bottomRadius)) }
+    set {
+      shoulderInset = newValue.first
+      topShoulderDepth = newValue.second.first
+      bottomRadius = newValue.second.second
+    }
+  }
+
+  func path(in rect: CGRect) -> Path {
+    let inset = min(max(0, shoulderInset), rect.width / 4)
+    let depth = min(max(0, topShoulderDepth), rect.height / 2)
+    let left = rect.minX + inset
+    let right = rect.maxX - inset
+    let radius = min(max(0, bottomRadius), min((right - left) / 2, rect.height - depth))
+    let k: CGFloat = 0.5522848
+    var path = Path()
+    path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+    path.addCurve(
+      to: CGPoint(x: right, y: rect.minY + depth),
+      control1: CGPoint(x: rect.maxX - inset * k, y: rect.minY),
+      control2: CGPoint(x: right, y: rect.minY + depth * (1 - k))
+    )
+    path.addLine(to: CGPoint(x: right, y: rect.maxY - radius))
+    path.addCurve(
+      to: CGPoint(x: right - radius, y: rect.maxY),
+      control1: CGPoint(x: right, y: rect.maxY - radius * (1 - k)),
+      control2: CGPoint(x: right - radius * (1 - k), y: rect.maxY)
+    )
+    path.addLine(to: CGPoint(x: left + radius, y: rect.maxY))
+    path.addCurve(
+      to: CGPoint(x: left, y: rect.maxY - radius),
+      control1: CGPoint(x: left + radius * (1 - k), y: rect.maxY),
+      control2: CGPoint(x: left, y: rect.maxY - radius * (1 - k))
+    )
+    // Mirror the right-hand straight edge before reversing its shoulder curve.
+    path.addLine(to: CGPoint(x: left, y: rect.minY + depth))
+    path.addCurve(
+      to: CGPoint(x: rect.minX, y: rect.minY),
+      control1: CGPoint(x: left, y: rect.minY + depth * (1 - k)),
+      control2: CGPoint(x: rect.minX + inset * k, y: rect.minY)
+    )
+    path.closeSubpath()
+    return path
+  }
+}
+
 enum ListCreationDraftPolicy {
   static func shouldResetName(
     previousSource: ReminderSource?,
     newSource: ReminderSource?
   ) -> Bool {
     previousSource == nil && newSource != nil
+  }
+}
+
+/// Destinations shown in the expanded Island sidebar. New Island features can
+/// add a case here without changing the shell or window geometry.
+enum IslandSidebarItem: String, CaseIterable, Identifiable {
+  case reminders
+
+  var id: Self { self }
+
+  var title: LocalizedStringKey {
+    switch self {
+    case .reminders: "sidebar.reminders"
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .reminders: "checklist"
+    }
   }
 }
 
@@ -19,8 +94,24 @@ struct IslandRootView: View {
   @State private var reminderPendingDeletion: ReminderSnapshot?
   @State private var listPendingRename: ReminderListSnapshot?
   @State private var listNameDraft = ""
+  @State private var selectedSidebarItem: IslandSidebarItem = .reminders
+  @State private var hoveredSidebarItem: IslandSidebarItem?
+  @State private var hoveredChipID: String?
+  @State private var chipPreviewTask: Task<Void, Never>?
+  @State private var hoveredReminderID: String?
 
   private var isPinned: Bool { model.islandState == .pinned }
+
+  /// Native equivalents of ReUI's shadcn surface tokens.
+  private enum ReUITheme {
+    static let panel = Color(red: 0.055, green: 0.063, blue: 0.078)
+    static let item = Color(red: 0.095, green: 0.106, blue: 0.13)
+    static let itemHover = Color(red: 0.135, green: 0.15, blue: 0.18)
+    static let itemSelected = Color(red: 0.11, green: 0.16, blue: 0.22)
+    static let border = Color.white.opacity(0.105)
+    static let subtleBorder = Color.white.opacity(0.065)
+    static let muted = Color.white.opacity(0.58)
+  }
 
   var body: some View {
     GeometryReader { proxy in
@@ -32,21 +123,22 @@ struct IslandRootView: View {
       ZStack(alignment: .top) {
         if model.islandState == .collapsed {
           collapsedContent
-            .transition(.opacity)
+            .transition(
+              .asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.94, anchor: .top)),
+                removal: .opacity.combined(with: .scale(scale: 1.04, anchor: .top))
+              )
+            )
         } else {
           expandedContent
             .transition(
-              .opacity.combined(with: .scale(scale: 0.985, anchor: .top))
+              .opacity.combined(with: .scale(scale: 0.965, anchor: .top))
             )
         }
       }
       .frame(width: surfaceSize.width, height: surfaceSize.height, alignment: .top)
       .background(.black)
       .clipShape(islandShape)
-      .overlay(alignment: .top) {
-        Rectangle().fill(.black).frame(height: 1).padding(
-          .horizontal, model.islandState == .collapsed ? 6 : 10)
-      }
       .contentShape(Rectangle())
       .onHover { hovering in
         model.setIslandHovered(hovering)
@@ -136,6 +228,10 @@ struct IslandRootView: View {
       }
       .onChange(of: model.islandState) { _, state in
         if state == .collapsed {
+          hoveredSidebarItem = nil
+          hoveredChipID = nil
+          hoveredReminderID = nil
+          chipPreviewTask?.cancel()
           quickAddFocused = false
           editorTitleFocused = false
         }
@@ -143,27 +239,54 @@ struct IslandRootView: View {
     }
   }
 
-  private var islandShape: UnevenRoundedRectangle {
-    if model.islandState == .collapsed {
-      UnevenRoundedRectangle(
-        topLeadingRadius: 6,
-        bottomLeadingRadius: 14,
-        bottomTrailingRadius: 14,
-        topTrailingRadius: 6
-      )
-    } else {
-      UnevenRoundedRectangle(
-        topLeadingRadius: 10,
-        bottomLeadingRadius: 24,
-        bottomTrailingRadius: 24,
-        topTrailingRadius: 10
-      )
-    }
+  private var islandShape: IslandSurfaceShape {
+    IslandSurfaceShape(
+      shoulderInset: model.islandState == .collapsed ? 0 : 8,
+      topShoulderDepth: model.islandState == .collapsed ? 0 : expandedTopShoulderDepth,
+      bottomRadius: model.islandState == .collapsed
+        ? (hostDisplayHasNotch ? 14 : 18)
+        : 36
+    )
   }
 
   @ViewBuilder
   private var collapsedContent: some View {
-    if !model.canUseActiveList {
+    if hostDisplayHasNotch {
+      HStack(spacing: 0) {
+        HStack(spacing: 4) {
+          if model.canUseActiveList {
+            sourceGlyph
+          } else {
+            Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")
+          }
+          Text(model.activeList?.title ?? L10n.text("list.none"))
+            .lineLimit(1)
+            .truncationMode(.tail)
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .frame(width: collapsedSideWidth, alignment: .leading)
+        .clipped()
+
+        // Reserve the camera housing; all visible content stays outside it.
+        Color.clear.frame(width: hostPhysicalNotchWidth)
+
+        Group {
+          if model.canUseActiveList {
+            remainingCountRing
+          } else {
+            Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")
+          }
+        }
+        .padding(.trailing, 12)
+        .frame(width: collapsedSideWidth, alignment: .trailing)
+      }
+      .font(.system(size: 11, weight: .semibold))
+      .foregroundStyle(.white)
+      .frame(maxHeight: .infinity)
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(collapsedAccessibilityLabel)
+    } else if !model.canUseActiveList {
       HStack(spacing: 8) {
         Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")
         Text(model.authorization == .fullAccess ? "list.none" : "island.locked")
@@ -176,32 +299,6 @@ struct IslandRootView: View {
       .frame(maxHeight: .infinity)
       .accessibilityLabel(
         Text(model.authorization == .fullAccess ? "list.none" : "island.locked.accessibility"))
-    } else if hostDisplayHasNotch {
-      HStack(alignment: .center, spacing: 0) {
-        HStack(alignment: .center, spacing: 4) {
-          sourceGlyph
-            .frame(width: 18, height: 18, alignment: .center)
-          Text(model.activeList?.title ?? L10n.text("list.none"))
-            .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .frame(height: 18, alignment: .center)
-        }
-        .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(.white)
-        .frame(height: 18, alignment: .center)
-        .frame(width: collapsedSideContentWidth, alignment: .leading)
-        .padding(.leading, collapsedOuterInset)
-
-        Color.clear
-          .frame(width: hostPhysicalNotchWidth)
-
-        remainingCountRing
-          .frame(width: collapsedSideContentWidth, alignment: .trailing)
-          .padding(.trailing, collapsedOuterInset)
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel(collapsedAccessibilityLabel)
     } else {
       HStack(alignment: .center, spacing: 8) {
         sourceGlyph
@@ -223,10 +320,76 @@ struct IslandRootView: View {
   }
 
   private var expandedContent: some View {
-    VStack(spacing: 0) {
-      header
-      Divider().overlay(.white.opacity(0.12))
+    HStack(spacing: 0) {
+      expandedSidebar
+        .frame(width: 28)
+        .frame(maxHeight: .infinity, alignment: .top)
 
+      VStack(spacing: 0) {
+        header
+        Divider().overlay(ReUITheme.border)
+
+        expandedFeatureContent
+
+        if selectedSidebarItem == .reminders
+          && !model.needsCollapsedIslandVisibilityChoice
+          && model.islandState.showsQuickAdd && model.canUseActiveList
+          && model.requestedListCreationSource == nil && listPendingRename == nil
+        {
+          quickAdd
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 4)
+        }
+      }
+      .font(.system(size: 14.04))
+      .controlSize(.mini)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+    .foregroundStyle(.white)
+    // Wider than the shoulder inset so trailing content clears the concave
+    // side edges of the surface shape.
+    .padding(.horizontal, 12)
+    .padding(.top, expandedContentTopInset)
+    .padding(.bottom, 7)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+  }
+
+  private var expandedSidebar: some View {
+    VStack(spacing: 3) {
+      ForEach(IslandSidebarItem.allCases) { item in
+        Button {
+          withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+            selectedSidebarItem = item
+          }
+        } label: {
+          Image(systemName: item.symbol)
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 24, height: 24)
+            .shadow(
+              color: hoveredSidebarItem == item ? .white.opacity(0.82) : .clear,
+              radius: hoveredSidebarItem == item ? 4.8 : 0
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering in
+          hoveredSidebarItem = isHovering ? item : nil
+        }
+        .accessibilityLabel(item.title)
+        .help(item.title)
+        .accessibilityAddTraits(selectedSidebarItem == item ? .isSelected : [])
+      }
+
+      Spacer(minLength: 0)
+    }
+    .padding(.top, 4)
+    .padding(.horizontal, 0)
+  }
+
+  @ViewBuilder
+  private var expandedFeatureContent: some View {
+    switch selectedSidebarItem {
+    case .reminders:
       if model.needsCollapsedIslandVisibilityChoice {
         initialSetupContent
       } else if model.requestedListCreationSource != nil {
@@ -234,7 +397,13 @@ struct IslandRootView: View {
       } else if listPendingRename != nil {
         listRenameForm
       } else if model.canUseActiveList {
-        reminderContent
+        // The Island Preview keeps the compact pending list; the Pinned
+        // Island's content area is the month calendar plus the Day Schedule.
+        if model.islandState == .preview {
+          reminderContent
+        } else {
+          calendarDayContent
+        }
       } else if model.preferredEmptySource == .local,
         model.localStoreAvailability == .available
       {
@@ -248,140 +417,256 @@ struct IslandRootView: View {
       } else {
         lockedContent
       }
-
-      if !model.needsCollapsedIslandVisibilityChoice
-        && model.islandState.showsQuickAdd && model.canUseActiveList
-        && model.requestedListCreationSource == nil && listPendingRename == nil
-      {
-        quickAdd
-      }
     }
-    .foregroundStyle(.white)
-    .padding(.horizontal, 14)
-    .padding(.top, 10)
-    .padding(.bottom, 14)
   }
 
   private var header: some View {
-    HStack(spacing: 10) {
-      Menu {
-        Section(L10n.text("source.icloud")) {
-          switch model.iCloudSourceMenuState {
-          case .available:
-            ForEach(model.iCloudLists) { list in
-              listSelectionButton(list)
-            }
-          case .authorizationRequired:
-            Button {
-              restoreICloudAccess()
-            } label: {
-              Label(
-                L10n.text(
-                  model.authorization == .notDetermined
-                    ? "permission.allow" : "permission.open-settings"),
-                systemImage: "lock.open"
-              )
-            }
-          case .empty:
-            Button {
-              model.requestNewList(source: .iCloud)
-            } label: {
-              Label(L10n.text("list.new-icloud"), systemImage: "plus")
-            }
-            Button {
-              Task { await model.reload() }
-            } label: {
-              Label(L10n.text("list.check-again"), systemImage: "arrow.clockwise")
-            }
-            Button {
-              SystemSettings.openReminders()
-            } label: {
-              Label(L10n.text("list.open-reminders"), systemImage: "list.bullet")
-            }
-          }
-        }
-
-        Section(L10n.text("source.local")) {
-          ForEach(model.localLists) { list in
-            Menu(list.title) {
-              Button {
-                model.selectList(list.id)
-              } label: {
-                Label(
-                  list.id == model.activeListID
-                    ? L10n.text("list.active") : L10n.text("list.open"),
-                  systemImage: list.id == model.activeListID ? "checkmark" : "arrow.right"
-                )
-              }
-              Button(L10n.text("list.rename")) {
-                model.cancelListCreation()
-                listPendingRename = list
-                listNameDraft = list.title
-                Task { @MainActor in listNameFocused = true }
-              }
-              Divider()
-              Button(L10n.text("list.delete"), role: .destructive) {
-                Task { await model.prepareListDeletion(list) }
-              }
-            }
-          }
-          if model.localLists.isEmpty {
-            Button {
-              Task { await model.useLocal() }
-            } label: {
-              Label(L10n.text("source.use-local"), systemImage: "desktopcomputer")
-            }
-          }
-        }
-
-        Divider()
-        Button {
-          listPendingRename = nil
-          model.requestNewList()
-        } label: {
-          Label(L10n.text("list.new"), systemImage: "plus")
-        }
-      } label: {
-        HStack(spacing: 7) {
-          Circle().fill(accentColor).frame(width: 8, height: 8)
-          if model.shouldShowAuthorizationLockInHeader {
-            Image(systemName: "lock.fill")
-              .font(.headline)
-          } else if let activeList = model.activeList {
-            Image(systemName: activeList.source.symbolName)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
-          if !model.shouldShowAuthorizationLockInHeader {
-            Text(model.activeList?.title ?? L10n.text("list.none"))
-              .font(.headline)
-              .lineLimit(1)
-          }
-          if !model.shouldShowAuthorizationLockInHeader {
-            Image(systemName: "chevron.down")
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-          }
-        }
+    HStack(spacing: 6) {
+      if hasSwitchableLists {
+        listChipRow
+        listManagementMenu
+      } else {
+        legacyListSwitcherMenu
+        Spacer()
       }
-      .menuStyle(.borderlessButton)
-      .accessibilityLabel(Text("list.switch"))
-      .disabled(model.needsCollapsedIslandVisibilityChoice)
-
-      Spacer()
-
+      if model.canUseActiveList {
+        remainingCountBadge
+      }
       if model.isLoading {
         ProgressView().controlSize(.small)
-      } else if model.canUseActiveList {
-        Text("\(model.remainingCount)")
-          .font(.system(size: 16, weight: .semibold, design: .monospaced))
-          .foregroundStyle(accentColor)
-          .accessibilityLabel(
-            Text(String(format: L10n.text("reminders.remaining"), model.remainingCount)))
       }
-
     }
-    .frame(height: 30)
+    .frame(height: 24)
+  }
+
+  private var hasSwitchableLists: Bool {
+    !model.iCloudLists.isEmpty || !model.localLists.isEmpty
+  }
+
+  /// Every Reminder List as a switchable chip so the header row doubles as
+  /// the second-level navigation instead of hiding lists inside the menu.
+  private var listChipRow: some View {
+    ScrollViewReader { proxy in
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 4) {
+          ForEach(model.iCloudLists) { listChip($0) }
+          ForEach(model.localLists) { listChip($0) }
+        }
+        .padding(.vertical, 2)
+      }
+      .onChange(of: model.activeListID) { _, newID in
+        guard let newID else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+          proxy.scrollTo(newID, anchor: .center)
+        }
+      }
+    }
+    .disabled(model.needsCollapsedIslandVisibilityChoice)
+  }
+
+  private func listChip(_ list: ReminderListSnapshot) -> some View {
+    let isActive = list.id == model.activeListID
+    let isHovered = hoveredChipID == list.id
+    return Button {
+      model.selectList(list.id)
+    } label: {
+      HStack(spacing: 3.5) {
+        Image(systemName: list.source.symbolName)
+          .font(.system(size: 10.8))
+        Text(list.title)
+          .font(.system(size: 13, weight: .medium))
+          .lineLimit(1)
+      }
+      .padding(.horizontal, 8)
+      .frame(height: 20)
+      .background(
+        Capsule(style: .continuous)
+          .fill(
+            isActive
+              ? accentColor.opacity(0.2)
+              : isHovered ? ReUITheme.itemHover : ReUITheme.item
+          )
+      )
+      .overlay(
+        Capsule(style: .continuous)
+          .strokeBorder(isActive ? accentColor.opacity(0.55) : ReUITheme.subtleBorder, lineWidth: 1)
+      )
+      .foregroundStyle(Color.white.opacity(isActive ? 1 : 0.65))
+      .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovered)
+    }
+    .buttonStyle(.plain)
+    .onHover { hovering in
+      hoveredChipID = hovering ? list.id : (hoveredChipID == list.id ? nil : hoveredChipID)
+      previewListOnDwell(list, hovering: hovering)
+    }
+    .accessibilityLabel(Text(list.title))
+    .accessibilityAddTraits(isActive ? .isSelected : [])
+  }
+
+  /// Gliding across the chips should flow into each list without a click, but
+  /// every switch cancels editing and reloads the store, so require a short
+  /// dwell before committing the hovered list.
+  private func previewListOnDwell(_ list: ReminderListSnapshot, hovering: Bool) {
+    guard hovering, list.id != model.activeListID,
+      !model.needsCollapsedIslandVisibilityChoice
+    else { return }
+    chipPreviewTask?.cancel()
+    let id = list.id
+    chipPreviewTask = Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 140_000_000)
+      guard !Task.isCancelled else { return }
+      model.selectList(id)
+    }
+  }
+
+  private var listManagementMenu: some View {
+    Menu {
+      listMenuContent
+    } label: {
+      Image(systemName: "ellipsis")
+        .font(.system(size: 10.8, weight: .semibold))
+        .foregroundStyle(.white.opacity(0.75))
+        .frame(width: 18, height: 18)
+        .contentShape(Rectangle())
+    }
+    .menuStyle(.borderlessButton)
+    .accessibilityLabel(Text("list.switch"))
+    .disabled(model.needsCollapsedIslandVisibilityChoice)
+  }
+
+  /// Fallback switcher for states without chips: no lists yet or a locked
+  /// iCloud Source needing the recovery actions front and center.
+  private var legacyListSwitcherMenu: some View {
+    Menu {
+      listMenuContent
+    } label: {
+      HStack(spacing: 3.5) {
+        Circle().fill(accentColor).frame(width: 3.5, height: 3.5)
+        if model.shouldShowAuthorizationLockInHeader {
+          Image(systemName: "lock.fill")
+            .font(.system(size: 14.04, weight: .semibold))
+        } else if let activeList = model.activeList {
+          Image(systemName: activeList.source.symbolName)
+            .font(.system(size: 11.88))
+            .foregroundStyle(.secondary)
+        }
+        if !model.shouldShowAuthorizationLockInHeader {
+          Text(model.activeList?.title ?? L10n.text("list.none"))
+            .font(.system(size: 15.12, weight: .semibold, design: .rounded))
+            .lineLimit(1)
+        }
+        if !model.shouldShowAuthorizationLockInHeader {
+          Image(systemName: "chevron.down")
+            .font(.system(size: 10.8))
+            .foregroundStyle(.secondary)
+        }
+      }
+    }
+    .menuStyle(.borderlessButton)
+    .padding(.horizontal, 4.5)
+    .padding(.vertical, 2.5)
+    .accessibilityLabel(Text("list.switch"))
+    .disabled(model.needsCollapsedIslandVisibilityChoice)
+  }
+
+  @ViewBuilder
+  private var listMenuContent: some View {
+    Section(L10n.text("source.icloud")) {
+      switch model.iCloudSourceMenuState {
+      case .available:
+        ForEach(model.iCloudLists) { list in
+          listSelectionButton(list)
+        }
+      case .authorizationRequired:
+        Button {
+          restoreICloudAccess()
+        } label: {
+          Label(
+            L10n.text(
+              model.authorization == .notDetermined
+                ? "permission.allow" : "permission.open-settings"),
+            systemImage: "lock.open"
+          )
+        }
+      case .empty:
+        Button {
+          model.requestNewList(source: .iCloud)
+        } label: {
+          Label(L10n.text("list.new-icloud"), systemImage: "plus")
+        }
+        Button {
+          Task { await model.reload() }
+        } label: {
+          Label(L10n.text("list.check-again"), systemImage: "arrow.clockwise")
+        }
+        Button {
+          SystemSettings.openReminders()
+        } label: {
+          Label(L10n.text("list.open-reminders"), systemImage: "list.bullet")
+        }
+      }
+    }
+
+    Section(L10n.text("source.local")) {
+      ForEach(model.localLists) { list in
+        Menu(list.title) {
+          Button {
+            model.selectList(list.id)
+          } label: {
+            Label(
+              list.id == model.activeListID
+                ? L10n.text("list.active") : L10n.text("list.open"),
+              systemImage: list.id == model.activeListID ? "checkmark" : "arrow.right"
+            )
+          }
+          Button(L10n.text("list.rename")) {
+            model.cancelListCreation()
+            listPendingRename = list
+            listNameDraft = list.title
+            Task { @MainActor in listNameFocused = true }
+          }
+          Divider()
+          Button(L10n.text("list.delete"), role: .destructive) {
+            Task { await model.prepareListDeletion(list) }
+          }
+        }
+      }
+      if model.localLists.isEmpty {
+        Button {
+          Task { await model.useLocal() }
+        } label: {
+          Label(L10n.text("source.use-local"), systemImage: "desktopcomputer")
+        }
+      }
+    }
+
+    Divider()
+    Button {
+      listPendingRename = nil
+      model.requestNewList()
+    } label: {
+      Label(L10n.text("list.new"), systemImage: "plus")
+    }
+  }
+
+  private var remainingCountBadge: some View {
+    HStack(spacing: 4) {
+      Circle().fill(accentColor).frame(width: 5, height: 5)
+      Text("\(model.remainingCount)")
+        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+        .monospacedDigit()
+        .minimumScaleFactor(0.6)
+      Text("reminders.pending")
+        .font(.system(size: 10.5, weight: .medium))
+        .foregroundStyle(ReUITheme.muted)
+    }
+    .padding(.horizontal, 7)
+    .frame(height: 20)
+    .background(Capsule(style: .continuous).fill(ReUITheme.item))
+    .overlay(Capsule(style: .continuous).stroke(ReUITheme.border, lineWidth: 1))
+    .foregroundStyle(accentColor)
+    .accessibilityLabel(
+      Text(String(format: L10n.text("reminders.remaining"), model.remainingCount)))
   }
 
   private func listSelectionButton(_ list: ReminderListSnapshot) -> some View {
@@ -406,21 +691,21 @@ struct IslandRootView: View {
   }
 
   private var initialSetupContent: some View {
-    VStack(spacing: 14) {
+    VStack(spacing: 7) {
       Image(systemName: "macwindow")
-        .font(.system(size: 30, weight: .semibold))
+        .font(.system(size: 18, weight: .semibold))
         .foregroundStyle(accentColor)
 
-      VStack(spacing: 5) {
+      VStack(spacing: 2.5) {
         Text("setup.visibility.title")
-          .font(.headline)
+          .font(.system(size: 14.04, weight: .semibold))
         Text("setup.visibility.detail")
-          .font(.caption)
+          .font(.system(size: 11.88))
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
       }
 
-      HStack(spacing: 12) {
+      HStack(spacing: 6) {
         visibilityCard(
           .alwaysVisible,
           titleKey: "setup.visibility.always-visible",
@@ -436,11 +721,11 @@ struct IslandRootView: View {
       }
 
       Text("setup.visibility.choose-first")
-        .font(.caption2)
+        .font(.system(size: 10.8))
         .foregroundStyle(.secondary)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(20)
+    .padding(10)
   }
 
   private func visibilityCard(
@@ -452,21 +737,21 @@ struct IslandRootView: View {
     Button {
       model.setCollapsedIslandVisibility(visibility)
     } label: {
-      VStack(spacing: 8) {
+      VStack(spacing: 4) {
         Image(systemName: symbol)
-          .font(.system(size: 20, weight: .semibold))
+          .font(.system(size: 18, weight: .semibold))
           .foregroundStyle(accentColor)
         Text(titleKey)
-          .font(.system(size: 13, weight: .semibold))
+          .font(.system(size: 14.04, weight: .semibold))
           .foregroundStyle(.primary)
         Text(detailKey)
-          .font(.caption2)
+          .font(.system(size: 10.8))
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
           .fixedSize(horizontal: false, vertical: true)
       }
       .frame(maxWidth: .infinity, minHeight: 112)
-      .padding(.horizontal, 10)
+      .padding(.horizontal, 5)
       .background(
         RoundedRectangle(cornerRadius: 14, style: .continuous)
           .fill(.white.opacity(0.075))
@@ -487,75 +772,348 @@ struct IslandRootView: View {
     } else if model.reminders.isEmpty {
       allDoneContent
     } else {
-      ScrollViewReader { proxy in
-        ScrollView {
-          LazyVStack(spacing: 5) {
-            ForEach(model.reminders) { reminder in
-              reminderRow(reminder)
-                .id(reminder.id)
+      reminderList
+    }
+  }
+
+  /// ReUI-style item list backed by the native macOS scroll container. Using
+  /// ScrollView here keeps trackpad, mouse-wheel, keyboard, and accessibility
+  /// scrolling on the same reliable event path while the item rows retain
+  /// their animated hover and selection treatment.
+  private var reminderList: some View {
+    ScrollViewReader { proxy in
+      ScrollView(.vertical, showsIndicators: false) {
+        LazyVStack(spacing: 0) {
+          ForEach(model.reminders) { reminder in
+            reminderRow(reminder)
+              .frame(height: reminderRowPitch)
+              .id(reminder.id)
+              .transition(.opacity.combined(with: .move(edge: .top)))
+
+            if model.editingReminderID == reminder.id, let draft = model.draft {
+              reminderEditor(draft)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 4)
+                .id("editor-\(reminder.id)")
                 .transition(.opacity.combined(with: .move(edge: .top)))
-              if model.editingReminderID == reminder.id, let draft = model.draft {
-                reminderEditor(draft)
-                  .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+          }
+        }
+        .padding(.vertical, 2)
+      }
+      .scrollBounceBehavior(.basedOnSize)
+      .onChange(of: model.selectedReminderID) { _, id in
+        guard let id else { return }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.22, extraBounce: 0)) {
+          proxy.scrollTo(id, anchor: .center)
+        }
+      }
+      .animation(
+        reduceMotion ? nil : .smooth(duration: 0.26, extraBounce: 0),
+        value: model.reminders.map(\.id)
+      )
+    }
+    .clipped()
+    // Content fading into the black surface at the scroll edges keeps
+    // scrolling feeling fluid instead of hard-clipped.
+    .overlay(alignment: .top) {
+      LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+        .frame(height: 16)
+        .allowsHitTesting(false)
+    }
+    .overlay(alignment: .bottom) {
+      LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+        .frame(height: 20)
+        .allowsHitTesting(false)
+    }
+  }
+
+  private let reminderRowPitch: CGFloat = 46
+
+  // MARK: Day Schedule (Pinned Island content area)
+
+  private let calendarPaneWidth: CGFloat = 172
+
+  private var calendarDayContent: some View {
+    let schedule = model.selectedDaySchedule
+    let undated = model.undatedReminders
+
+    return HStack(alignment: .top, spacing: 10) {
+      monthCalendarPane
+        .frame(width: calendarPaneWidth, alignment: .top)
+
+      daySchedulePane(schedule: schedule, undated: undated)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+  }
+
+  private var monthCalendarPane: some View {
+    let calendar = Calendar.current
+    let grid = MonthCalendar(containing: model.selectedDay, calendar: calendar)
+    let counts = ReminderSchedule.dayCounts(in: model.monthReminders, calendar: calendar)
+    let today = calendar.startOfDay(for: Date())
+
+    return VStack(spacing: 3) {
+      HStack(spacing: 3) {
+        Text(grid.monthTitle)
+          .font(.system(size: 12.5, weight: .semibold))
+          .lineLimit(1)
+        Spacer(minLength: 2)
+        monthStepper(labelKey: "calendar.previous-month", systemName: "chevron.left") {
+          shiftMonth(-1)
+        }
+        monthStepper(labelKey: "calendar.next-month", systemName: "chevron.right") {
+          shiftMonth(1)
+        }
+      }
+
+      HStack(spacing: 0) {
+        ForEach(grid.weekdaySymbols, id: \.self) { symbol in
+          Text(symbol)
+            .font(.system(size: 9.5, weight: .medium))
+            .foregroundStyle(ReUITheme.muted)
+            .frame(maxWidth: .infinity)
+        }
+      }
+
+      VStack(spacing: 1.5) {
+        ForEach(0..<(MonthCalendar.totalDayCount / 7), id: \.self) { week in
+          HStack(spacing: 0) {
+            ForEach(0..<7, id: \.self) { weekday in
+              if let day = grid.day(at: week * 7 + weekday) {
+                calendarDayCell(day, today: today, counts: counts)
               }
             }
           }
-          .padding(.vertical, 8)
+        }
+      }
+    }
+    .padding(.top, 2)
+  }
+
+  private func monthStepper(
+    labelKey: LocalizedStringKey,
+    systemName: String,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: systemName)
+        .font(.system(size: 9.5, weight: .bold))
+        .foregroundStyle(.white.opacity(0.7))
+        .frame(width: 16, height: 16)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text(labelKey))
+  }
+
+  private func calendarDayCell(
+    _ day: MonthCalendar.Day,
+    today: Date,
+    counts: [Date: ReminderSchedule.DayCounts]
+  ) -> some View {
+    let calendar = Calendar.current
+    let dayDate = day.date
+    let isSelected = calendar.isDate(dayDate, inSameDayAs: model.selectedDay)
+    let isToday = calendar.isDateInToday(dayDate)
+    let dayCounts = counts[calendar.startOfDay(for: dayDate)] ?? ReminderSchedule.DayCounts()
+
+    return Button {
+      model.selectDay(dayDate)
+    } label: {
+      VStack(spacing: 1.5) {
+        Text("\(calendar.component(.day, from: dayDate))")
+          .font(.system(size: 10.8, weight: isSelected || isToday ? .semibold : .regular))
+          .foregroundStyle(
+            dayCellTextColor(isSelected: isSelected, isToday: isToday, isInMonth: day.isInMonth)
+          )
+          .frame(width: 19, height: 19)
+          .background {
+            if isSelected {
+              Circle().fill(accentColor)
+            } else if isToday {
+              Circle().strokeBorder(accentColor.opacity(0.75), lineWidth: 1)
+            }
+          }
+        // Accent marks days with pending items; gray means only completed
+        // ones remain on that date.
+        Circle()
+          .fill(dayCounts.pending > 0 ? accentColor : Color.white.opacity(0.42))
+          .frame(width: 3, height: 3)
+          .opacity(dayCounts.isEmpty ? 0 : 1)
+      }
+      .frame(maxWidth: .infinity, minHeight: 24)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text(dayDate, style: .date))
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
+  }
+
+  private func dayCellTextColor(isSelected: Bool, isToday: Bool, isInMonth: Bool) -> Color {
+    if isSelected { return .black }
+    if isToday { return accentColor }
+    return isInMonth ? .white.opacity(0.85) : .white.opacity(0.3)
+  }
+
+  @ViewBuilder
+  private func daySchedulePane(
+    schedule: ReminderSchedule.DaySchedule,
+    undated: [ReminderSnapshot]
+  ) -> some View {
+    if schedule.pending.isEmpty && schedule.completed.isEmpty && undated.isEmpty {
+      emptyDaySchedule
+    } else {
+      VStack(alignment: .leading, spacing: 0) {
+        Text(dayScheduleTitle(for: schedule.date))
+          .font(.system(size: 12.5, weight: .semibold))
+          .lineLimit(1)
+          .padding(.top, 2)
+          .padding(.bottom, 3)
+
+        ScrollViewReader { proxy in
+          ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(spacing: 0) {
+              ForEach(schedule.pending) { reminder in
+                dayRowWithEditor(reminder, isCompleted: false)
+              }
+
+              if !schedule.completed.isEmpty {
+                daySectionHeader("calendar.completed")
+                ForEach(schedule.completed) { reminder in
+                  dayRowWithEditor(reminder, isCompleted: true)
+                }
+              }
+
+              if !undated.isEmpty {
+                daySectionHeader("calendar.undated")
+                ForEach(undated) { reminder in
+                  dayRowWithEditor(reminder, isCompleted: false)
+                }
+              }
+            }
+            .padding(.vertical, 2)
+          }
+          .scrollBounceBehavior(.basedOnSize)
+          .onChange(of: model.selectedReminderID) { _, id in
+            guard let id else { return }
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.22, extraBounce: 0)) {
+              proxy.scrollTo(id, anchor: .center)
+            }
+          }
           .animation(
             reduceMotion ? nil : .smooth(duration: 0.26, extraBounce: 0),
-            value: model.reminders.map(\.id)
+            value: model.visibleScheduleReminders.map(\.id)
           )
         }
-        .onChange(of: model.selectedReminderID) { _, id in
-          guard let id else { return }
-          withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
-            proxy.scrollTo(id, anchor: .center)
-          }
+        .clipped()
+        .overlay(alignment: .top) {
+          LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+            .frame(height: 14)
+            .allowsHitTesting(false)
+        }
+        .overlay(alignment: .bottom) {
+          LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+            .frame(height: 18)
+            .allowsHitTesting(false)
         }
       }
     }
   }
 
-  private func reminderRow(_ reminder: ReminderSnapshot) -> some View {
-    let isCompleting = model.completingReminderIDs.contains(reminder.id)
+  @ViewBuilder
+  private func dayRowWithEditor(_ reminder: ReminderSnapshot, isCompleted: Bool) -> some View {
+    dayRow(reminder, isCompleted: isCompleted)
+      .frame(height: reminderRowPitch)
+      .id(reminder.id)
+      .transition(.opacity.combined(with: .move(edge: .top)))
 
-    return HStack(spacing: 10) {
+    if model.editingReminderID == reminder.id, let draft = model.draft {
+      reminderEditor(draft)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.bottom, 4)
+        .id("editor-\(reminder.id)")
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+  }
+
+  private func daySectionHeader(_ titleKey: LocalizedStringKey) -> some View {
+    HStack(spacing: 3) {
+      Text(titleKey)
+        .font(.system(size: 10.8, weight: .semibold))
+        .foregroundStyle(ReUITheme.muted)
+      Spacer()
+    }
+    .padding(.top, 5)
+    .padding(.bottom, 2)
+    .accessibilityAddTraits(.isHeader)
+  }
+
+  private var emptyDaySchedule: some View {
+    VStack(spacing: 3) {
+      Image(systemName: "checkmark.circle")
+        .font(.system(size: 18))
+        .foregroundStyle(accentColor)
+      Text("calendar.empty-day")
+        .font(.system(size: 14.04, weight: .semibold))
+      Text("calendar.empty-day.detail")
+        .font(.system(size: 11.88))
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .padding(8)
+  }
+
+  private func dayRow(_ reminder: ReminderSnapshot, isCompleted: Bool) -> some View {
+    let isCompleting = model.completingReminderIDs.contains(reminder.id)
+    let isSelected = model.selectedReminderID == reminder.id
+    let isHovered = hoveredReminderID == reminder.id
+
+    return HStack(spacing: 5) {
       Button {
-        model.complete(reminder)
+        if isCompleted {
+          model.reopen(reminder)
+        } else {
+          model.complete(reminder)
+        }
       } label: {
-        Image(systemName: isCompleting ? "checkmark.circle.fill" : "circle")
-          .font(.system(size: 17, weight: .medium))
-          .foregroundStyle(isCompleting ? Color.green : accentColor)
+        Image(systemName: circleSymbol(isCompleted: isCompleted, isCompleting: isCompleting))
+          .font(.system(size: 17.5, weight: .medium))
+          .foregroundStyle(circleColor(isCompleted: isCompleted, isCompleting: isCompleting))
       }
       .buttonStyle(.plain)
       .disabled(isCompleting)
-      .accessibilityLabel(Text(String(format: L10n.text("reminder.complete"), reminder.title)))
+      .accessibilityLabel(
+        Text(String(
+          format: L10n.text(isCompleted ? "reminder.reopen" : "reminder.complete"),
+          reminder.title)))
 
-      VStack(alignment: .leading, spacing: 2) {
-        HStack(spacing: 5) {
-          Text(reminder.title)
-            .font(.system(size: 13, weight: .medium))
-            .lineLimit(1)
-          if reminder.isRecurring {
-            Image(systemName: "repeat")
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              .accessibilityLabel(Text("reminder.recurring"))
-          }
-        }
-
-        if let due = dueLabel(for: reminder) {
-          Text(due.text)
-            .font(.caption)
-            .foregroundStyle(due.isOverdue ? .red : .secondary)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(reminder.title)
+          .font(.system(size: 14.04, weight: .medium))
+          .strikethrough(isCompleted, color: .white.opacity(0.4))
+          .foregroundStyle(isCompleted ? ReUITheme.muted : .primary)
+          .lineLimit(1)
+        if let time = dueTimeLabel(for: reminder) {
+          Text(time)
+            .font(.system(size: 11.4))
+            .foregroundStyle(ReUITheme.muted)
         }
       }
 
-      Spacer(minLength: 8)
+      Spacer(minLength: 4)
 
-      if reminder.priority != .none {
+      listTag(for: reminder)
+
+      if !isCompleted && reminder.priority != .none {
         Image(systemName: prioritySymbol(reminder.priority))
-          .font(.caption)
+          .font(.system(size: 11.88))
+          .padding(.horizontal, 5)
+          .padding(.vertical, 2)
+          .background(Capsule(style: .continuous).fill(priorityColor(reminder.priority).opacity(0.14)))
+          .overlay(Capsule(style: .continuous).stroke(priorityColor(reminder.priority).opacity(0.28), lineWidth: 1))
           .foregroundStyle(priorityColor(reminder.priority))
           .accessibilityLabel(priorityLabel(reminder.priority))
       }
@@ -569,24 +1127,214 @@ struct IslandRootView: View {
           }
         } label: {
           Image(systemName: "ellipsis")
-            .frame(width: 22, height: 22)
+            .frame(width: 11, height: 11)
         }
         .menuStyle(.borderlessButton)
         .accessibilityLabel(Text(String(format: L10n.text("reminder.actions"), reminder.title)))
       }
     }
-    .padding(.horizontal, 10)
-    .padding(.vertical, 7)
+    .padding(.horizontal, 5.5)
+    .padding(.vertical, 4)
     .background {
-      RoundedRectangle(cornerRadius: 10)
-        .fill(
+      RoundedRectangle(cornerRadius: 11, style: .continuous)
+        .fill(rowFill(isSelected: isSelected, isHovered: isHovered))
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: 11, style: .continuous)
+        .stroke(isSelected ? accentColor.opacity(0.62) : ReUITheme.subtleBorder, lineWidth: 1)
+    }
+    .animation(
+      reduceMotion ? nil : .smooth(duration: 0.18, extraBounce: 0),
+      value: isSelected
+    )
+    .animation(
+      reduceMotion ? nil : .easeOut(duration: 0.12),
+      value: isHovered
+    )
+    .onHover { hovering in
+      hoveredReminderID = hovering ? reminder.id : (hoveredReminderID == reminder.id ? nil : hoveredReminderID)
+    }
+    .contentShape(Rectangle())
+    .onTapGesture {
+      guard isPinned else { return }
+      model.selectedReminderID = reminder.id
+    }
+    .onTapGesture(count: 2) {
+      guard isPinned else { return }
+      model.beginEditing(reminder)
+    }
+    .accessibilityElement(children: .contain)
+  }
+
+  /// The owning Reminder List as a colored capsule so the Day Schedule can
+  /// aggregate across lists without losing provenance.
+  @ViewBuilder
+  private func listTag(for reminder: ReminderSnapshot) -> some View {
+    if let list = model.lists.first(where: { $0.id == reminder.listID }) {
+      let accent = listAccent(for: list)
+      HStack(spacing: 2.5) {
+        Circle().fill(accent).frame(width: 4, height: 4)
+        Text(list.title)
+          .font(.system(size: 10.5, weight: .medium))
+          .lineLimit(1)
+          .truncationMode(.tail)
+      }
+      .padding(.horizontal, 5)
+      .padding(.vertical, 2)
+      .background(Capsule(style: .continuous).fill(accent.opacity(0.14)))
+      .overlay(Capsule(style: .continuous).stroke(accent.opacity(0.28), lineWidth: 1))
+      .foregroundStyle(accent)
+      .accessibilityLabel(Text(list.title))
+    }
+  }
+
+  private func listAccent(for list: ReminderListSnapshot) -> Color {
+    Color(
+      .sRGB,
+      red: list.accent.red,
+      green: list.accent.green,
+      blue: list.accent.blue,
+      opacity: list.accent.alpha
+    )
+  }
+
+  private func circleSymbol(isCompleted: Bool, isCompleting: Bool) -> String {
+    if isCompleting { return isCompleted ? "circle" : "checkmark.circle.fill" }
+    return isCompleted ? "checkmark.circle.fill" : "circle"
+  }
+
+  private func circleColor(isCompleted: Bool, isCompleting: Bool) -> Color {
+    if isCompleting { return isCompleted ? ReUITheme.muted : .green }
+    return isCompleted ? ReUITheme.muted : accentColor
+  }
+
+  private func dayScheduleTitle(for date: Date) -> String {
+    let calendar = Calendar.current
+    if calendar.isDateInToday(date) { return L10n.text("date.today") }
+    let formatter = DateFormatter()
+    formatter.locale = .current
+    formatter.setLocalizedDateFormatFromTemplate("MMMd EEEE")
+    return formatter.string(from: date)
+  }
+
+  private func dueTimeLabel(for reminder: ReminderSnapshot) -> String? {
+    guard reminder.dueDateComponents?.hour != nil,
+      let date = reminder.dueDate(in: .current)
+    else { return nil }
+    let formatter = DateFormatter()
+    formatter.locale = .current
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
+  }
+
+  private func shiftMonth(_ delta: Int) {
+    guard
+      let target = Calendar.current.date(byAdding: .month, value: delta, to: model.selectedDay)
+    else { return }
+    model.selectDay(target)
+  }
+
+  private func shiftDay(_ delta: Int) {
+    guard
+      let target = Calendar.current.date(byAdding: .day, value: delta, to: model.selectedDay)
+    else { return }
+    model.selectDay(target)
+  }
+
+  private func rowFill(isSelected: Bool, isHovered: Bool) -> Color {
+    if isSelected { return ReUITheme.itemSelected }
+    if isHovered { return ReUITheme.itemHover }
+    return ReUITheme.item
+  }
+
+  private func reminderRow(_ reminder: ReminderSnapshot) -> some View {
+    let isCompleting = model.completingReminderIDs.contains(reminder.id)
+
+    return HStack(spacing: 5) {
+      Button {
+        model.complete(reminder)
+      } label: {
+        Image(systemName: isCompleting ? "checkmark.circle.fill" : "circle")
+          .font(.system(size: 17.5, weight: .medium))
+          .foregroundStyle(isCompleting ? Color.green : accentColor)
+      }
+      .buttonStyle(.plain)
+      .disabled(isCompleting)
+      .accessibilityLabel(Text(String(format: L10n.text("reminder.complete"), reminder.title)))
+
+      VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: 2.5) {
+          Text(reminder.title)
+            .font(.system(size: 14.04, weight: .medium))
+            .lineLimit(1)
+          if reminder.isRecurring {
+            Image(systemName: "repeat")
+              .font(.system(size: 10.8))
+              .foregroundStyle(ReUITheme.muted)
+              .accessibilityLabel(Text("reminder.recurring"))
+          }
+        }
+
+        if let due = dueLabel(for: reminder) {
+          Text(due.text)
+            .font(.system(size: 11.88))
+            .foregroundStyle(due.isOverdue ? .red : ReUITheme.muted)
+        }
+      }
+
+      Spacer(minLength: 4)
+
+      if reminder.priority != .none {
+        Image(systemName: prioritySymbol(reminder.priority))
+          .font(.system(size: 11.88))
+          .padding(.horizontal, 5)
+          .padding(.vertical, 2)
+          .background(Capsule(style: .continuous).fill(priorityColor(reminder.priority).opacity(0.14)))
+          .overlay(Capsule(style: .continuous).stroke(priorityColor(reminder.priority).opacity(0.28), lineWidth: 1))
+          .foregroundStyle(priorityColor(reminder.priority))
+          .accessibilityLabel(priorityLabel(reminder.priority))
+      }
+
+      if isPinned {
+        Menu {
+          Button(L10n.text("reminder.edit")) { model.beginEditing(reminder) }
+          Divider()
+          Button(L10n.text("reminder.delete"), role: .destructive) {
+            reminderPendingDeletion = reminder
+          }
+        } label: {
+          Image(systemName: "ellipsis")
+            .frame(width: 11, height: 11)
+        }
+        .menuStyle(.borderlessButton)
+        .accessibilityLabel(Text(String(format: L10n.text("reminder.actions"), reminder.title)))
+      }
+    }
+    .padding(.horizontal, 5.5)
+    .padding(.vertical, 4)
+    .background {
+      RoundedRectangle(cornerRadius: 11, style: .continuous)
+        .fill(rowFill(isSelected: model.selectedReminderID == reminder.id, isHovered: hoveredReminderID == reminder.id))
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: 11, style: .continuous)
+        .stroke(
           model.selectedReminderID == reminder.id
-            ? accentColor.opacity(0.18) : .white.opacity(0.045))
+            ? accentColor.opacity(0.62) : ReUITheme.subtleBorder,
+          lineWidth: 1
+        )
     }
     .animation(
       reduceMotion ? nil : .smooth(duration: 0.18, extraBounce: 0),
       value: model.selectedReminderID == reminder.id
     )
+    .animation(
+      reduceMotion ? nil : .easeOut(duration: 0.12),
+      value: hoveredReminderID == reminder.id
+    )
+    .onHover { hovering in
+      hoveredReminderID = hovering ? reminder.id : (hoveredReminderID == reminder.id ? nil : hoveredReminderID)
+    }
     .contentShape(Rectangle())
     .onTapGesture {
       guard isPinned else { return }
@@ -600,25 +1348,25 @@ struct IslandRootView: View {
   }
 
   private func reminderEditor(_ draft: ReminderDraft) -> some View {
-    VStack(alignment: .leading, spacing: 11) {
-      HStack(spacing: 8) {
+    VStack(alignment: .leading, spacing: 5.5) {
+      HStack(spacing: 4) {
         ZStack {
           Circle().fill(accentColor.opacity(0.18))
           Image(systemName: "pencil")
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: 12.96, weight: .semibold))
             .foregroundStyle(accentColor)
         }
-        .frame(width: 28, height: 28)
+        .frame(width: 14, height: 14)
 
         Text("editor.edit-reminder")
-          .font(.subheadline.weight(.semibold))
+          .font(.system(size: 12.96).weight(.semibold))
 
         Spacer()
       }
 
-      HStack(spacing: 9) {
+      HStack(spacing: 4.5) {
         Image(systemName: "text.cursor")
-          .font(.caption)
+          .font(.system(size: 11.88))
           .foregroundStyle(editorTitleFocused ? accentColor : .secondary)
         TextField(
           L10n.text("editor.title.placeholder"),
@@ -631,7 +1379,7 @@ struct IslandRootView: View {
         .focused($editorTitleFocused)
         .onSubmit { model.saveEditing() }
       }
-      .padding(.horizontal, 11)
+      .padding(.horizontal, 5.5)
       .frame(height: 38)
       .background {
         RoundedRectangle(cornerRadius: 10)
@@ -645,19 +1393,19 @@ struct IslandRootView: View {
           )
       }
 
-      VStack(spacing: 8) {
-        HStack(spacing: 10) {
+      VStack(spacing: 4) {
+        HStack(spacing: 5) {
           ZStack {
             RoundedRectangle(cornerRadius: 8)
               .fill(draft.hasDueDate ? accentColor.opacity(0.18) : .white.opacity(0.06))
             Image(systemName: "calendar")
-              .font(.system(size: 13, weight: .medium))
+              .font(.system(size: 14.04, weight: .medium))
               .foregroundStyle(draft.hasDueDate ? accentColor : .secondary)
           }
           .frame(width: 30, height: 30)
 
           Text("editor.due-date")
-            .font(.subheadline.weight(.medium))
+            .font(.system(size: 12.96).weight(.medium))
 
           Spacer()
 
@@ -677,7 +1425,7 @@ struct IslandRootView: View {
         if draft.hasDueDate {
           Divider().overlay(.white.opacity(0.08))
 
-          HStack(spacing: 10) {
+          HStack(spacing: 5) {
             DatePicker(
               "",
               selection: Binding(
@@ -705,8 +1453,8 @@ struct IslandRootView: View {
           .transition(.opacity.combined(with: .move(edge: .top)))
         }
       }
-      .padding(.horizontal, 10)
-      .padding(.vertical, 8)
+      .padding(.horizontal, 5)
+      .padding(.vertical, 4)
       .background {
         RoundedRectangle(cornerRadius: 11).fill(.white.opacity(0.04))
       }
@@ -718,12 +1466,12 @@ struct IslandRootView: View {
         value: draft.hasDueDate
       )
 
-      HStack(spacing: 9) {
+      HStack(spacing: 4.5) {
         Label(L10n.text("editor.priority"), systemImage: "flag")
-          .font(.caption.weight(.semibold))
+          .font(.system(size: 11.88).weight(.semibold))
           .foregroundStyle(.secondary)
 
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
           ForEach(
             [ReminderPriority.none, .low, .medium, .high],
             id: \.self
@@ -733,7 +1481,7 @@ struct IslandRootView: View {
         }
       }
 
-      HStack(spacing: 9) {
+      HStack(spacing: 4.5) {
         Spacer()
         Button(L10n.text("common.cancel")) { model.cancelEditing() }
           .buttonStyle(.bordered)
@@ -747,14 +1495,14 @@ struct IslandRootView: View {
           .disabled(!model.canSaveEditingDraft)
       }
     }
-    .padding(13)
+    .padding(6.5)
     .background {
       RoundedRectangle(cornerRadius: 14)
-        .fill(.white.opacity(0.055))
+        .fill(ReUITheme.panel)
     }
     .overlay {
       RoundedRectangle(cornerRadius: 14)
-        .stroke(accentColor.opacity(0.24), lineWidth: 1)
+        .stroke(accentColor.opacity(0.34), lineWidth: 1)
     }
   }
 
@@ -769,11 +1517,11 @@ struct IslandRootView: View {
     return Button {
       model.draft?.priority = priority
     } label: {
-      HStack(spacing: 4) {
+      HStack(spacing: 2) {
         Image(systemName: symbol)
-          .font(.system(size: 9, weight: .bold))
+          .font(.system(size: 9.72, weight: .bold))
         priorityLabel(priority)
-          .font(.caption.weight(.medium))
+          .font(.system(size: 11.88).weight(.medium))
       }
       .foregroundStyle(isSelected ? color : .secondary)
       .frame(maxWidth: .infinity)
@@ -796,8 +1544,11 @@ struct IslandRootView: View {
   }
 
   private var quickAdd: some View {
-    HStack(spacing: 8) {
-      Image(systemName: "plus.circle.fill")
+    HStack(spacing: 4) {
+      Image(systemName: "plus")
+        .font(.system(size: 12.96, weight: .bold))
+        .frame(width: 11, height: 11)
+        .background(accentColor.opacity(0.16), in: Circle())
         .foregroundStyle(accentColor)
       TextField("quick-add.placeholder", text: $model.quickAddTitle)
         .textFieldStyle(.plain)
@@ -818,16 +1569,35 @@ struct IslandRootView: View {
       Button {
         submitQuickAdd()
       } label: {
-        Image(systemName: "arrow.up.circle.fill")
+        Image(systemName: "arrow.up")
+          .font(.system(size: 11.88, weight: .bold))
+          .frame(width: 11.5, height: 11.5)
+          .background(
+            model.quickAddTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              ? .white.opacity(0.08) : accentColor,
+            in: Circle()
+          )
+          .foregroundStyle(
+            model.quickAddTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              ? Color.secondary : Color.black
+          )
       }
       .buttonStyle(.plain)
       .foregroundStyle(accentColor)
       .disabled(model.quickAddTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       .accessibilityLabel(Text("quick-add.submit"))
     }
-    .padding(.horizontal, 10)
-    .frame(height: 38)
-    .background(RoundedRectangle(cornerRadius: 11).fill(.white.opacity(0.08)))
+    .padding(.horizontal, 5)
+    .frame(height: 20)
+    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(ReUITheme.item))
+    .overlay(alignment: .center) {
+      RoundedRectangle(cornerRadius: 13, style: .continuous)
+        .stroke(
+          quickAddFocused ? accentColor.opacity(0.72) : ReUITheme.border,
+          lineWidth: 1
+        )
+        .allowsHitTesting(false)
+    }
   }
 
   private func submitQuickAdd() {
@@ -837,13 +1607,13 @@ struct IslandRootView: View {
   }
 
   private var allDoneContent: some View {
-    VStack(spacing: 10) {
+    VStack(spacing: 5) {
       Image(systemName: "checkmark.circle.fill")
-        .font(.system(size: 30))
+        .font(.system(size: 18))
         .foregroundStyle(accentColor)
-      Text("island.all-done").font(.headline)
+      Text("island.all-done").font(.system(size: 14.04, weight: .semibold))
       Text("all-done.detail")
-        .font(.caption)
+        .font(.system(size: 11.88))
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
       Button(action: focusQuickAdd) {
@@ -851,10 +1621,10 @@ struct IslandRootView: View {
       }
       .buttonStyle(.borderedProminent)
       .tint(accentColor)
-      .padding(.top, 2)
+      .padding(.top, 1)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(20)
+    .padding(10)
   }
 
   private func focusQuickAdd() {
@@ -862,40 +1632,40 @@ struct IslandRootView: View {
   }
 
   private var listCreationForm: some View {
-    VStack(alignment: .leading, spacing: 13) {
-      HStack(spacing: 11) {
+    VStack(alignment: .leading, spacing: 6.5) {
+      HStack(spacing: 5.5) {
         ZStack {
           Circle().fill(accentColor.opacity(0.18))
           Image(systemName: "list.bullet.badge.plus")
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(size: 16.2, weight: .semibold))
             .foregroundStyle(accentColor)
         }
         .frame(width: 36, height: 36)
 
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
           Text("list.new")
-            .font(.headline)
+            .font(.system(size: 14.04, weight: .semibold))
           Text("list.new.detail")
-            .font(.caption)
+            .font(.system(size: 11.88))
             .foregroundStyle(.secondary)
         }
       }
 
-      VStack(alignment: .leading, spacing: 7) {
+      VStack(alignment: .leading, spacing: 3.5) {
         Text("list.name")
-          .font(.caption.weight(.semibold))
+          .font(.system(size: 11.88).weight(.semibold))
           .foregroundStyle(.secondary)
 
-        HStack(spacing: 9) {
+        HStack(spacing: 4.5) {
           Image(systemName: "text.cursor")
-            .font(.caption)
+            .font(.system(size: 11.88))
             .foregroundStyle(listNameFocused ? accentColor : .secondary)
           TextField(L10n.text("list.name.placeholder"), text: $listNameDraft)
             .textFieldStyle(.plain)
             .focused($listNameFocused)
             .onSubmit { createListFromForm() }
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, 5.5)
         .frame(height: 39)
         .background {
           RoundedRectangle(cornerRadius: 11)
@@ -910,12 +1680,12 @@ struct IslandRootView: View {
         }
       }
 
-      VStack(alignment: .leading, spacing: 7) {
+      VStack(alignment: .leading, spacing: 3.5) {
         Text("list.source")
-          .font(.caption.weight(.semibold))
+          .font(.system(size: 11.88).weight(.semibold))
           .foregroundStyle(.secondary)
 
-        HStack(spacing: 10) {
+        HStack(spacing: 5) {
           listSourceOption(.iCloud)
           listSourceOption(.local)
         }
@@ -923,14 +1693,14 @@ struct IslandRootView: View {
 
       if model.requestedListCreationSource == .iCloud, model.authorization != .fullAccess {
         Label("list.icloud-permission-required", systemImage: "exclamationmark.circle.fill")
-          .font(.caption)
+          .font(.system(size: 11.88))
           .foregroundStyle(.orange)
           .lineLimit(1)
       }
 
       Spacer(minLength: 0)
 
-      HStack(spacing: 10) {
+      HStack(spacing: 5) {
         Spacer()
         Button(L10n.text("common.cancel")) {
           model.cancelListCreation()
@@ -952,8 +1722,8 @@ struct IslandRootView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(.horizontal, 22)
-    .padding(.vertical, 17)
+    .padding(.horizontal, 11)
+    .padding(.vertical, 8.5)
   }
 
   private func listSourceOption(_ source: ReminderSource) -> some View {
@@ -964,34 +1734,34 @@ struct IslandRootView: View {
     return Button {
       model.requestedListCreationSource = source
     } label: {
-      HStack(spacing: 9) {
+      HStack(spacing: 4.5) {
         ZStack {
           RoundedRectangle(cornerRadius: 8)
             .fill(isSelected ? accentColor.opacity(0.18) : .white.opacity(0.06))
           Image(systemName: source.symbolName)
-            .font(.system(size: 14, weight: .medium))
+            .font(.system(size: 15.12, weight: .medium))
             .foregroundStyle(isSelected ? accentColor : .secondary)
         }
         .frame(width: 30, height: 30)
 
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 0.5) {
           Text(L10n.text(titleKey))
-            .font(.subheadline.weight(.semibold))
+            .font(.system(size: 12.96).weight(.semibold))
             .foregroundStyle(.primary)
             .lineLimit(1)
           Text(L10n.text(detailKey))
-            .font(.caption2)
+            .font(.system(size: 10.8))
             .foregroundStyle(.secondary)
             .lineLimit(1)
         }
 
-        Spacer(minLength: 2)
+        Spacer(minLength: 1)
 
         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-          .font(.system(size: 14, weight: .medium))
+          .font(.system(size: 15.12, weight: .medium))
           .foregroundStyle(isSelected ? accentColor : .white.opacity(0.18))
       }
-      .padding(.horizontal, 10)
+      .padding(.horizontal, 5)
       .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
       .background {
         RoundedRectangle(cornerRadius: 12)
@@ -1011,11 +1781,11 @@ struct IslandRootView: View {
   }
 
   private var listRenameForm: some View {
-    VStack(spacing: 14) {
+    VStack(spacing: 7) {
       Label(L10n.text("list.rename"), systemImage: "pencil")
-        .font(.headline)
+        .font(.system(size: 14.04, weight: .semibold))
       Text(listPendingRename?.title ?? "")
-        .font(.caption)
+        .font(.system(size: 11.88))
         .foregroundStyle(.secondary)
       TextField(L10n.text("list.name.placeholder"), text: $listNameDraft)
         .textFieldStyle(.roundedBorder)
@@ -1032,7 +1802,7 @@ struct IslandRootView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(24)
+    .padding(12)
   }
 
   private func createListFromForm() {
@@ -1057,18 +1827,18 @@ struct IslandRootView: View {
   }
 
   private var lockedContent: some View {
-    VStack(spacing: 12) {
+    VStack(spacing: 6) {
       Image(systemName: "lock.shield.fill")
-        .font(.system(size: 34))
+        .font(.system(size: 20.4))
         .foregroundStyle(accentColor)
       Text("permission.required")
-        .font(.headline)
+        .font(.system(size: 14.04, weight: .semibold))
       Text("permission.required.detail")
-        .font(.caption)
+        .font(.system(size: 11.88))
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
       Text("permission.privacy")
-        .font(.caption2)
+        .font(.system(size: 10.8))
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
       if model.islandState.showsAuthorizationActions {
@@ -1113,23 +1883,23 @@ struct IslandRootView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(24)
+    .padding(12)
   }
 
   private var noListsContent: some View {
-    VStack(spacing: 10) {
+    VStack(spacing: 5) {
       Image(systemName: "list.bullet")
-        .font(.system(size: 30))
+        .font(.system(size: 18))
         .foregroundStyle(accentColor)
-      Text("list.no-icloud").font(.headline)
+      Text("list.no-icloud").font(.system(size: 14.04, weight: .semibold))
       Text("list.no-icloud.detail")
-        .font(.caption)
+        .font(.system(size: 11.88))
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
 
       if isPinned {
-        VStack(spacing: 8) {
-          HStack(spacing: 10) {
+        VStack(spacing: 4) {
+          HStack(spacing: 5) {
             Button("list.new-icloud") {
               model.requestNewList(source: .iCloud)
             }
@@ -1139,7 +1909,7 @@ struct IslandRootView: View {
             .buttonStyle(.borderedProminent)
             .tint(accentColor)
           }
-          HStack(spacing: 10) {
+          HStack(spacing: 5) {
             Button("list.open-reminders") {
               SystemSettings.openReminders()
             }
@@ -1148,21 +1918,21 @@ struct IslandRootView: View {
             }
           }
         }
-        .padding(.top, 4)
+        .padding(.top, 2)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(20)
+    .padding(10)
   }
 
   private var localEmptyContent: some View {
-    VStack(spacing: 12) {
+    VStack(spacing: 6) {
       Image(systemName: "desktopcomputer")
-        .font(.system(size: 30))
+        .font(.system(size: 18))
         .foregroundStyle(accentColor)
-      Text("list.no-local").font(.headline)
+      Text("list.no-local").font(.system(size: 14.04, weight: .semibold))
       Text("list.no-local.detail")
-        .font(.caption)
+        .font(.system(size: 11.88))
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
       if isPinned {
@@ -1174,18 +1944,18 @@ struct IslandRootView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(20)
+    .padding(10)
   }
 
   private var localStoreUnavailableContent: some View {
-    VStack(spacing: 12) {
+    VStack(spacing: 6) {
       Image(systemName: "externaldrive.badge.exclamationmark")
-        .font(.system(size: 32))
+        .font(.system(size: 19.2))
         .foregroundStyle(.orange)
-      Text("local-store.unavailable").font(.headline)
+      Text("local-store.unavailable").font(.system(size: 14.04, weight: .semibold))
       if case let .unavailable(message, _) = model.localStoreAvailability {
         Text(message)
-          .font(.caption)
+          .font(.system(size: 11.88))
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
       }
@@ -1202,7 +1972,7 @@ struct IslandRootView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(24)
+    .padding(12)
   }
 
   private var accentColor: Color {
@@ -1229,14 +1999,15 @@ struct IslandRootView: View {
     return DisplaySupport.metrics(for: screen).physicalNotchWidth
   }
 
+  private var expandedTopShoulderDepth: CGFloat { 8 }
+
   private var collapsedSideWidth: CGFloat {
     max(0, (islandSurfaceSize.width - hostPhysicalNotchWidth) / 2)
   }
 
-  private var collapsedOuterInset: CGFloat { 12 }
-
-  private var collapsedSideContentWidth: CGFloat {
-    max(0, collapsedSideWidth - collapsedOuterInset)
+  private var expandedContentTopInset: CGFloat {
+    guard let screen = DisplaySupport.screen(id: model.hostDisplayID) else { return 16 }
+    return max(16, DisplaySupport.metrics(for: screen).safeAreaTop + 6)
   }
 
   private var islandSurfaceSize: CGSize {
@@ -1267,7 +2038,6 @@ struct IslandRootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
     .frame(width: 18, height: 18)
-    .offset(y: -3)
     .animation(
       reduceMotion ? nil : .smooth(duration: 0.22, extraBounce: 0),
       value: model.remainingCount
@@ -1277,8 +2047,11 @@ struct IslandRootView: View {
   private var surfaceAnimation: Animation? {
     guard !reduceMotion else { return nil }
     let motion = model.islandState.motionProfile
-    let extraBounce = max(0, 1 - motion.dampingFraction) * 0.2
-    return .smooth(duration: motion.response, extraBounce: extraBounce)
+    return .spring(
+      response: motion.response,
+      dampingFraction: motion.dampingFraction,
+      blendDuration: 0.04
+    )
   }
 
   private func dueLabel(for reminder: ReminderSnapshot) -> (text: String, isOverdue: Bool)? {
@@ -1361,18 +2134,24 @@ struct IslandRootView: View {
     case 126:
       model.moveSelection(-1)
       return true
+    case 123:
+      shiftDay(-1)
+      return true
+    case 124:
+      shiftDay(1)
+      return true
     case 36:
-      if let selected = model.reminders.first(where: { $0.id == model.selectedReminderID }) {
+      if let selected = model.selectedReminder {
         model.beginEditing(selected)
         return true
       }
     case 49:
-      if let selected = model.reminders.first(where: { $0.id == model.selectedReminderID }) {
+      if let selected = model.selectedReminder {
         model.complete(selected)
         return true
       }
     case 51, 117:
-      if let selected = model.reminders.first(where: { $0.id == model.selectedReminderID }) {
+      if let selected = model.selectedReminder {
         reminderPendingDeletion = selected
         return true
       }

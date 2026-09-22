@@ -57,9 +57,11 @@
 "source.local.detail" = "Only on this Mac";
 "source.use-local" = "Use Local";
 "reminders.remaining" = "%d reminders remaining";
+"reminders.pending" = "pending";
 
 "reminder.complete" = "Complete %@";
 "reminder.recurring" = "Recurring reminder";
+"reminder.reopen" = "Reopen %@";
 "reminder.edit" = "Edit";
 "reminder.delete" = "Delete";
 "reminder.actions" = "Actions for %@";
@@ -84,6 +86,13 @@
 
 "all-done.detail" = "There are no pending reminders in this list.";
 "date.today" = "Today";
+
+"calendar.completed" = "Completed";
+"calendar.undated" = "Undated";
+"calendar.empty-day" = "Nothing scheduled";
+"calendar.empty-day.detail" = "Use Quick Add below to create a reminder.";
+"calendar.previous-month" = "Previous month";
+"calendar.next-month" = "Next month";
 
 "permission.required" = "Reminders Access Required";
 "permission.required.detail" = "Apple does not offer read-only Reminders permission. Todo Island uses full access only to display and manage the iCloud reminders you choose.";
@@ -120,3 +129,4 @@
 "menu.settings" = "Settings…";
 "menu.about" = "About Todo Island";
 "menu.quit" = "Quit Todo Island";
+"sidebar.reminders" = "Reminders";

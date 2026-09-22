@@ -16,7 +16,7 @@ struct DisplayMetrics: Equatable, Sendable {
       let auxiliaryRightWidth
     else { return 200 }
 
-    return max(180, frame.width - auxiliaryLeftWidth - auxiliaryRightWidth + 4)
+    return max(0, frame.width - auxiliaryLeftWidth - auxiliaryRightWidth)
   }
 }
 
@@ -49,23 +49,25 @@ enum IslandAnimatedSurfaceLayout {
 }
 
 enum DisplayGeometryCalculator {
+  static let collapsedNotchSideWidth: CGFloat = 72
+
   static func geometry(for display: DisplayMetrics) -> IslandGeometry {
     let availableWidth = max(320, display.frame.width - 32)
     let expanded = CGSize(
-      width: min(480, availableWidth), height: min(360, max(260, display.frame.height - 80)))
+      width: min(640, availableWidth), height: min(320, max(280, display.frame.height - 80)))
     let preview = CGSize(
-      width: min(440, availableWidth), height: min(260, max(180, display.frame.height - 80)))
+      width: min(600, availableWidth), height: min(240, max(180, display.frame.height - 80)))
 
     let collapsedHeight: CGFloat
     if display.hasPhysicalNotch {
-      collapsedHeight = max(28, display.safeAreaTop)
+      collapsedHeight = display.safeAreaTop
     } else {
       collapsedHeight = max(30, display.frame.maxY - display.visibleFrame.maxY)
     }
 
     let collapsedWidth =
       display.hasPhysicalNotch
-      ? min(display.physicalNotchWidth + 112, availableWidth)
+      ? min(display.physicalNotchWidth + collapsedNotchSideWidth * 2, availableWidth)
       : min(340, availableWidth)
     return IslandGeometry(
       collapsedSize: CGSize(width: collapsedWidth, height: collapsedHeight),

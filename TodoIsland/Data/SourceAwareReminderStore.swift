@@ -66,9 +66,45 @@ final class SourceAwareReminderStore: ReminderStore {
       .map(Self.namespace)
   }
 
-  func createReminder(title: String, in listID: String) async throws {
+  /// Month-calendar data across both Sources. A failure in one Source must
+  /// not blank the other Source's contributions, so per-Source errors are
+  /// swallowed just like in fetchLists.
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] {
+    var reminders: [ReminderSnapshot] = []
+    if authorizationStatus() == .fullAccess,
+      let dated = try? await iCloudStore.fetchReminders(dueFrom: dueFrom, through: through)
+    {
+      reminders += dated.map(Self.namespace)
+    }
+    if let localStore,
+      let dated = try? await localStore.fetchReminders(dueFrom: dueFrom, through: through)
+    {
+      reminders += dated.map(Self.namespace)
+    }
+    return reminders
+  }
+
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] {
+    var reminders: [ReminderSnapshot] = []
+    if authorizationStatus() == .fullAccess,
+      let undated = try? await iCloudStore.fetchUndatedPendingReminders()
+    {
+      reminders += undated.map(Self.namespace)
+    }
+    if let localStore, let undated = try? await localStore.fetchUndatedPendingReminders() {
+      reminders += undated.map(Self.namespace)
+    }
+    return reminders
+  }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {
     let target = try split(listID)
-    try await backend(for: target.source).createReminder(title: title, in: target.rawID)
+    try await backend(for: target.source)
+      .createReminder(title: title, in: target.rawID, dueComponents: dueComponents)
   }
 
   func updateReminder(id: String, from draft: ReminderDraft) async throws {
@@ -174,7 +210,8 @@ final class SourceAwareReminderStore: ReminderStore {
       title: reminder.title,
       dueDateComponents: reminder.dueDateComponents,
       priority: reminder.priority,
-      isRecurring: reminder.isRecurring
+      isRecurring: reminder.isRecurring,
+      isCompleted: reminder.isCompleted
     )
   }
 }

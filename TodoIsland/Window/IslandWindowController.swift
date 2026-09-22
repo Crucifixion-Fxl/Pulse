@@ -7,6 +7,7 @@ import SwiftUI
 final class IslandWindowController: NSObject, NSWindowDelegate {
   private let model: AppModel
   private let panel = IslandPanel()
+  private let frameSpring = IslandFrameSpring()
   private(set) var appliedState: IslandPresentationState?
   private(set) var appliedHostDisplayID: String?
   private(set) var isCollapsedSurfaceVisible = true
@@ -30,6 +31,9 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       rootView: AnyView(IslandRootView().environmentObject(model))
     )
     hostingView.wantsLayer = true
+    // The panel frame is driven per-frame by the spring; skipping intrinsic
+    // size syncing keeps each resize pass cheap.
+    hostingView.sizingOptions = []
     hostingView.layer?.backgroundColor = NSColor.clear.cgColor
     panel.contentView = hostingView
     let initiallyVisible = model.islandState != .collapsed || model.isCollapsedIslandVisible
@@ -208,7 +212,6 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     displayID: String?,
     animated: Bool
   ) {
-    let previousState = appliedState
     appliedState = state
     guard let screen = DisplaySupport.screen(id: displayID) else {
       panel.orderOut(nil)
@@ -223,13 +226,19 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     panel.acceptsKeyInput = state == .pinned
     if animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
       let motion = state.motionProfile
-      NSAnimationContext.runAnimationGroup { context in
-        context.duration = motion.response
-        context.allowsImplicitAnimation = true
-        context.timingFunction = windowTimingFunction(from: previousState, to: state)
-        panel.animator().setFrame(frame, display: true)
+      frameSpring.animate(
+        on: panel,
+        from: panel.frame,
+        to: frame,
+        response: motion.response,
+        dampingFraction: motion.dampingFraction
+      ) { [panel] interpolated in
+        // Coalesce drawing into the normal vsync update instead of forcing a
+        // synchronous display inside the display-link tick.
+        panel.setFrame(interpolated, display: false)
       }
     } else {
+      frameSpring.settle(at: frame)
       panel.setFrame(frame, display: true)
     }
 
@@ -244,20 +253,6 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       panel.orderFrontRegardless()
     }
     updateVisibility(state: state, displayID: displayID, animated: animated)
-  }
-
-  private func windowTimingFunction(
-    from previousState: IslandPresentationState?,
-    to state: IslandPresentationState
-  ) -> CAMediaTimingFunction {
-    switch (previousState, state) {
-    case (.preview, .pinned):
-      CAMediaTimingFunction(controlPoints: 0.22, 0.82, 0.20, 1)
-    case (_, .collapsed):
-      CAMediaTimingFunction(controlPoints: 0.32, 0.72, 0, 1)
-    default:
-      CAMediaTimingFunction(controlPoints: 0.20, 0.84, 0.18, 1)
-    }
   }
 
   private func updateVisibility(animated: Bool) {
@@ -345,10 +340,17 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       model.usesAutoHiddenCollapsedIsland,
       !NSWorkspace.shared.isVoiceOverEnabled,
       let screen = DisplaySupport.screen(id: model.hostDisplayID),
-      !DisplaySupport.shouldHideFallbackInFullScreen(screen),
       panel.isVisible
     else { return }
 
-    model.setIslandHovered(panel.frame.contains(NSEvent.mouseLocation))
+    let pointerInsideZone = panel.frame.contains(NSEvent.mouseLocation)
+    guard pointerInsideZone else {
+      model.setIslandHovered(false)
+      return
+    }
+    // The full-screen window scan is expensive; run it only when the pointer
+    // actually sits in the activation zone.
+    guard !DisplaySupport.shouldHideFallbackInFullScreen(screen) else { return }
+    model.setIslandHovered(true)
   }
 }

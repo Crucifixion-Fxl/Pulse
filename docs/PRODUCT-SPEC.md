@@ -50,7 +50,7 @@ Within those groups, Reminders are ordered by due time, Priority, and title. The
 
 ### Collapsed Island
 
-On a display with a physical notch, a small cloud or Mac source glyph and the Active List name appear on the left side, while an 18-point green outline circle containing its Pending Reminder count in green appears on the right. The text and count circle use matching outer insets so the Collapsed Island is visually symmetrical. On a display without a notch, the same information appears in a centered black capsule. The glyph distinguishes sources without adding a full source label to the collapsed surface.
+On a display with a physical notch, the Collapsed Island keeps the measured safe-area height and reserves the physical notch width as an empty center. Two equal 72-point side regions display the source glyph and truncated Active List name on the left and Pending Reminder count on the right; no text is drawn behind the camera housing. Its activation region matches the entire surface. On a display without a notch, a centered black capsule shows the source glyph, Active List name, and Pending Reminder count. Expanded surfaces have a full-width top lip with mirrored concave shoulders flowing inward into the side edges, and rounded bottom corners.
 
 Collapsed Island Visibility is a required per-Mac preference with no preselected value during Initial Setup:
 
@@ -65,7 +65,7 @@ Initial Setup, Locked iCloud Source, no-list recovery, and Local-store recovery 
 
 Hovering for 200 milliseconds over the Collapsed Island expands an Island Preview without taking focus from the current application. The Preview shows the Active List's Pending Reminders and supports pointer-based actions such as switching lists and completing a Reminder. Quick Add uses the same bottom input as the Pinned Island; clicking it pins the Island and focuses the field. The Preview closes 500 milliseconds after the pointer leaves. With Auto-Hide selected, it transitions directly to a hidden Collapsed Island without briefly rendering the collapsed surface.
 
-The nominal Preview size is 440 by 260 points so the All Done state and Quick Add remain fully visible together. It still remains smaller than the Pinned Island and adapts down for shorter displays.
+The nominal Preview size is 600 by 240 points so the All Done state and Quick Add remain fully visible together. It still remains smaller than the Pinned Island and adapts down for shorter displays.
 
 ### Pinned Island
 
@@ -76,17 +76,29 @@ Clicking the Island opens or converts it to a Pinned Island. The Pinned Island c
 - Enter or leaving an edit field saves its value.
 - Escape while editing discards unsaved field changes.
 
-The nominal expanded size is 480 by 360 points, with adaptation for smaller displays. Content scrolls instead of growing the Island without limit.
+The nominal expanded size is 640 by 320 points, with adaptation for smaller displays. Content scrolls instead of growing the Island without limit.
 
 ## Expanded Layout
 
 The expanded Island contains:
 
-1. a header showing the Active List and its source, which opens a menu grouped into iCloud and Todo Island Local lists;
-2. a scrollable list of Pending Reminders;
-3. rows containing completion control, title, due state, and Priority;
-4. a compact in-Island editor for the selected Reminder; and
-5. Quick Add at the bottom.
+1. a left sidebar of feature destinations and a right content area. The first destination is Reminders; future features add a sidebar item and their own content without changing the Island shell;
+2. a header with a horizontally scrolling chip row holding every Reminder List from the iCloud and Todo Island Local sources, with the Active List accented; dwelling the pointer on a chip presents that list without a click, and a trailing ellipsis menu keeps switching overflow, authorization recovery, and list management (new, rename, delete);
+3. in the Island Preview, the Active List's Pending Reminders in a native macOS scroll container, with trackpad inertia, mouse-wheel scrolling, and a clipped viewport that keeps rows inside the content area;
+4. in the Pinned Island, the Reminders content area as a Month Calendar on the left and the selected date's Day Schedule on the right;
+5. ReUI-style dark card rows containing completion control, title, due state, and Priority badges, with animated hover and selection highlights and subtle fades at the viewport edges;
+6. a compact in-Island editor for the selected Reminder; and
+7. Quick Add at the bottom.
+
+The sidebar uses a 28-point rail with white 12.5-point icons, no visible text, and a white hover glow. Tooltips and accessibility labels identify each feature. Expanded content uses compact typography (13-point list chips, 14-point Reminder titles) and halved spacing; content clears the concave side shoulders of the surface. Its remaining-count badge is a compact ReUI-style capsule with an accent dot, the count, and a localized pending label. The Collapsed Island retains its 18-point accented count ring.
+
+### Month Calendar and Day Schedule
+
+The Month Calendar shows one month of the system calendar as a fixed six-week grid with adjacent-month filler days, weekday initials beginning at the calendar's first weekday, and chevron buttons for month navigation. The selected date is filled with the accent color, today is ringed, and each date carries a dot when it contains Reminders — accented while pending ones remain and gray once only Completed ones do. Clicking a date, stepping a month, or pressing the left or right arrow keys selects that date.
+
+The Day Schedule shows the Reminders due on the selected date across every accessible Reminder List from both Sources, so no per-list switching is required to see a whole day. Pending Reminders appear first in Automatic Reminder Order within the day (timed Reminders ordered by time), followed by a Completed section of Completed Reminders due that day with muted struck-through titles, and an Undated section listing every Pending Reminder without a Due Date. Each row is tagged with its owning Reminder List's name and accent color, shows its due time when one is set, and supports completion, reopening a Completed Reminder, selection, and double-click editing in the compact editor. The schedule keeps the native scroll container with clipped viewport and edge fades, and an empty selected date shows a short all-clear state.
+
+Quick Add continues to create a Pending Reminder without a Due Date in the Active List, which appears immediately in the Undated section of the Day Schedule.
 
 The last valid Active List is restored on launch. If it no longer exists, the app falls back to the first available iCloud Reminder List, then a Local Reminder List. Lists are ordered alphabetically inside each source group.
 
@@ -98,11 +110,12 @@ Quick Add creates a Pending Reminder in the Active List from a title followed by
 
 When the Active List has no Pending Reminders, the All Done state presents a prominent Add Reminder action that pins the Island when necessary and focuses Quick Add.
 
-Completing a Reminder immediately changes its leading circle to a green checkmark, then removes it from the visible Pending Reminders after 200 milliseconds. Completion has no Undo action. Completed Local Reminders remain stored, but the initial product has no completed-history view. Deleting a Reminder requires confirmation.
+Completing a Reminder immediately changes its leading circle to a green checkmark, then removes it from the visible Pending Reminders after 200 milliseconds. Deleting a Reminder requires confirmation. Completed Reminders remain in their Reminder List; the Day Schedule shows those due on the selected date in its Completed section, where they can be reopened, and no other completed-history view exists.
 
 ## Keyboard Operations
 
 - `Up Arrow` and `Down Arrow`: change the selected Reminder
+- `Left Arrow` and `Right Arrow`: select the previous or next date in the Pinned Island
 - `Return`: edit the selected Reminder
 - `Space`: complete the selected Reminder
 - `Command-N`: focus Quick Add
@@ -116,6 +129,8 @@ Every operation also has a mouse-accessible equivalent.
 The Island uses a black surface, white primary text, and gray secondary text. The Active List's Reminders color is the interaction accent. Overdue dates use red.
 
 The application icon is an original black notch silhouette with a colored checkmark. The implementation must not copy boring.notch artwork or source code.
+
+When the Island grows between presentation states, the surface follows a damped spring pinned at the top edge and horizontal center: it overshoots its final size and settles with a small elastic wobble. Collapsing stays critically damped without overshoot. Reduce Motion keeps immediate state changes.
 
 Todo Island supports VoiceOver, keyboard navigation, increased contrast where applicable, and Reduce Motion. Reduce Motion replaces geometry-heavy spring transitions with restrained fades or immediate state changes. VoiceOver temporarily keeps the Collapsed Island visible even when Auto-Hide is selected; the menu-bar Open Island action remains an accessible path and no new global shortcut is introduced.
 

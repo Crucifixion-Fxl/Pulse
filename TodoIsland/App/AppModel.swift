@@ -13,6 +13,9 @@ final class AppModel: ObservableObject {
   @Published private(set) var authorization: ReminderAuthorization
   @Published private(set) var lists: [ReminderListSnapshot] = []
   @Published private(set) var reminders: [ReminderSnapshot] = []
+  @Published private(set) var monthReminders: [ReminderSnapshot] = []
+  @Published private(set) var undatedReminders: [ReminderSnapshot] = []
+  @Published private(set) var selectedDay: Date = Calendar.current.startOfDay(for: Date())
   @Published private(set) var islandState: IslandPresentationState = .collapsed
   @Published private(set) var isLoading = false
   @Published private(set) var isRequestingAccess = false
@@ -41,6 +44,7 @@ final class AppModel: ObservableObject {
   private let store: ReminderStore
   private let defaults: UserDefaults
   private var refreshTask: Task<Void, Never>?
+  private var scheduleTask: Task<Void, Never>?
   private var hoverTask: Task<Void, Never>?
   private var isPointerInsideIsland = false
   private var isQuickAddActive = false
@@ -103,13 +107,35 @@ final class AppModel: ObservableObject {
   var usesAutoHiddenCollapsedIsland: Bool { collapsedIslandVisibility == .autoHide }
   var nextReminder: ReminderSnapshot? { reminders.first }
   var remainingCount: Int { reminders.count }
+  var selectedDaySchedule: ReminderSchedule.DaySchedule {
+    ReminderSchedule.schedule(on: selectedDay, in: monthReminders)
+  }
+  /// Every Reminder the Day Schedule pane can display, in display order.
+  var visibleScheduleReminders: [ReminderSnapshot] {
+    let schedule = selectedDaySchedule
+    return schedule.pending + schedule.completed + undatedReminders
+  }
+  /// The Island Preview shows the Active List's pending reminders; the Pinned
+  /// Island's Day Schedule additionally includes completed and undated ones.
+  var keyboardNavigableReminders: [ReminderSnapshot] {
+    islandState == .preview ? reminders : visibleScheduleReminders
+  }
+  var selectedReminder: ReminderSnapshot? {
+    keyboardNavigableReminders.first { $0.id == selectedReminderID }
+  }
   var canSaveEditingDraft: Bool {
     guard
       isEditingDraftValidated,
       let editingReminderID,
       draft != nil
     else { return false }
-    return reminders.contains { $0.id == editingReminderID && canAccess(source: $0.source) }
+    if let reminder = reminders.first(where: { $0.id == editingReminderID }) {
+      return canAccess(source: reminder.source)
+    }
+    if let reminder = visibleScheduleReminders.first(where: { $0.id == editingReminderID }) {
+      return canAccess(source: reminder.source)
+    }
+    return false
   }
 
   func start() async {
@@ -166,6 +192,7 @@ final class AppModel: ObservableObject {
       if newLists.contains(where: { $0.source == .local }) {
         defaults.set(true, forKey: Keys.didInitializeLocalSource)
       }
+      await reloadScheduleData()
 
       if !newLists.contains(where: { $0.id == activeListID }) {
         if let activeListID,
@@ -202,8 +229,9 @@ final class AppModel: ObservableObject {
 
       let fetched = try await store.fetchPendingReminders(in: activeListID)
       reminders = ReminderSorter.sorted(fetched)
-      if !reminders.contains(where: { $0.id == selectedReminderID }) {
-        selectedReminderID = reminders.first?.id
+      let navigable = keyboardNavigableReminders
+      if !navigable.contains(where: { $0.id == selectedReminderID }) {
+        selectedReminderID = navigable.first?.id
       }
       if let editingReminderID {
         isEditingDraftValidated = reminders.contains { $0.id == editingReminderID }
@@ -226,6 +254,36 @@ final class AppModel: ObservableObject {
     Task { await reload() }
   }
 
+  /// Moves the Day Schedule to another date. Crossing into a different month
+  /// refetches the month's dated reminders.
+  func selectDay(_ day: Date) {
+    let calendar = Calendar.current
+    let newDay = calendar.startOfDay(for: day)
+    guard newDay != calendar.startOfDay(for: selectedDay) else { return }
+    selectedDay = newDay
+    scheduleTask?.cancel()
+    scheduleTask = Task { await reloadScheduleData() }
+  }
+
+  private func reloadScheduleData() async {
+    let calendar = Calendar.current
+    guard let interval = calendar.dateInterval(of: .month, for: selectedDay) else {
+      monthReminders = []
+      undatedReminders = []
+      return
+    }
+    let dated =
+      (try? await store.fetchReminders(dueFrom: interval.start, through: interval.end)) ?? []
+    let undated = (try? await store.fetchUndatedPendingReminders()) ?? []
+    guard !Task.isCancelled else { return }
+    monthReminders = dated
+    undatedReminders = ReminderSorter.sorted(undated)
+    let navigable = keyboardNavigableReminders
+    if !navigable.contains(where: { $0.id == selectedReminderID }) {
+      selectedReminderID = navigable.first?.id
+    }
+  }
+
   func createQuickReminder() {
     let title = quickAddTitle.trimmingCharacters(in: .whitespacesAndNewlines)
     guard canUseActiveList, !title.isEmpty, let activeListID else { return }
@@ -233,7 +291,9 @@ final class AppModel: ObservableObject {
 
     Task {
       do {
-        try await store.createReminder(title: title, in: activeListID)
+        // Quick Add reminders stay undated (see CONTEXT.md) and surface in
+        // the Day Schedule's Undated section.
+        try await store.createReminder(title: title, in: activeListID, dueComponents: nil)
         await reload()
       } catch {
         quickAddTitle = title
@@ -259,7 +319,10 @@ final class AppModel: ObservableObject {
   func saveEditing() {
     guard let id = editingReminderID, let draft else { return }
     guard isEditingDraftValidated else { return }
-    guard let reminder = reminders.first(where: { $0.id == id }) else {
+    guard
+      let reminder = reminders.first(where: { $0.id == id })
+        ?? visibleScheduleReminders.first(where: { $0.id == id })
+    else {
       errorMessage = ReminderStoreError.reminderNotFound.localizedDescription
       return
     }
@@ -285,7 +348,7 @@ final class AppModel: ObservableObject {
   func complete(_ reminder: ReminderSnapshot) {
     guard
       canAccess(source: reminder.source),
-      reminders.contains(where: { $0.id == reminder.id }),
+      isKnownReminder(reminder),
       completingReminderIDs.insert(reminder.id).inserted
     else { return }
 
@@ -304,6 +367,37 @@ final class AppModel: ObservableObject {
         present(error)
       }
     }
+  }
+
+  /// Clears the completed flag of a Day Schedule row so it returns to the
+  /// pending side of its day.
+  func reopen(_ reminder: ReminderSnapshot) {
+    guard
+      canAccess(source: reminder.source),
+      reminder.isCompleted,
+      monthReminders.contains(where: { $0.id == reminder.id }),
+      completingReminderIDs.insert(reminder.id).inserted
+    else { return }
+
+    Task {
+      do {
+        try await store.setCompleted(false, reminderID: reminder.id)
+        try await Task.sleep(for: .milliseconds(200))
+        if let index = monthReminders.firstIndex(where: { $0.id == reminder.id }) {
+          monthReminders[index].isCompleted = false
+        }
+        completingReminderIDs.remove(reminder.id)
+        await reload()
+      } catch {
+        completingReminderIDs.remove(reminder.id)
+        present(error)
+      }
+    }
+  }
+
+  private func isKnownReminder(_ reminder: ReminderSnapshot) -> Bool {
+    reminders.contains(where: { $0.id == reminder.id })
+      || visibleScheduleReminders.contains(where: { $0.id == reminder.id })
   }
 
   func delete(_ reminder: ReminderSnapshot) {
@@ -432,10 +526,11 @@ final class AppModel: ObservableObject {
   }
 
   func moveSelection(_ delta: Int) {
-    guard !reminders.isEmpty else { return }
-    let currentIndex = reminders.firstIndex { $0.id == selectedReminderID } ?? 0
-    let nextIndex = min(max(currentIndex + delta, 0), reminders.count - 1)
-    selectedReminderID = reminders[nextIndex].id
+    let navigable = keyboardNavigableReminders
+    guard !navigable.isEmpty else { return }
+    let currentIndex = navigable.firstIndex { $0.id == selectedReminderID } ?? 0
+    let nextIndex = min(max(currentIndex + delta, 0), navigable.count - 1)
+    selectedReminderID = navigable[nextIndex].id
   }
 
   func setIslandHovered(_ hovering: Bool) {
@@ -630,6 +725,10 @@ final class AppModel: ObservableObject {
   private func removeCompletedReminder(id: String) {
     let removedIndex = reminders.firstIndex { $0.id == id }
     reminders.removeAll { $0.id == id }
+    if let index = monthReminders.firstIndex(where: { $0.id == id }) {
+      monthReminders[index].isCompleted = true
+    }
+    undatedReminders.removeAll { $0.id == id }
     completingReminderIDs.remove(id)
 
     guard selectedReminderID == id else { return }

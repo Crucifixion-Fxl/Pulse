@@ -47,6 +47,56 @@ final class LocalSourceAppModelTests: XCTestCase {
   }
 
   @MainActor
+  func testQuickAddReminderStaysUndatedAndJoinsDayScheduleUndatedSection() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+
+    model.quickAddTitle = "Undated task"
+    model.createQuickReminder()
+    try await Task.sleep(for: .milliseconds(50))
+
+    XCTAssertTrue(model.monthReminders.isEmpty)
+    XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
+    XCTAssertEqual(model.undatedReminders.map(\.title), ["Undated task"])
+    XCTAssertEqual(model.visibleScheduleReminders.map(\.title), ["Undated task"])
+  }
+
+  @MainActor
+  func testCompletingDayItemMarksItCompletedInSchedule() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    guard let listID = model.activeListID else {
+      return XCTFail("Expected an Active List")
+    }
+
+    try await store.createReminder(
+      title: "Dated task",
+      in: listID,
+      dueComponents: Calendar.current.dateComponents([.year, .month, .day], from: model.selectedDay)
+    )
+    await model.reload()
+    let reminder = try XCTUnwrap(model.monthReminders.first)
+    XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["Dated task"])
+
+    model.complete(reminder)
+    try await Task.sleep(for: .milliseconds(400))
+
+    XCTAssertEqual(try XCTUnwrap(model.monthReminders.first).isCompleted, true)
+    XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
+    XCTAssertEqual(model.selectedDaySchedule.completed.map(\.title), ["Dated task"])
+  }
+
+  @MainActor
   func testDeniedICloudAuthorizationOffersRecoveryWhileLocalListIsActive() async {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)
@@ -162,7 +212,24 @@ private final class LocalOnlyTestReminderStore: ReminderStore {
     reminders.filter { $0.listID == listID }
   }
 
-  func createReminder(title: String, in listID: String) async throws {
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] {
+    reminders.filter { reminder in
+      guard let due = reminder.dueDateComponents.flatMap({ Calendar.current.date(from: $0) }) else {
+        return false
+      }
+      return due >= dueFrom && due <= through
+    }
+  }
+
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] {
+    reminders.filter { $0.dueDateComponents == nil }
+  }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {
     createdReminderTitles.append(title)
     reminders.append(
       ReminderSnapshot(
@@ -170,15 +237,19 @@ private final class LocalOnlyTestReminderStore: ReminderStore {
         listID: listID,
         source: .local,
         title: title,
-        dueDateComponents: nil,
+        dueDateComponents: dueComponents,
         priority: .none,
         isRecurring: false
       ))
   }
 
   func updateReminder(id: String, from draft: ReminderDraft) async throws {}
-  func setCompleted(_ completed: Bool, reminderID: String) async throws {}
   func deleteReminder(id: String) async throws {}
+
+  func setCompleted(_ completed: Bool, reminderID: String) async throws {
+    guard let index = reminders.firstIndex(where: { $0.id == reminderID }) else { return }
+    reminders[index].isCompleted = completed
+  }
 
   func createList(title: String, source: ReminderSource) async throws -> ReminderListSnapshot {
     createdListTitles.append(title)

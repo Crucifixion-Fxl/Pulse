@@ -1,8 +1,34 @@
 import XCTest
+import SwiftUI
 
 @testable import TodoIsland
 
 final class DisplayGeometryTests: XCTestCase {
+  func testExpandedShouldersJoinFullTopEdgeAndTaperInwardSymmetrically() {
+    let path = IslandSurfaceShape(
+      shoulderInset: 8, topShoulderDepth: 8, bottomRadius: 36
+    ).path(in: CGRect(x: 0, y: 0, width: 520, height: 320))
+    XCTAssertTrue(path.contains(CGPoint(x: 2, y: 0.1)))
+    XCTAssertTrue(path.contains(CGPoint(x: 518, y: 0.1)))
+    XCTAssertTrue(path.contains(CGPoint(x: 4, y: 1)))
+    XCTAssertFalse(path.contains(CGPoint(x: 4, y: 7)))
+    XCTAssertFalse(path.contains(CGPoint(x: 516, y: 7)))
+    // The shoulder must finish within 8 points, then remain vertical.
+    for y in [9.0, 30, 140, 280] {
+      XCTAssertFalse(path.contains(CGPoint(x: 7.5, y: y)))
+      XCTAssertFalse(path.contains(CGPoint(x: 512.5, y: y)))
+      XCTAssertTrue(path.contains(CGPoint(x: 8.5, y: y)))
+      XCTAssertTrue(path.contains(CGPoint(x: 511.5, y: y)))
+    }
+    for y in stride(from: 1.0, through: 319.0, by: 7) {
+      for x in stride(from: 1.5, through: 259.0, by: 7) {
+        if path.contains(CGPoint(x: x, y: y)) != path.contains(CGPoint(x: 520 - x, y: y)) {
+          XCTFail("Silhouette is not mirrored at x=\(x), y=\(y)")
+          return
+        }
+      }
+    }
+  }
   func testAnimatedSurfaceTracksCurrentWindowSize() {
     let intermediateWindowSize = CGSize(width: 372, height: 126)
     let previewTargetSize = CGSize(width: 440, height: 220)
@@ -27,9 +53,14 @@ final class DisplayGeometryTests: XCTestCase {
 
     let geometry = DisplayGeometryCalculator.geometry(for: display)
     XCTAssertEqual(geometry.collapsedSize.height, 32)
-    XCTAssertEqual(geometry.collapsedSize.width, 320)
-    XCTAssertEqual(geometry.expandedSize, CGSize(width: 480, height: 360))
-    XCTAssertEqual(geometry.origin(for: .pinned, in: display), CGPoint(x: 516, y: 622))
+    XCTAssertEqual(geometry.collapsedSize.width, 348)
+    let sideWidth = (geometry.collapsedSize.width - display.physicalNotchWidth) / 2
+    XCTAssertEqual(sideWidth, 72)
+    let collapsedOrigin = geometry.origin(for: .collapsed, in: display)
+    XCTAssertEqual(collapsedOrigin.x + sideWidth, display.auxiliaryLeftWidth)
+    XCTAssertEqual(collapsedOrigin.x + sideWidth + display.physicalNotchWidth, 858)
+    XCTAssertEqual(geometry.expandedSize, CGSize(width: 640, height: 320))
+    XCTAssertEqual(geometry.origin(for: .pinned, in: display), CGPoint(x: 436, y: 662))
   }
 
   func testHoverPreviewIsShorterThanPinnedIsland() {
@@ -60,7 +91,7 @@ final class DisplayGeometryTests: XCTestCase {
 
     let geometry = DisplayGeometryCalculator.geometry(for: display)
 
-    XCTAssertEqual(geometry.previewSize, CGSize(width: 440, height: 260))
+    XCTAssertEqual(geometry.previewSize, CGSize(width: 600, height: 240))
   }
 
   func testNoNotchUsesMenuBarHeightAndCapsuleWidth() {

@@ -6,15 +6,15 @@ final class IslandStateTests: XCTestCase {
   func testMotionProfilesUseSmoothStateSpecificTiming() {
     XCTAssertEqual(
       IslandPresentationState.preview.motionProfile,
-      IslandMotionProfile(response: 0.34, dampingFraction: 0.96)
+      IslandMotionProfile(response: 0.5, dampingFraction: 0.68)
     )
     XCTAssertEqual(
       IslandPresentationState.pinned.motionProfile,
-      IslandMotionProfile(response: 0.26, dampingFraction: 0.98)
+      IslandMotionProfile(response: 0.44, dampingFraction: 0.75)
     )
     XCTAssertEqual(
       IslandPresentationState.collapsed.motionProfile,
-      IslandMotionProfile(response: 0.30, dampingFraction: 1.0)
+      IslandMotionProfile(response: 0.24, dampingFraction: 1.0)
     )
   }
 
@@ -404,7 +404,14 @@ private final class HoverTestReminderStore: ReminderStore {
   func requestFullAccess() async throws -> Bool { false }
   func fetchLists() async throws -> [ReminderListSnapshot] { [] }
   func fetchPendingReminders(in listID: String) async throws -> [ReminderSnapshot] { [] }
-  func createReminder(title: String, in listID: String) async throws {}
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {}
   func updateReminder(id: String, from draft: ReminderDraft) async throws {}
   func setCompleted(_ completed: Bool, reminderID: String) async throws {}
   func deleteReminder(id: String) async throws {}
@@ -439,7 +446,14 @@ private final class ListSelectionTestReminderStore: ReminderStore {
     ]
   }
 
-  func createReminder(title: String, in listID: String) async throws {}
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {}
   func updateReminder(id: String, from draft: ReminderDraft) async throws {}
   func setCompleted(_ completed: Bool, reminderID: String) async throws {}
   func deleteReminder(id: String) async throws {}
@@ -468,7 +482,14 @@ private final class CompletionFeedbackTestReminderStore: ReminderStore {
   func fetchPendingReminders(in listID: String) async throws -> [ReminderSnapshot] {
     pendingReminders
   }
-  func createReminder(title: String, in listID: String) async throws {}
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {}
   func updateReminder(id: String, from draft: ReminderDraft) async throws {}
   func setCompleted(_ completed: Bool, reminderID: String) async throws {
     guard completed else { return }
@@ -493,7 +514,13 @@ private final class QuickAddTestReminderStore: ReminderStore {
   func fetchPendingReminders(in listID: String) async throws -> [ReminderSnapshot] {
     pendingReminders
   }
-  func createReminder(title: String, in listID: String) async throws {
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { pendingReminders }
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {
     createdTitle = title
     createdListID = listID
     pendingReminders = [
@@ -520,7 +547,14 @@ private final class NoListTestReminderStore: ReminderStore {
   func requestFullAccess() async throws -> Bool { true }
   func fetchLists() async throws -> [ReminderListSnapshot] { [] }
   func fetchPendingReminders(in listID: String) async throws -> [ReminderSnapshot] { [] }
-  func createReminder(title: String, in listID: String) async throws {}
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {}
   func updateReminder(id: String, from draft: ReminderDraft) async throws {}
   func setCompleted(_ completed: Bool, reminderID: String) async throws {}
   func deleteReminder(id: String) async throws {}

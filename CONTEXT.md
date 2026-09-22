@@ -119,3 +119,11 @@ _Avoid_: Repeating task, recurrence item
 **All Done**:
 The state of an Active List that contains no Pending Reminders. The Island remains available for Quick Add while showing this state.
 _Avoid_: Empty list, zero state
+
+**Month Calendar**:
+The grid of one calendar month in the Pinned Island's content area, with a marker for each date that contains Reminders, month navigation, and the system calendar's first weekday. Adjacent-month filler days complete its fixed six-week grid.
+_Avoid_: Calendar view, date picker
+
+**Day Schedule**:
+The Reminders due on the selected date, aggregated across every accessible Reminder List and grouped into Pending, Completed, and Undated sections, with each row tagged by its owning Reminder List.
+_Avoid_: Day view, daily list, agenda

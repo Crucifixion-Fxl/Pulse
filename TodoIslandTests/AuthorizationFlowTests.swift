@@ -176,7 +176,14 @@ private final class AuthorizationFlowReminderStore: ReminderStore {
     ]
   }
 
-  func createReminder(title: String, in listID: String) async throws {}
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {}
 
   func updateReminder(id: String, from draft: ReminderDraft) async throws {
     updatedReminderIDs.append(id)
