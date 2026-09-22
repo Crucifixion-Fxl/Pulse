@@ -625,6 +625,9 @@ struct IslandRootView: View {
     let dayTitleSize: CGFloat
     let rowPitch: CGFloat
     let headerBottomPadding: CGFloat
+    let rowTitleSize: CGFloat
+    let rowDetailSize: CGFloat
+    let rowGlyphSize: CGFloat
 
     static let regular = ScheduleMetrics(
       paneWidth: 216,
@@ -639,8 +642,11 @@ struct IslandRootView: View {
       weekSpacing: 2,
       dotSize: 3.5,
       dayTitleSize: 14,
-      rowPitch: 46,
-      headerBottomPadding: 7
+      rowPitch: 38,
+      headerBottomPadding: 7,
+      rowTitleSize: 12.5,
+      rowDetailSize: 10.5,
+      rowGlyphSize: 15
     )
 
     static let compact = ScheduleMetrics(
@@ -656,8 +662,11 @@ struct IslandRootView: View {
       weekSpacing: 1.5,
       dotSize: 3,
       dayTitleSize: 12.5,
-      rowPitch: 44,
-      headerBottomPadding: 5
+      rowPitch: 36,
+      headerBottomPadding: 5,
+      rowTitleSize: 11.5,
+      rowDetailSize: 10,
+      rowGlyphSize: 13.5
     )
   }
 
@@ -799,14 +808,14 @@ struct IslandRootView: View {
               }
 
               if !schedule.completed.isEmpty {
-                daySectionHeader("calendar.completed")
+                daySectionHeader("calendar.completed", metrics: metrics)
                 ForEach(schedule.completed) { reminder in
                   dayRowWithEditor(reminder, isCompleted: true, metrics: metrics)
                 }
               }
 
               if !undated.isEmpty {
-                daySectionHeader("calendar.undated")
+                daySectionHeader("calendar.undated", metrics: metrics)
                 ForEach(undated) { reminder in
                   dayRowWithEditor(reminder, isCompleted: false, metrics: metrics)
                 }
@@ -847,7 +856,7 @@ struct IslandRootView: View {
     isCompleted: Bool,
     metrics: ScheduleMetrics
   ) -> some View {
-    dayRow(reminder, isCompleted: isCompleted)
+    dayRow(reminder, isCompleted: isCompleted, metrics: metrics)
       .frame(height: metrics.rowPitch)
       .id(reminder.id)
       .transition(.opacity.combined(with: .move(edge: .top)))
@@ -861,14 +870,17 @@ struct IslandRootView: View {
     }
   }
 
-  private func daySectionHeader(_ titleKey: LocalizedStringKey) -> some View {
+  private func daySectionHeader(
+    _ titleKey: LocalizedStringKey,
+    metrics: ScheduleMetrics
+  ) -> some View {
     HStack(spacing: 3) {
       Text(titleKey)
-        .font(.system(size: 10.8, weight: .semibold))
+        .font(.system(size: metrics.rowDetailSize, weight: .semibold))
         .foregroundStyle(ReUITheme.muted)
       Spacer()
     }
-    .padding(.top, 5)
+    .padding(.top, 4)
     .padding(.bottom, 2)
     .accessibilityAddTraits(.isHeader)
   }
@@ -889,7 +901,11 @@ struct IslandRootView: View {
     .padding(8)
   }
 
-  private func dayRow(_ reminder: ReminderSnapshot, isCompleted: Bool) -> some View {
+  private func dayRow(
+    _ reminder: ReminderSnapshot,
+    isCompleted: Bool,
+    metrics: ScheduleMetrics
+  ) -> some View {
     let isCompleting = model.completingReminderIDs.contains(reminder.id)
     let isSelected = model.selectedReminderID == reminder.id
     let isHovered = hoveredReminderID == reminder.id
@@ -903,7 +919,7 @@ struct IslandRootView: View {
         }
       } label: {
         Image(systemName: circleSymbol(isCompleted: isCompleted, isCompleting: isCompleting))
-          .font(.system(size: 17.5, weight: .medium))
+          .font(.system(size: metrics.rowGlyphSize, weight: .medium))
           .foregroundStyle(circleColor(isCompleted: isCompleted, isCompleting: isCompleting))
       }
       .buttonStyle(.plain)
@@ -915,26 +931,29 @@ struct IslandRootView: View {
 
       VStack(alignment: .leading, spacing: 1) {
         Text(reminder.title)
-          .font(.system(size: 14.04, weight: .medium))
+          .font(.system(size: metrics.rowTitleSize, weight: .medium))
           .strikethrough(isCompleted, color: .white.opacity(0.4))
           .foregroundStyle(isCompleted ? ReUITheme.muted : .primary)
           .lineLimit(1)
         if let time = dueTimeLabel(for: reminder) {
           Text(time)
-            .font(.system(size: 11.4))
+            .font(.system(size: metrics.rowDetailSize))
             .foregroundStyle(ReUITheme.muted)
         }
       }
 
       Spacer(minLength: 4)
 
-      listTag(for: reminder)
+      listTag(for: reminder, metrics: metrics)
+      if reminder.dueDateComponents == nil {
+        undatedTag(metrics: metrics)
+      }
 
       if !isCompleted && reminder.priority != .none {
         Image(systemName: prioritySymbol(reminder.priority))
-          .font(.system(size: 11.88))
-          .padding(.horizontal, 5)
-          .padding(.vertical, 2)
+          .font(.system(size: metrics.rowDetailSize))
+          .padding(.horizontal, 4.5)
+          .padding(.vertical, 1.5)
           .background(Capsule(style: .continuous).fill(priorityColor(reminder.priority).opacity(0.14)))
           .overlay(Capsule(style: .continuous).stroke(priorityColor(reminder.priority).opacity(0.28), lineWidth: 1))
           .foregroundStyle(priorityColor(reminder.priority))
@@ -992,23 +1011,35 @@ struct IslandRootView: View {
   /// The owning Reminder List as a colored capsule so the Day Schedule can
   /// aggregate across lists without losing provenance.
   @ViewBuilder
-  private func listTag(for reminder: ReminderSnapshot) -> some View {
+  private func listTag(for reminder: ReminderSnapshot, metrics: ScheduleMetrics) -> some View {
     if let list = model.lists.first(where: { $0.id == reminder.listID }) {
       let accent = listAccent(for: list)
       HStack(spacing: 2.5) {
-        Circle().fill(accent).frame(width: 4, height: 4)
+        Circle().fill(accent).frame(width: 3.5, height: 3.5)
         Text(list.title)
-          .font(.system(size: 10.5, weight: .medium))
+          .font(.system(size: metrics.rowDetailSize, weight: .medium))
           .lineLimit(1)
           .truncationMode(.tail)
       }
-      .padding(.horizontal, 5)
-      .padding(.vertical, 2)
+      .padding(.horizontal, 4.5)
+      .padding(.vertical, 1.5)
       .background(Capsule(style: .continuous).fill(accent.opacity(0.14)))
       .overlay(Capsule(style: .continuous).stroke(accent.opacity(0.28), lineWidth: 1))
       .foregroundStyle(accent)
       .accessibilityLabel(Text(list.title))
     }
+  }
+
+  /// Marks reminders that have no Due Date, mirroring the Undated section.
+  private func undatedTag(metrics: ScheduleMetrics) -> some View {
+    Text("calendar.undated")
+      .font(.system(size: metrics.rowDetailSize, weight: .medium))
+      .lineLimit(1)
+      .padding(.horizontal, 4.5)
+      .padding(.vertical, 1.5)
+      .background(Capsule(style: .continuous).fill(Color.white.opacity(0.07)))
+      .overlay(Capsule(style: .continuous).stroke(ReUITheme.subtleBorder, lineWidth: 1))
+      .foregroundStyle(ReUITheme.muted)
   }
 
   private func listAccent(for list: ReminderListSnapshot) -> Color {
