@@ -1,5 +1,5 @@
 "app.name" = "Todo Island";
-"about.detail" = "在灵动岛中管理 iCloud 和 Todo Island 本地提醒事项。";
+"about.detail" = "在灵动岛中管理你的 iCloud 提醒事项。";
 
 "common.ok" = "好";
 "common.cancel" = "取消";
@@ -14,8 +14,8 @@
 "error.operation-unsupported" = "所选来源不支持此操作。";
 "error.local-store-unavailable" = "Todo Island 本地存储不可用，现有数据没有被修改。";
 
-"island.locked" = "选择 iCloud 或本地";
-"island.locked.accessibility" = "请选择授权 iCloud 或使用 Todo Island 本地提醒事项。";
+"island.locked" = "请授权 iCloud 提醒事项";
+"island.locked.accessibility" = "授权 iCloud 提醒事项后即可显示列表。";
 "island.all-done" = "全部完成";
 "island.collapsed.accessibility" = "列表：%@。还有 %d 项未完成。";
 
@@ -30,15 +30,12 @@
 "list.none" = "没有列表";
 "list.switch" = "切换提醒事项列表";
 "list.no-icloud" = "没有 iCloud 列表";
-"list.no-icloud.detail" = "你可以在这里创建 iCloud 列表，或切换到 Todo Island 本地。";
-"list.no-local" = "没有本地列表";
-"list.no-local.detail" = "需要再次使用 Todo Island 本地提醒事项时，请新建一个列表。";
+"list.no-icloud.detail" = "可以在这里新建 iCloud 列表，或到 Apple 提醒事项中创建。";
 "list.open-reminders" = "打开提醒事项";
 "list.check-again" = "重新检查";
 "list.new" = "新建列表";
-"list.new.detail" = "设置名称并选择保存位置";
+"list.new.detail" = "为新的 iCloud 列表设置名称";
 "list.new-icloud" = "新建 iCloud 列表";
-"list.new-local" = "新建本地列表";
 "list.create" = "创建列表";
 "list.rename" = "重命名";
 "list.delete" = "删除列表";
@@ -46,16 +43,12 @@
 "list.active" = "当前列表";
 "list.name" = "名称";
 "list.name.placeholder" = "列表名称";
-"list.source" = "来源";
 "list.icloud-permission-required" = "请先允许访问提醒事项，再创建 iCloud 列表。";
 "list.delete.title" = "删除这个本地列表？";
 "list.delete.confirm" = "删除列表";
 "list.delete.detail" = "“%@”包含 %d 个未完成事项和 %d 个已完成事项。它们都会被永久删除。";
 "source.icloud" = "iCloud";
 "source.icloud.detail" = "Apple 提醒事项";
-"source.local" = "Todo Island 本地";
-"source.local.detail" = "仅保存在这台 Mac";
-"source.use-local" = "使用本地";
 "reminders.remaining" = "还有 %d 项";
 
 "reminder.complete" = "完成 %@";
@@ -91,7 +84,6 @@
 "permission.required.detail" = "Apple 没有提供只读提醒事项权限。Todo Island 只使用完整权限来显示和管理你选择的 iCloud 提醒事项。";
 "permission.privacy" = "Todo Island 不会上传提醒事项内容，iCloud 同步仍由 Apple 提醒事项管理。";
 "permission.allow" = "允许访问提醒事项";
-"permission.use-local" = "不授权，使用本地";
 "permission.open-island" = "在灵动岛中授权";
 "permission.open-settings" = "打开系统设置";
 "permission.full-access" = "完整访问";
@@ -110,13 +102,6 @@
 "settings.launch-at-login" = "登录时启动";
 "settings.about" = "关于";
 "settings.privacy" = "Todo Island 只在这台 Mac 上处理提醒事项内容。";
-"settings.local-source" = "Todo Island 本地";
-"settings.local-storage" = "存储";
-
-"local-store.available" = "可用";
-"local-store.unavailable" = "本地存储不可用";
-"local-store.retry" = "重试";
-"local-store.show-in-finder" = "在 Finder 中显示数据";
 
 "menu.open" = "打开 Todo Island";
 "menu.settings" = "设置…";

@@ -2,7 +2,7 @@
 
 ## Product
 
-Todo Island is a personal macOS accessory application that presents and manages unfinished Reminders from iCloud and Todo Island's own Local Source in a Dynamic Island-style surface attached to the top center of one automatically determined Host Display.
+Todo Island is a personal macOS accessory application that presents and manages Reminders from the iCloud Source in a Dynamic Island-style surface attached to the top center of one automatically determined Host Display.
 
 - Product name: `Todo Island`
 - Bundle identifier: `com.fxl.TodoIsland`
@@ -14,14 +14,14 @@ The canonical product vocabulary lives in [`CONTEXT.md`](../CONTEXT.md). Archite
 
 ## Product Boundaries
 
-Todo Island reads and writes iCloud Reminders through Apple's public EventKit APIs and stores Local Reminders in its own sandboxed on-device database. It requests full Reminders access only for the iCloud Source because Apple does not expose a read-only authorization level. Todo Island never uploads, analyzes, or writes Reminder content to logs; Apple Reminders remains responsible for iCloud synchronization of the iCloud Source.
+Todo Island reads and writes iCloud Reminders through Apple's public EventKit APIs. It requests full Reminders access because Apple does not expose a read-only authorization level. Todo Island never uploads, analyzes, or writes Reminder content to logs; Apple Reminders remains responsible for iCloud synchronization of the iCloud Source.
 
 The product:
 
-- supports an EventKit-backed iCloud Source and an app-owned Local Source;
+- is backed by the iCloud Source alone;
 - presents Pending Reminders, plus the Completed Reminders due on the Day Schedule's selected date;
-- switches between iCloud and Local Reminder Lists inside one combined Island list menu;
-- creates Reminder Lists inside the Island with iCloud selected as the default source;
+- switches between iCloud Reminder Lists in one Island list menu;
+- creates iCloud Reminder Lists inside the Island;
 - creates, edits, completes, and deletes Reminders;
 - edits title, optional Due Date and optional time, and Priority;
 - can present and complete existing Recurring Reminders but cannot edit their repetition rules;
@@ -29,9 +29,7 @@ The product:
 - restores the last valid Active List and otherwise prefers iCloud; and
 - does not move or copy Reminders between lists or sources.
 
-Local Reminder Lists can be created, renamed, and deleted inside Todo Island because no other application manages them. iCloud Reminder Lists can be created inside Todo Island, while renaming and deletion remain in Apple Reminders. Reminder Lists are not manually reordered.
-
-Local Reminders support the same Todo Island fields and operations as iCloud Reminders: title, optional Due Date and time, Priority, completion, editing, and deletion. Local Reminders do not support repetition rules and do not appear in Apple Reminders.
+iCloud Reminder Lists can be created inside Todo Island, while renaming and deletion remain in Apple Reminders. Reminder Lists are not manually reordered.
 
 The first version does not include search, filters, notes, URLs, attachments, locations, tags, subtasks, recurrence editing, notifications, or due-date alerts. A Local Reminder's Due Date affects display and ordering but does not schedule a macOS notification.
 
@@ -59,7 +57,7 @@ Collapsed Island Visibility is a required per-Mac preference with no preselected
 
 For an ordinary Active List, including All Done, Auto-Hide waits 200 milliseconds after the pointer leaves and then fades the Collapsed Island out over approximately 160 milliseconds. Entering its Activation Zone immediately fades it in over approximately 160 milliseconds; remaining there for the existing 200-millisecond dwell continues into an Island Preview. Reduce Motion replaces these fades with immediate visibility changes.
 
-Initial Setup, Locked iCloud Source, no-list recovery, and Local-store recovery remain visible. Auto-Hide is also temporarily suppressed while VoiceOver is active without changing the saved preference. Background Reminder changes never reveal a hidden Island; current content appears the next time it opens.
+Initial Setup, Locked iCloud Source, and no-list recovery remain visible. Auto-Hide is also temporarily suppressed while VoiceOver is active without changing the saved preference. Background Reminder changes never reveal a hidden Island; current content appears the next time it opens.
 
 ### Island Preview
 
@@ -96,11 +94,11 @@ The Day Schedule shows the Reminders due on the selected date across every acces
 
 Reminders without a Due Date always appear in the Undated section of the Day Schedule, whatever list they belong to.
 
-The last valid Active List is restored on launch. If it no longer exists, the app falls back to the first available iCloud Reminder List, then a Local Reminder List. Lists are ordered alphabetically inside each source group.
+The last valid Active List is restored on launch. If it no longer exists, the app falls back to the first available iCloud Reminder List. Lists are ordered alphabetically inside each source group.
 
-The list menu includes a New List action that pins the Island when necessary and expands a compact form inside it. The form asks for a name and source, defaults to iCloud, and assigns Local Reminder Lists a stable automatic accent color. Creating or renaming a list rejects a name already used inside the selected source but allows the same name in the other source; externally created duplicate iCloud names remain supported and are distinguished by stable identity, source, and color.
+The list menu includes a New List action that pins the Island when necessary and expands a compact form inside it. The form asks for a name for the new iCloud list. Creating a list rejects a name already used by an existing iCloud list; externally created duplicate iCloud names remain supported and are distinguished by stable identity, source, and color.
 
-Creating a list makes it the Active List. Local Reminder Lists additionally expose rename and delete actions. Deletion confirmation shows the list name plus its Pending and Completed Reminder counts, then permanently removes the list and all of those Reminders. If the deleted list was active, the app falls back to the first available iCloud list and then another Local list. If neither exists, it shows the Local empty state; it does not automatically recreate a Default Local List after deliberate deletion.
+Creating a list makes it the Active List. Renaming and deleting Reminder Lists remains in Apple Reminders.
 
 When neither the selected date nor the Undated section has any Reminder, the Day Schedule shows a short all-clear state.
 
@@ -159,7 +157,6 @@ Todo Island is an accessory application with no Dock icon. Its menu-bar icon ope
 Settings contains:
 
 - Reminders authorization status and the appropriate in-Island authorization or Open System Settings action;
-- Local Source storage status and recovery actions;
 - a Collapsed Island segmented control labeled `Always Visible` and `Auto-Hide` in English and `常驻显示` and `自动隐藏` in Simplified Chinese;
 - Launch at Login;
 - full-screen hiding behavior;
@@ -170,15 +167,15 @@ Launch at Login is disabled by default.
 
 ## In-Island Authorization
 
-The Local Source remains usable without Apple Reminders access. Authorization controls only the iCloud Source.
+Authorization controls the iCloud Source.
 
-On first launch, Todo Island opens a Pinned Initial Setup Island. Its Collapsed Island Visibility section presents two unselected cards: `Always Visible — Keep the Collapsed Island visible.` and `Auto-Hide — Hide it when the pointer leaves; move to the top center to reveal it.` In Simplified Chinese they read `常驻显示：折叠灵动岛始终保持可见` and `自动隐藏：鼠标离开后隐藏，移到屏幕顶部中央即可唤醒`. The user must select one before the Allow Access and Use Local actions become available.
+On first launch, Todo Island opens a Pinned Initial Setup Island. Its Collapsed Island Visibility section presents two unselected cards: `Always Visible — Keep the Collapsed Island visible.` and `Auto-Hide — Hide it when the pointer leaves; move to the top center to reveal it.` In Simplified Chinese they read `常驻显示：折叠灵动岛始终保持可见` and `自动隐藏：鼠标离开后隐藏，移到屏幕顶部中央即可唤醒`. The user must select one before the Allow Access action becomes available.
 
-After the visibility choice, Initial Setup explains why full Reminders access is required for iCloud, states that Reminder content stays on the device, and offers Allow Access and Use Local actions with iCloud selected by default. The application does not use a separate setup window. The macOS authorization prompt remains a system-owned surface triggered by Allow Access.
+After the visibility choice, Initial Setup explains why full Reminders access is required for iCloud, states that Reminder content stays on the device, and offers the Allow Access action. The application does not use a separate setup window. The macOS authorization prompt remains a system-owned surface triggered by Allow Access.
 
 An existing installation with no saved Collapsed Island Visibility choice presents the required choice once after upgrading. If its current source and authorization are already usable, only the new visibility choice is shown. If recovery is required, its existing recovery controls resume immediately after the choice. The app does not repeat previously completed source setup.
 
-The visibility choice is saved independently from Reminder Source and authorization. If access is granted, the same Pinned Island immediately replaces its authorization content with the Active List and its Reminders. If access is denied or restricted, the visibility choice remains saved, only the iCloud Source is locked, and Open System Settings plus Use Local remain available. Resetting authorization, reauthorizing, or switching between iCloud and Local does not ask for the visibility choice again. The application does not repeatedly prompt.
+The visibility choice is saved independently from Reminder Source and authorization. If access is granted, the same Pinned Island immediately replaces its authorization content with the Active List and its Reminders. If access is denied or restricted, the visibility choice remains saved, only the iCloud Source is locked, and Open System Settings remains available. Resetting authorization or reauthorizing does not ask for the visibility choice again. The application does not repeatedly prompt.
 
 The user may dismiss Initial Setup with Escape or by clicking outside it before choosing visibility. No choice is recorded; the Collapsed Island remains temporarily visible and reopens Initial Setup on the next interaction or launch. Dismissing it does not quit the application.
 
@@ -186,13 +183,13 @@ After Auto-Hide has been selected, an ordinary subsequent launch starts with the
 
 Changing Collapsed Island Visibility in Settings saves and applies it immediately. Selecting Always Visible reveals a hidden Collapsed Island immediately. Selecting Auto-Hide while the pointer is outside waits 200 milliseconds before hiding, but never dismisses an Island Preview or Pinned Island currently in use; the new preference takes effect when that Island next collapses.
 
-After launch, the app restores the last valid Active List. If it is unavailable or none has been saved, the app automatically uses the first available iCloud Reminder List, then a Local Reminder List. The user can switch the Active List from within the Island.
+After launch, the app restores the last valid Active List. If it is unavailable or none has been saved, the app automatically uses the first available iCloud Reminder List. The user can switch the Active List from within the Island.
 
-If the user selects Local and no Local Reminder List exists, Todo Island creates the Default Local List and makes it active. If no iCloud Reminder List is available, the iCloud empty state offers New iCloud List, Use Local, Open Reminders, and Check Again actions.
+If no iCloud Reminder List is available, the empty state offers New iCloud List, Open Reminders, and Check Again actions.
 
-If access is revoked while Todo Island is running and an iCloud list is active, the Island preserves its current presentation state and replaces only the iCloud content with the locked state. Local lists remain available. The Island does not expand itself or take focus solely because authorization changed.
+If access is revoked while Todo Island is running and an iCloud list is active, the Island preserves its current presentation state and replaces only the iCloud content with the locked state. The Island does not expand itself or take focus solely because authorization changed.
 
-If authorization is revoked while editing an iCloud Reminder, the unsaved draft remains in memory but cannot be saved. If access returns, Todo Island refetches the Reminder, validates that the draft still has a valid target, and lets the user explicitly save it. Authorization restoration never writes a draft automatically and does not affect Local Reminder editing.
+If authorization is revoked while editing an iCloud Reminder, the unsaved draft remains in memory but cannot be saved. If access returns, Todo Island refetches the Reminder, validates that the draft still has a valid target, and lets the user explicitly save it. Authorization restoration never writes a draft automatically.
 
 The app uses:
 
@@ -236,7 +233,7 @@ The Island shell is an independent implementation informed by boring.notch's pub
 - A locally signed `.app` launches on the current Mac.
 - Unit tests cover Reminder ordering, presentation mapping, Island state transitions, and display geometry.
 - The application has no Dock icon and its menu-bar entry remains usable when the Island cannot be shown.
-- In-Island authorization correctly handles not-determined, full-access, denied, and restricted iCloud states while keeping Local available.
+- In-Island authorization correctly handles not-determined, full-access, denied, and restricted iCloud states.
 - The app reads and performs the agreed CRUD operations against real iCloud Reminders and its own Local Reminders.
 - Local list creation, renaming, deletion, first-use Default Local List creation, and stable automatic colors work without Reminders permission.
 - Local completion retains hidden Completed Reminders, and Local list deletion confirms both Pending and Completed counts.

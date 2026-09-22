@@ -27,24 +27,6 @@ struct SettingsView: View {
         }
       }
 
-      Section("settings.local-source") {
-        LabeledContent("settings.local-storage") {
-          Text(localStorageLabel)
-            .foregroundStyle(localStorageColor)
-        }
-
-        if case .unavailable = model.localStoreAvailability {
-          HStack {
-            Button("local-store.retry") {
-              Task { await model.retryLocalStore() }
-            }
-            Button("local-store.show-in-finder") {
-              model.showLocalDataInFinder()
-            }
-          }
-        }
-      }
-
       Section("settings.island") {
         LabeledContent("settings.collapsed-island") {
           if model.needsCollapsedIslandVisibilityChoice {
@@ -92,7 +74,7 @@ struct SettingsView: View {
     }
     .formStyle(.grouped)
     .padding(16)
-    .frame(width: 520, height: 455)
+    .frame(width: 520, height: 380)
     .task {
       launchAtLogin.refresh()
     }
@@ -120,17 +102,6 @@ struct SettingsView: View {
 
   private var permissionColor: Color {
     model.authorization == .fullAccess ? .green : .orange
-  }
-
-  private var localStorageLabel: LocalizedStringKey {
-    switch model.localStoreAvailability {
-    case .available: "local-store.available"
-    case .unavailable: "local-store.unavailable"
-    }
-  }
-
-  private var localStorageColor: Color {
-    model.localStoreAvailability == .available ? .green : .orange
   }
 
   private var appVersion: String {

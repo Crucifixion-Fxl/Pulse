@@ -21,20 +21,12 @@ A user-defined collection of Reminders owned by exactly one Reminder Source.
 _Avoid_: Calendar, category
 
 **Reminder Source**:
-The system that owns a Reminder List and its Reminders. Todo Island supports the iCloud Source and Local Source.
+The system that owns a Reminder List and its Reminders. Todo Island supports the iCloud Source.
 _Avoid_: Account, storage mode, provider
 
 **iCloud Source**:
 The Reminder Source backed by Apple Reminders and synchronized through iCloud.
-_Avoid_: Cloud mode, Apple source
-
-**Local Source**:
-The Reminder Source privately maintained by Todo Island on this Mac and available without Apple Reminders permission. Its Reminder Lists and Reminders do not appear in Apple Reminders or synchronize through iCloud.
-_Avoid_: On My Mac, offline mode, local account
-
-**Default Local List**:
-The first Local Reminder List, automatically created with the title Todo Island the first time the user selects an empty Local Source. It is not automatically recreated after the user deliberately deletes the last Local Reminder List.
-_Avoid_: Inbox, default calendar
+_Avoid_: Cloud mode, Apple source, local source
 
 **Active List**:
 The Reminder List currently presented in the Island. A user can switch the Active List from within the Island.
@@ -65,7 +57,7 @@ The pointer-sensitive top-center region matching the Collapsed Island's frame. W
 _Avoid_: Invisible button, hover trap, hot corner
 
 **Initial Setup**:
-The in-Island experience in which a user must explicitly choose Collapsed Island Visibility before continuing with iCloud authorization or Local Source use. It appears for new and upgraded installations with no recorded choice; dismissing it records nothing and leaves a temporarily visible Collapsed Island from which setup can resume.
+The in-Island experience in which a user must explicitly choose Collapsed Island Visibility before continuing with iCloud authorization. It appears for new and upgraded installations with no recorded choice; dismissing it records nothing and leaves a temporarily visible Collapsed Island from which setup can resume.
 _Avoid_: Onboarding page, setup window
 
 **Host Display**:
@@ -81,7 +73,7 @@ The expanded, interactive Island entered by clicking it. It takes keyboard focus
 _Avoid_: Focused popup
 
 **Locked iCloud Source**:
-An iCloud Source that cannot present or modify Reminders because Apple Reminders access is unavailable. The Island keeps Local Source navigation available while offering the appropriate iCloud authorization or recovery action.
+An iCloud Source that cannot present or modify Reminders because Apple Reminders access is unavailable. The Island offers the appropriate iCloud authorization or recovery action.
 _Avoid_: Locked Island, onboarding, permission page
 
 **Due Date**:
@@ -105,7 +97,7 @@ An exchange of positions between exactly two Pending Reminders in the same Activ
 _Avoid_: Insert, move, cross-list move
 
 **Manual Reminder Order**:
-The user-defined positions of Pending Reminders in one Reminder List after its first Reminder Swap. It applies to both iCloud and Local Sources, persists on the current Mac, appends newly encountered Reminders, and keeps positions stable when Reminder fields change until the user restores Automatic Reminder Order.
+The user-defined positions of Pending Reminders in one Reminder List after its first Reminder Swap. It applies to the iCloud Source, persists on the current Mac, appends newly encountered Reminders, and keeps positions stable when Reminder fields change until the user restores Automatic Reminder Order.
 _Avoid_: Automatic order, global order
 
 **Recurring Reminder**:

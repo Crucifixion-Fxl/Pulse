@@ -377,14 +377,6 @@ struct IslandRootView: View {
         // Schedule; the preview picks tighter metrics for its shorter
         // surface.
         calendarDayContent
-      } else if model.preferredEmptySource == .local,
-        model.localStoreAvailability == .available
-      {
-        localEmptyContent
-      } else if case .unavailable = model.localStoreAvailability,
-        model.authorization == .fullAccess
-      {
-        localStoreUnavailableContent
       } else if model.authorization == .fullAccess {
         noListsContent
       } else {
@@ -448,43 +440,10 @@ struct IslandRootView: View {
       }
     }
 
-    Section(L10n.text("source.local")) {
-      ForEach(model.localLists) { list in
-        Menu(list.title) {
-          Button {
-            model.selectList(list.id)
-          } label: {
-            Label(
-              list.id == model.activeListID
-                ? L10n.text("list.active") : L10n.text("list.open"),
-              systemImage: list.id == model.activeListID ? "checkmark" : "arrow.right"
-            )
-          }
-          Button(L10n.text("list.rename")) {
-            model.cancelListCreation()
-            listPendingRename = list
-            listNameDraft = list.title
-            Task { @MainActor in listNameFocused = true }
-          }
-          Divider()
-          Button(L10n.text("list.delete"), role: .destructive) {
-            Task { await model.prepareListDeletion(list) }
-          }
-        }
-      }
-      if model.localLists.isEmpty {
-        Button {
-          Task { await model.useLocal() }
-        } label: {
-          Label(L10n.text("source.use-local"), systemImage: "desktopcomputer")
-        }
-      }
-    }
-
     Divider()
     Button {
       listPendingRename = nil
-      model.requestNewList()
+      model.requestNewList(source: .iCloud)
     } label: {
       Label(L10n.text("list.new"), systemImage: "plus")
     }
@@ -1313,17 +1272,6 @@ struct IslandRootView: View {
         }
       }
 
-      VStack(alignment: .leading, spacing: 3.5) {
-        Text("list.source")
-          .font(.system(size: 11.88).weight(.semibold))
-          .foregroundStyle(.secondary)
-
-        HStack(spacing: 5) {
-          listSourceOption(.iCloud)
-          listSourceOption(.local)
-        }
-      }
-
       if model.requestedListCreationSource == .iCloud, model.authorization != .fullAccess {
         Label("list.icloud-permission-required", systemImage: "exclamationmark.circle.fill")
           .font(.system(size: 11.88))
@@ -1357,60 +1305,6 @@ struct IslandRootView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .padding(.horizontal, 11)
     .padding(.vertical, 8.5)
-  }
-
-  private func listSourceOption(_ source: ReminderSource) -> some View {
-    let isSelected = model.requestedListCreationSource == source
-    let titleKey = source == .iCloud ? "source.icloud" : "source.local"
-    let detailKey = source == .iCloud ? "source.icloud.detail" : "source.local.detail"
-
-    return Button {
-      model.requestedListCreationSource = source
-    } label: {
-      HStack(spacing: 4.5) {
-        ZStack {
-          RoundedRectangle(cornerRadius: 8)
-            .fill(isSelected ? accentColor.opacity(0.18) : .white.opacity(0.06))
-          Image(systemName: source.symbolName)
-            .font(.system(size: 15.12, weight: .medium))
-            .foregroundStyle(isSelected ? accentColor : .secondary)
-        }
-        .frame(width: 30, height: 30)
-
-        VStack(alignment: .leading, spacing: 0.5) {
-          Text(L10n.text(titleKey))
-            .font(.system(size: 12.96).weight(.semibold))
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-          Text(L10n.text(detailKey))
-            .font(.system(size: 10.8))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-
-        Spacer(minLength: 1)
-
-        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-          .font(.system(size: 15.12, weight: .medium))
-          .foregroundStyle(isSelected ? accentColor : .white.opacity(0.18))
-      }
-      .padding(.horizontal, 5)
-      .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-      .background {
-        RoundedRectangle(cornerRadius: 12)
-          .fill(isSelected ? accentColor.opacity(0.10) : .white.opacity(0.035))
-      }
-      .overlay {
-        RoundedRectangle(cornerRadius: 12)
-          .stroke(
-            isSelected ? accentColor.opacity(0.65) : .white.opacity(0.09),
-            lineWidth: isSelected ? 1.25 : 1
-          )
-      }
-      .contentShape(RoundedRectangle(cornerRadius: 12))
-    }
-    .buttonStyle(.plain)
-    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
   private var listRenameForm: some View {
@@ -1495,23 +1389,6 @@ struct IslandRootView: View {
           .buttonStyle(.borderedProminent)
           .tint(accentColor)
 
-          if case .available = model.localStoreAvailability {
-            Button {
-              Task { await model.useLocal() }
-            } label: {
-              Label(L10n.text("source.use-local"), systemImage: "desktopcomputer")
-            }
-            .buttonStyle(.bordered)
-          } else {
-            HStack {
-              Button("local-store.retry") {
-                Task { await model.retryLocalStore() }
-              }
-              Button("local-store.show-in-finder") {
-                model.showLocalDataInFinder()
-              }
-            }
-          }
         }
       }
     }
@@ -1532,16 +1409,11 @@ struct IslandRootView: View {
 
       if isPinned {
         VStack(spacing: 4) {
-          HStack(spacing: 5) {
-            Button("list.new-icloud") {
-              model.requestNewList(source: .iCloud)
-            }
-            Button("source.use-local") {
-              Task { await model.useLocal() }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(accentColor)
+          Button("list.new-icloud") {
+            model.requestNewList(source: .iCloud)
           }
+          .buttonStyle(.borderedProminent)
+          .tint(accentColor)
           HStack(spacing: 5) {
             Button("list.open-reminders") {
               SystemSettings.openReminders()
@@ -1556,56 +1428,6 @@ struct IslandRootView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .padding(10)
-  }
-
-  private var localEmptyContent: some View {
-    VStack(spacing: 6) {
-      Image(systemName: "desktopcomputer")
-        .font(.system(size: 18))
-        .foregroundStyle(accentColor)
-      Text("list.no-local").font(.system(size: 14.04, weight: .semibold))
-      Text("list.no-local.detail")
-        .font(.system(size: 11.88))
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.center)
-      if isPinned {
-        Button("list.new-local") {
-          model.requestNewList(source: .local)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(accentColor)
-      }
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(10)
-  }
-
-  private var localStoreUnavailableContent: some View {
-    VStack(spacing: 6) {
-      Image(systemName: "externaldrive.badge.exclamationmark")
-        .font(.system(size: 19.2))
-        .foregroundStyle(.orange)
-      Text("local-store.unavailable").font(.system(size: 14.04, weight: .semibold))
-      if case let .unavailable(message, _) = model.localStoreAvailability {
-        Text(message)
-          .font(.system(size: 11.88))
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.center)
-      }
-      if isPinned {
-        HStack {
-          Button("local-store.retry") {
-            Task { await model.retryLocalStore() }
-          }
-          .buttonStyle(.borderedProminent)
-          Button("local-store.show-in-finder") {
-            model.showLocalDataInFinder()
-          }
-        }
-      }
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(12)
   }
 
   private var accentColor: Color {
