@@ -54,9 +54,9 @@ enum DisplayGeometryCalculator {
   static func geometry(for display: DisplayMetrics) -> IslandGeometry {
     let availableWidth = max(320, display.frame.width - 32)
     let expanded = CGSize(
-      width: min(640, availableWidth), height: min(320, max(280, display.frame.height - 80)))
+      width: min(760, availableWidth), height: min(420, max(300, display.frame.height - 80)))
     let preview = CGSize(
-      width: min(600, availableWidth), height: min(240, max(180, display.frame.height - 80)))
+      width: min(680, availableWidth), height: min(280, max(200, display.frame.height - 80)))
 
     let collapsedHeight: CGFloat
     if display.hasPhysicalNotch {

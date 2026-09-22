@@ -456,16 +456,19 @@ struct IslandRootView: View {
     let rowTitleSize: CGFloat
     let rowDetailSize: CGFloat
     let rowGlyphSize: CGFloat
+    /// Drops the month title so its center sits on the first schedule row's
+    /// text center, keeping both panes' tops on one line.
+    let paneTopPadding: CGFloat
 
     static let regular = ScheduleMetrics(
-      paneWidth: 216,
+      paneWidth: 232,
       paneSpacing: 12,
       titleSize: 14,
       stepperSide: 18,
       weekdaySize: 11,
       daySize: 12.5,
-      circleSize: 24,
-      cellMinHeight: 30,
+      circleSize: 26,
+      cellMinHeight: 32,
       cellStackSpacing: 2,
       weekSpacing: 2,
       dotSize: 3.5,
@@ -474,18 +477,19 @@ struct IslandRootView: View {
       headerBottomPadding: 7,
       rowTitleSize: 12.5,
       rowDetailSize: 10.5,
-      rowGlyphSize: 15
+      rowGlyphSize: 15,
+      paneTopPadding: 12
     )
 
     static let compact = ScheduleMetrics(
-      paneWidth: 190,
+      paneWidth: 200,
       paneSpacing: 10,
       titleSize: 12.5,
       stepperSide: 16,
       weekdaySize: 9.5,
       daySize: 11,
-      circleSize: 19,
-      cellMinHeight: 22,
+      circleSize: 21,
+      cellMinHeight: 24,
       cellStackSpacing: 1.5,
       weekSpacing: 1.5,
       dotSize: 3,
@@ -494,7 +498,8 @@ struct IslandRootView: View {
       headerBottomPadding: 5,
       rowTitleSize: 11.5,
       rowDetailSize: 10,
-      rowGlyphSize: 13.5
+      rowGlyphSize: 13.5,
+      paneTopPadding: 12
     )
   }
 
@@ -520,6 +525,7 @@ struct IslandRootView: View {
         }
       }
       .padding(.bottom, metrics.headerBottomPadding)
+      .padding(.top, metrics.paneTopPadding)
 
       HStack(spacing: 0) {
         ForEach(grid.weekdaySymbols, id: \.self) { symbol in
@@ -542,7 +548,6 @@ struct IslandRootView: View {
         }
       }
     }
-    .padding(.top, 2)
   }
 
   private func monthStepper(

@@ -59,8 +59,8 @@ final class DisplayGeometryTests: XCTestCase {
     let collapsedOrigin = geometry.origin(for: .collapsed, in: display)
     XCTAssertEqual(collapsedOrigin.x + sideWidth, display.auxiliaryLeftWidth)
     XCTAssertEqual(collapsedOrigin.x + sideWidth + display.physicalNotchWidth, 858)
-    XCTAssertEqual(geometry.expandedSize, CGSize(width: 640, height: 320))
-    XCTAssertEqual(geometry.origin(for: .pinned, in: display), CGPoint(x: 436, y: 662))
+    XCTAssertEqual(geometry.expandedSize, CGSize(width: 760, height: 420))
+    XCTAssertEqual(geometry.origin(for: .pinned, in: display), CGPoint(x: 376, y: 562))
   }
 
   func testHoverPreviewIsShorterThanPinnedIsland() {
@@ -91,7 +91,7 @@ final class DisplayGeometryTests: XCTestCase {
 
     let geometry = DisplayGeometryCalculator.geometry(for: display)
 
-    XCTAssertEqual(geometry.previewSize, CGSize(width: 600, height: 240))
+    XCTAssertEqual(geometry.previewSize, CGSize(width: 680, height: 280))
   }
 
   func testNoNotchUsesMenuBarHeightAndCapsuleWidth() {

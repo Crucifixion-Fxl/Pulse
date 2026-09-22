@@ -62,7 +62,7 @@ Initial Setup, Locked iCloud Source, and no-list recovery remain visible. Auto-H
 
 Hovering for 200 milliseconds over the Collapsed Island expands an Island Preview without taking focus from the current application. The Preview shows the same Month Calendar and Day Schedule as the Pinned Island, drawn with tighter metrics so the shorter surface still fits the calendar beside the schedule, and supports pointer-based actions such as completing a Reminder. The Preview closes 500 milliseconds after the pointer leaves. With Auto-Hide selected, it transitions directly to a hidden Collapsed Island without briefly rendering the collapsed surface.
 
-The nominal Preview size is 600 by 240 points so the compact calendar and the Day Schedule remain visible together. It still remains smaller than the Pinned Island and adapts down for shorter displays.
+The nominal Preview size is 680 by 280 points so the compact calendar and the Day Schedule remain visible together. It still remains smaller than the Pinned Island and adapts down for shorter displays.
 
 ### Pinned Island
 
@@ -73,7 +73,7 @@ Clicking the Island opens or converts it to a Pinned Island. The Pinned Island c
 - Enter or leaving an edit field saves its value.
 - Escape while editing discards unsaved field changes.
 
-The nominal expanded size is 640 by 320 points, with adaptation for smaller displays. Content scrolls instead of growing the Island without limit.
+The nominal expanded size is 760 by 420 points, with adaptation for smaller displays. Content scrolls instead of growing the Island without limit.
 
 ## Expanded Layout
 
