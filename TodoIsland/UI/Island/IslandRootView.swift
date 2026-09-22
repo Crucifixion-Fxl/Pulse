@@ -427,6 +427,8 @@ struct IslandRootView: View {
 
       daySchedulePane(schedule: schedule, undated: undated, metrics: metrics)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Keeps the row cards clear of the surface's right edge.
+        .padding(.trailing, 6)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
