@@ -63,7 +63,7 @@ final class DisplayGeometryTests: XCTestCase {
     XCTAssertEqual(geometry.origin(for: .pinned, in: display), CGPoint(x: 376, y: 562))
   }
 
-  func testHoverPreviewIsShorterThanPinnedIsland() {
+  func testHoverPreviewMatchesThePinnedSize() {
     let display = DisplayMetrics(
       frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
       visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 950),
@@ -74,13 +74,10 @@ final class DisplayGeometryTests: XCTestCase {
 
     let geometry = DisplayGeometryCalculator.geometry(for: display)
 
-    XCTAssertLessThan(
-      geometry.size(for: .preview).height,
-      geometry.size(for: .pinned).height
-    )
+    XCTAssertEqual(geometry.size(for: .preview), geometry.size(for: .pinned))
   }
 
-  func testHoverPreviewReservesHeightForCompactCalendarAndDaySchedule() {
+  func testExpandedSurfacesShareTheNominalFullSize() {
     let display = DisplayMetrics(
       frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
       visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 950),
@@ -91,7 +88,8 @@ final class DisplayGeometryTests: XCTestCase {
 
     let geometry = DisplayGeometryCalculator.geometry(for: display)
 
-    XCTAssertEqual(geometry.previewSize, CGSize(width: 680, height: 280))
+    XCTAssertEqual(geometry.previewSize, CGSize(width: 760, height: 420))
+    XCTAssertEqual(geometry.expandedSize, CGSize(width: 760, height: 420))
   }
 
   func testNoNotchUsesMenuBarHeightAndCapsuleWidth() {

@@ -55,8 +55,9 @@ enum DisplayGeometryCalculator {
     let availableWidth = max(320, display.frame.width - 32)
     let expanded = CGSize(
       width: min(760, availableWidth), height: min(420, max(300, display.frame.height - 80)))
-    let preview = CGSize(
-      width: min(680, availableWidth), height: min(280, max(200, display.frame.height - 80)))
+    // The Preview presents the maximum size immediately; pinning only adds
+    // keyboard focus, so both states share one geometry.
+    let preview = expanded
 
     let collapsedHeight: CGFloat
     if display.hasPhysicalNotch {

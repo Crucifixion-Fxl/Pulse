@@ -65,7 +65,7 @@ The single display that currently hosts the Island. Todo Island determines it fr
 _Avoid_: Selected Display, main monitor, primary screen
 
 **Island Preview**:
-The expanded Island shown while the pointer hovers over its collapsed surface. It supports pointer-based Reminder actions without taking keyboard focus and closes 500 milliseconds after the pointer leaves.
+The expanded Island, at its full size, shown while the pointer hovers over the collapsed surface. It supports pointer-based Reminder actions without taking keyboard focus and closes 500 milliseconds after the pointer leaves.
 _Avoid_: Hover mode, passive popup
 
 **Pinned Island**:

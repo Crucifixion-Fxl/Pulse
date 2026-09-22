@@ -419,7 +419,7 @@ struct IslandRootView: View {
   private var calendarDayContent: some View {
     let schedule = model.selectedDaySchedule
     let undated = model.undatedReminders
-    let metrics = scheduleMetrics
+    let metrics = ScheduleMetrics.regular
 
     return HStack(alignment: .top, spacing: metrics.paneSpacing) {
       monthCalendarPane(metrics: metrics)
@@ -431,13 +431,8 @@ struct IslandRootView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
 
-  /// The hover preview and the pinned island share one calendar layout; the
-  /// preview's shorter surface uses tighter metrics instead of a second
-  /// layout path.
-  private var scheduleMetrics: ScheduleMetrics {
-    model.islandState == .preview ? .compact : .regular
-  }
-
+  /// One metric set serves both expanded states: the hover preview opens at
+  /// the full pinned size, so there is no second, smaller layout.
   private struct ScheduleMetrics {
     let paneWidth: CGFloat
     let paneSpacing: CGFloat
@@ -476,26 +471,6 @@ struct IslandRootView: View {
       rowTitleSize: 12.5,
       rowDetailSize: 10.5,
       rowGlyphSize: 15,
-      paneTopPadding: 12
-    )
-
-    static let compact = ScheduleMetrics(
-      paneWidth: 200,
-      paneSpacing: 10,
-      titleSize: 12.5,
-      weekdaySize: 9.5,
-      daySize: 11,
-      circleSize: 21,
-      cellMinHeight: 24,
-      cellStackSpacing: 1.5,
-      weekSpacing: 1.5,
-      dotSize: 3,
-      dayTitleSize: 12.5,
-      rowPitch: 36,
-      headerBottomPadding: 11,
-      rowTitleSize: 11.5,
-      rowDetailSize: 10,
-      rowGlyphSize: 13.5,
       paneTopPadding: 12
     )
   }
