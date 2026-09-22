@@ -61,8 +61,6 @@
 "calendar.undated" = "未安排日期";
 "calendar.empty-day" = "这一天没有事项";
 "calendar.empty-day.detail" = "在 Apple 提醒事项中添加的事项会显示在这里。";
-"calendar.previous-month" = "上个月";
-"calendar.next-month" = "下个月";
 
 "permission.required" = "需要提醒事项权限";
 "permission.required.detail" = "Apple 没有提供只读提醒事项权限。Todo Island 只使用完整权限来显示和管理你选择的 iCloud 提醒事项。";

@@ -61,8 +61,6 @@
 "calendar.undated" = "Undated";
 "calendar.empty-day" = "Nothing scheduled";
 "calendar.empty-day.detail" = "Reminders you add in Apple Reminders appear here.";
-"calendar.previous-month" = "Previous month";
-"calendar.next-month" = "Next month";
 
 "permission.required" = "Reminders Access Required";
 "permission.required.detail" = "Apple does not offer read-only Reminders permission. Todo Island uses full access only to display and manage the iCloud reminders you choose.";

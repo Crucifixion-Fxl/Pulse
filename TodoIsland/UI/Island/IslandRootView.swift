@@ -442,7 +442,6 @@ struct IslandRootView: View {
     let paneWidth: CGFloat
     let paneSpacing: CGFloat
     let titleSize: CGFloat
-    let stepperSide: CGFloat
     let weekdaySize: CGFloat
     let daySize: CGFloat
     let circleSize: CGFloat
@@ -464,7 +463,6 @@ struct IslandRootView: View {
       paneWidth: 232,
       paneSpacing: 12,
       titleSize: 14,
-      stepperSide: 18,
       weekdaySize: 11,
       daySize: 12.5,
       circleSize: 26,
@@ -485,7 +483,6 @@ struct IslandRootView: View {
       paneWidth: 200,
       paneSpacing: 10,
       titleSize: 12.5,
-      stepperSide: 16,
       weekdaySize: 9.5,
       daySize: 11,
       circleSize: 21,
@@ -510,22 +507,13 @@ struct IslandRootView: View {
     let today = calendar.startOfDay(for: Date())
 
     return VStack(spacing: 3) {
-      HStack(spacing: 3) {
-        monthStepper(metrics: metrics, labelKey: "calendar.previous-month", systemName: "chevron.left") {
-          shiftMonth(-1)
-        }
-        Spacer(minLength: 2)
-        Text(grid.monthTitle)
-          .font(.system(size: metrics.titleSize, weight: .semibold))
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-        Spacer(minLength: 2)
-        monthStepper(metrics: metrics, labelKey: "calendar.next-month", systemName: "chevron.right") {
-          shiftMonth(1)
-        }
-      }
-      .padding(.bottom, metrics.headerBottomPadding)
-      .padding(.top, metrics.paneTopPadding)
+      Text(grid.monthTitle)
+        .font(.system(size: metrics.titleSize, weight: .semibold))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.bottom, metrics.headerBottomPadding)
+        .padding(.top, metrics.paneTopPadding)
 
       HStack(spacing: 0) {
         ForEach(grid.weekdaySymbols, id: \.self) { symbol in
@@ -548,23 +536,6 @@ struct IslandRootView: View {
         }
       }
     }
-  }
-
-  private func monthStepper(
-    metrics: ScheduleMetrics,
-    labelKey: LocalizedStringKey,
-    systemName: String,
-    action: @escaping () -> Void
-  ) -> some View {
-    Button(action: action) {
-      Image(systemName: systemName)
-        .font(.system(size: metrics.weekdaySize, weight: .bold))
-        .foregroundStyle(.white.opacity(0.7))
-        .frame(width: metrics.stepperSide, height: metrics.stepperSide)
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .accessibilityLabel(Text(labelKey))
   }
 
   private func calendarDayCell(
@@ -879,13 +850,6 @@ struct IslandRootView: View {
     formatter.locale = .current
     formatter.timeStyle = .short
     return formatter.string(from: date)
-  }
-
-  private func shiftMonth(_ delta: Int) {
-    guard
-      let target = Calendar.current.date(byAdding: .month, value: delta, to: model.selectedDay)
-    else { return }
-    model.selectDay(target)
   }
 
   private func shiftDay(_ delta: Int) {

@@ -109,7 +109,7 @@ The state of an Active List that contains no Pending Reminders.
 _Avoid_: Empty list, zero state
 
 **Month Calendar**:
-The grid of one calendar month in the expanded Island's content area, with a marker for each date that contains Reminders, month navigation, and the system calendar's first weekday. Adjacent-month filler days complete its fixed six-week grid.
+The grid of one calendar month in the expanded Island's content area, with a marker for each date that contains Reminders and the system calendar's first weekday. Adjacent-month filler days complete its fixed six-week grid.
 _Avoid_: Calendar view, date picker
 
 **Day Schedule**:
