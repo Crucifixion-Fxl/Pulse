@@ -59,6 +59,9 @@
 "date.today" = "Today";
 
 "calendar.undated" = "Undated";
+"task.add.placeholder" = "Add a task for this day…";
+"task.add.accessibility" = "New task title";
+"task.add.submit" = "Add task";
 "calendar.empty-day" = "Nothing scheduled";
 "calendar.empty-day.detail" = "Reminders you add in Apple Reminders appear here.";
 

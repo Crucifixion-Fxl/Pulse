@@ -93,6 +93,34 @@ final class LocalSourceAppModelTests: XCTestCase {
   }
 
   @MainActor
+  func testTaskInputCreatesReminderDueOnTheSelectedDay() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    let listID = try XCTUnwrap(model.activeListID)
+
+    let calendar = Calendar.current
+    let target = calendar.date(byAdding: .day, value: 3, to: model.selectedDay)!
+    model.createTask("Planned task", on: target)
+    try await Task.sleep(for: .milliseconds(50))
+
+    let created = try XCTUnwrap(model.monthReminders.first)
+    XCTAssertEqual(created.title, "Planned task")
+    XCTAssertEqual(created.dueDateComponents?.year, calendar.component(.year, from: target))
+    XCTAssertEqual(created.dueDateComponents?.month, calendar.component(.month, from: target))
+    XCTAssertEqual(created.dueDateComponents?.day, calendar.component(.day, from: target))
+    XCTAssertNil(created.dueDateComponents?.hour)
+    // The task lands on its own day, not on today's schedule.
+    let targetSchedule = ReminderSchedule.schedule(on: target, in: model.monthReminders)
+    XCTAssertEqual(targetSchedule.pending.map(\.title), ["Planned task"])
+    XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
+  }
+
+  @MainActor
   func testCompletingDayItemMarksItCompletedInSchedule() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)

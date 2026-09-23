@@ -93,6 +93,8 @@ struct IslandRootView: View {
   @State private var selectedSidebarItem: IslandSidebarItem = .reminders
   @State private var hoveredSidebarItem: IslandSidebarItem?
   @State private var hoveredReminderID: String?
+  @State private var newTaskTitle = ""
+  @FocusState private var newTaskFocused: Bool
 
   private var isPinned: Bool { model.islandState == .pinned }
 
@@ -182,6 +184,7 @@ struct IslandRootView: View {
           hoveredSidebarItem = nil
           hoveredReminderID = nil
           editorTitleFocused = false
+          newTaskFocused = false
         }
       }
     }
@@ -422,11 +425,7 @@ struct IslandRootView: View {
     let metrics = ScheduleMetrics.regular
 
     return HStack(alignment: .top, spacing: metrics.paneSpacing) {
-      monthCalendarPane(
-        schedule: schedule,
-        undated: undated,
-        undatedCompleted: model.completedUndatedToday,
-        metrics: metrics)
+      monthCalendarPane(schedule: schedule, metrics: metrics)
         .frame(maxHeight: .infinity, alignment: .top)
         .frame(width: metrics.paneWidth, alignment: .top)
 
@@ -484,8 +483,6 @@ struct IslandRootView: View {
 
   private func monthCalendarPane(
     schedule: ReminderSchedule.DaySchedule,
-    undated: [ReminderSnapshot],
-    undatedCompleted: [ReminderSnapshot],
     metrics: ScheduleMetrics
   ) -> some View {
     let calendar = Calendar.current
@@ -529,122 +526,10 @@ struct IslandRootView: View {
 
       heatmapSection(metrics: metrics)
 
-      Spacer(minLength: 8)
+      Spacer(minLength: 10)
 
-      dayProgressSection(
-        schedule: schedule,
-        undated: undated,
-        undatedCompleted: undatedCompleted,
-        metrics: metrics)
+      newTaskInput
     }
-  }
-
-  /// GitHub-style contribution grid: one square per day, tinted by how many
-  /// Reminders were completed that day. The squares stretch so the grid
-  /// spans exactly the calendar pane's width.
-  private func heatmapSection(metrics: ScheduleMetrics) -> some View {
-    let grid = ReminderHeatmap.grid(in: model.recentlyCompletedReminders)
-    let gap: CGFloat = 1.2
-    let side = (metrics.paneWidth - gap * CGFloat(ReminderHeatmap.defaultWeekCount - 1))
-      / CGFloat(ReminderHeatmap.defaultWeekCount)
-    return HStack(alignment: .top, spacing: gap) {
-      ForEach(grid.weeks.indices, id: \.self) { column in
-        VStack(spacing: gap) {
-          ForEach(0..<7, id: \.self) { row in
-            let day = grid.weeks[column][row]
-            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-              .fill(heatmapColor(count: day.flatMap { grid.counts[$0] } ?? 0, isActive: day != nil))
-              .frame(width: side, height: side)
-          }
-        }
-      }
-    }
-    .frame(width: metrics.paneWidth, alignment: .leading)
-  }
-
-  private func heatmapColor(count: Int, isActive: Bool) -> Color {
-    guard isActive else { return Color.white.opacity(0.05) }
-    switch count {
-    case 0: return Color.white.opacity(0.10)
-    case 1: return accentColor.opacity(0.35)
-    case 2: return accentColor.opacity(0.60)
-    case 3: return accentColor.opacity(0.85)
-    default: return accentColor
-    }
-  }
-
-  private struct DayProgressRow: Identifiable {
-    let list: ReminderListSnapshot
-    let total: Int
-    let completed: Int
-    var id: String { list.id }
-  }
-
-  /// Per-list completion progress for the selected day, mirroring the rows
-  /// shown in the Day Schedule.
-  private func dayProgressSection(
-    schedule: ReminderSchedule.DaySchedule,
-    undated: [ReminderSnapshot],
-    undatedCompleted: [ReminderSnapshot],
-    metrics: ScheduleMetrics
-  ) -> some View {
-    // Undated reminders form the day's standing pool, so they count toward
-    // the day's progress: pending ones as remaining work, ones completed
-    // today as done.
-    let rows = dayProgressRows(
-      schedule: schedule,
-      undatedPending: undated,
-      undatedCompleted: undatedCompleted)
-    return VStack(alignment: .leading, spacing: 6) {
-      ForEach(rows) { row in
-        let accent = listAccent(for: row.list)
-        let fraction = row.total > 0 ? Double(row.completed) / Double(row.total) : 0
-        let isComplete = row.completed == row.total
-        VStack(alignment: .leading, spacing: 2.5) {
-          HStack(spacing: 3) {
-            Circle().fill(accent).frame(width: 3.5, height: 3.5)
-            Text(row.list.title)
-              .font(.system(size: metrics.rowDetailSize, weight: .medium))
-              .foregroundStyle(.white.opacity(0.85))
-              .lineLimit(1)
-              .truncationMode(.tail)
-            Spacer(minLength: 4)
-            Text("\(Int((fraction * 100).rounded()))%")
-              .font(.system(size: metrics.rowDetailSize, weight: .semibold, design: .rounded))
-              .monospacedDigit()
-              .foregroundStyle(isComplete ? Color.green : ReUITheme.muted)
-          }
-          GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-              Capsule(style: .continuous).fill(Color.white.opacity(0.10))
-              Capsule(style: .continuous)
-                .fill(isComplete ? Color.green : accent)
-                .frame(width: max(4, proxy.size.width * fraction))
-            }
-          }
-          .frame(height: 8)
-        }
-      }
-    }
-  }
-
-  private func dayProgressRows(
-    schedule: ReminderSchedule.DaySchedule,
-    undatedPending: [ReminderSnapshot],
-    undatedCompleted: [ReminderSnapshot]
-  ) -> [DayProgressRow] {
-    var counts: [String: (total: Int, completed: Int)] = [:]
-    for reminder in schedule.pending + schedule.completed + undatedPending + undatedCompleted {
-      let entry = counts[reminder.listID] ?? (0, 0)
-      counts[reminder.listID] = reminder.isCompleted
-        ? (entry.total + 1, entry.completed + 1)
-        : (entry.total + 1, entry.completed)
-    }
-    return counts.compactMap { listID, count in
-      guard let list = model.lists.first(where: { $0.id == listID }) else { return nil }
-      return DayProgressRow(list: list, total: count.total, completed: count.completed)
-    }
-    .sorted { $0.list.title.localizedStandardCompare($1.list.title) == .orderedAscending }
   }
 
   private func calendarDayCell(
@@ -695,6 +580,89 @@ struct IslandRootView: View {
     if isSelected { return .black }
     if isToday { return accentColor }
     return isInMonth ? .white.opacity(0.85) : .white.opacity(0.3)
+  }
+
+  /// Compact Task Input: Enter creates a Pending Reminder due on the
+  /// selected date. Focus stays for consecutive entry.
+  private var newTaskInput: some View {
+    HStack(spacing: 4) {
+      Image(systemName: "plus.circle.fill")
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(newTaskTitle.isEmpty ? ReUITheme.muted : accentColor)
+      TextField(
+        "task.add.placeholder",
+        text: $newTaskTitle,
+        axis: .horizontal
+      )
+      .textFieldStyle(.plain)
+      .font(.system(size: 12))
+      .focused($newTaskFocused)
+      .onSubmit { submitNewTask() }
+      .accessibilityLabel(Text("task.add.accessibility"))
+      if !newTaskTitle.isEmpty {
+        Button(action: submitNewTask) {
+          Image(systemName: "arrow.up.circle.fill")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(accentColor)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("task.add.submit"))
+      }
+    }
+    .padding(.horizontal, 6)
+    .frame(height: 22)
+    .background(
+      RoundedRectangle(cornerRadius: 11, style: .continuous)
+        .fill(ReUITheme.item)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 11, style: .continuous)
+        .stroke(
+          newTaskFocused ? accentColor.opacity(0.72) : ReUITheme.border,
+          lineWidth: 1
+        )
+    )
+  }
+
+  private func submitNewTask() {
+    let title = newTaskTitle
+    guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    model.createTask(title, on: model.selectedDay)
+    newTaskTitle = ""
+  }
+
+  /// GitHub-style contribution grid: one square per day, tinted by how many
+  /// Reminders were completed that day. The squares stretch so the grid
+  /// spans exactly the calendar pane's width.
+  private func heatmapSection(metrics: ScheduleMetrics) -> some View {
+    let grid = ReminderHeatmap.grid(in: model.recentlyCompletedReminders)
+    let gap: CGFloat = 1.2
+    let side = (metrics.paneWidth - gap * CGFloat(ReminderHeatmap.defaultWeekCount - 1))
+      / CGFloat(ReminderHeatmap.defaultWeekCount)
+    return HStack(alignment: .top, spacing: gap) {
+      ForEach(grid.weeks.indices, id: \.self) { column in
+        VStack(spacing: gap) {
+          ForEach(0..<7, id: \.self) { row in
+            let day = grid.weeks[column][row]
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+              .fill(heatmapColor(count: day.flatMap { grid.counts[$0] } ?? 0, isActive: day != nil))
+              .frame(width: side, height: side)
+          }
+        }
+      }
+    }
+    .frame(width: metrics.paneWidth, alignment: .leading)
+  }
+
+  private func heatmapColor(count: Int, isActive: Bool) -> Color {
+    guard isActive else { return Color.white.opacity(0.05) }
+    switch count {
+    case 0: return Color.white.opacity(0.10)
+    case 1: return accentColor.opacity(0.35)
+    case 2: return accentColor.opacity(0.60)
+    case 3: return accentColor.opacity(0.85)
+    default: return accentColor
+    }
   }
 
   @ViewBuilder
@@ -1377,6 +1345,13 @@ struct IslandRootView: View {
     if model.needsCollapsedIslandVisibilityChoice {
       guard event.keyCode == 53 else { return false }
       model.collapseIsland()
+      return true
+    }
+
+    if event.modifierFlags.contains(.command),
+      event.charactersIgnoringModifiers?.lowercased() == "n"
+    {
+      newTaskFocused = true
       return true
     }
 

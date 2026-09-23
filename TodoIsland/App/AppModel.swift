@@ -105,16 +105,6 @@ final class AppModel: ObservableObject {
   var usesAutoHiddenCollapsedIsland: Bool { collapsedIslandVisibility == .autoHide }
   var nextReminder: ReminderSnapshot? { reminders.first }
   var remainingCount: Int { reminders.count }
-  /// Undated Reminders completed today, feeding the day progress summary.
-  var completedUndatedToday: [ReminderSnapshot] {
-    let start = Calendar.current.startOfDay(for: Date())
-    return recentlyCompletedReminders.filter { reminder in
-      guard reminder.dueDateComponents == nil, let completed = reminder.completionDate else {
-        return false
-      }
-      return Calendar.current.startOfDay(for: completed) == start
-    }
-  }
   var selectedDaySchedule: ReminderSchedule.DaySchedule {
     // Overdue entries only land on the current day; the schedule decides
     // how they merge with that day's own reminders.
@@ -266,6 +256,24 @@ final class AppModel: ObservableObject {
 
   /// Moves the Day Schedule to another date. Crossing into a different month
   /// refetches the month's dated reminders.
+  /// Creates a Pending Reminder in the Active List, due on the given day —
+  /// the Task Input beneath the calendar adds work straight onto the
+  /// selected date.
+  func createTask(_ title: String, on day: Date) {
+    let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard canUseActiveList, !normalized.isEmpty, let activeListID else { return }
+    let components = Calendar.current.dateComponents([.year, .month, .day], from: day)
+    Task {
+      do {
+        try await store.createReminder(
+          title: normalized, in: activeListID, dueComponents: components)
+        await reload()
+      } catch {
+        present(error)
+      }
+    }
+  }
+
   func selectDay(_ day: Date) {
     let calendar = Calendar.current
     let newDay = calendar.startOfDay(for: day)

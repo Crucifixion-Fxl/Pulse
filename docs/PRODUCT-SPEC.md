@@ -83,7 +83,7 @@ The expanded Island contains:
 2. the Reminders content area as a Month Calendar on the left and the selected date's Day Schedule on the right in both expanded states; the Day Schedule keeps a native macOS scroll container with trackpad inertia, mouse-wheel scrolling, and a clipped viewport that keeps rows inside the content area; and
 3. ReUI-style dark card rows containing completion control, title, due state, list tags, and Priority badges, with animated hover and selection highlights and subtle fades at the viewport edges, plus a compact in-Island editor for the selected Reminder.
 
-There is no header row and no Quick Add input in the expanded Island; the Active List's Pending count appears only on the Collapsed Island. The sidebar uses a 28-point rail with white 12.5-point icons, no visible text, and a white hover glow. Tooltips and accessibility labels identify each feature. Expanded content uses compact typography (14-point Reminder titles) and halved spacing; content clears the concave side shoulders of the surface. The Collapsed Island retains its 18-point accented count ring.
+There is no header row in the expanded Island; the Active List's Pending count appears only on the Collapsed Island. A compact Task Input sits beneath the Month Calendar's heatmap: typing a title and pressing Enter creates a Pending Reminder in the Active List due on the selected date, and focus remains for consecutive entry. The sidebar uses a 28-point rail with white 12.5-point icons, no visible text, and a white hover glow. Tooltips and accessibility labels identify each feature. Expanded content uses compact typography (14-point Reminder titles) and halved spacing; content clears the concave side shoulders of the surface. The Collapsed Island retains its 18-point accented count ring.
 
 ### Month Calendar and Day Schedule
 
@@ -108,6 +108,7 @@ Completing a Reminder immediately changes its leading circle to a green checkmar
 - `Return`: edit the selected Reminder
 - `Space`: complete the selected Reminder
 - `Delete`: request deletion of the selected Reminder
+- `Command-N`: focus the Task Input
 - `Escape`: cancel editing or close the Pinned Island
 
 Every operation also has a mouse-accessible equivalent.

@@ -116,6 +116,10 @@ _Avoid_: Calendar view, date picker
 The Reminders due on the selected date, aggregated across every accessible Reminder List: Pending Reminders first, then Completed ones due that day, then Undated ones, with each row tagged by its owning Reminder List. Pending Reminders due before the current day flow into the current day until completed.
 _Avoid_: Day view, daily list, agenda
 
+**Task Input**:
+The compact field beneath the Month Calendar that creates a Pending Reminder from a title, due on the selected date. Focus persists so several tasks can be added in a row.
+_Avoid_: Quick Add, new-task box, composer
+
 **Completion Heatmap**:
 The trailing twenty-four week grid of squares under the Month Calendar, one per day, tinted by how many Reminders were completed that day.
 _Avoid_: Contribution graph, streak chart
