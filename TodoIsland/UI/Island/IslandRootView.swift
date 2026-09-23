@@ -467,18 +467,18 @@ struct IslandRootView: View {
       titleSize: 14,
       weekdaySize: 11,
       daySize: 12.5,
-      circleSize: 26,
-      cellMinHeight: 32,
+      circleSize: 22,
+      cellMinHeight: 28,
       cellStackSpacing: 2,
       weekSpacing: 2,
       dotSize: 3.5,
       dayTitleSize: 14,
       rowPitch: 38,
-      headerBottomPadding: 13,
+      headerBottomPadding: 8,
       rowTitleSize: 12.5,
       rowDetailSize: 10.5,
       rowGlyphSize: 15,
-      paneTopPadding: 12
+      paneTopPadding: 8
     )
   }
 
@@ -525,11 +525,11 @@ struct IslandRootView: View {
       }
       }
 
-      Spacer(minLength: 12)
+      Spacer(minLength: 8)
 
-      heatmapSection
+      heatmapSection(metrics: metrics)
 
-      Spacer(minLength: 14)
+      Spacer(minLength: 8)
 
       dayProgressSection(
         schedule: schedule,
@@ -540,22 +540,26 @@ struct IslandRootView: View {
   }
 
   /// GitHub-style contribution grid: one square per day, tinted by how many
-  /// Reminders were completed that day.
-  private var heatmapSection: some View {
+  /// Reminders were completed that day. The squares stretch so the grid
+  /// spans exactly the calendar pane's width.
+  private func heatmapSection(metrics: ScheduleMetrics) -> some View {
     let grid = ReminderHeatmap.grid(in: model.recentlyCompletedReminders)
-    return HStack(alignment: .top, spacing: 1.5) {
+    let gap: CGFloat = 1.2
+    let side = (metrics.paneWidth - gap * CGFloat(ReminderHeatmap.defaultWeekCount - 1))
+      / CGFloat(ReminderHeatmap.defaultWeekCount)
+    return HStack(alignment: .top, spacing: gap) {
       ForEach(grid.weeks.indices, id: \.self) { column in
-        VStack(spacing: 1.5) {
+        VStack(spacing: gap) {
           ForEach(0..<7, id: \.self) { row in
             let day = grid.weeks[column][row]
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
               .fill(heatmapColor(count: day.flatMap { grid.counts[$0] } ?? 0, isActive: day != nil))
-              .frame(width: 7, height: 7)
+              .frame(width: side, height: side)
           }
         }
       }
     }
-    .frame(maxWidth: .infinity)
+    .frame(width: metrics.paneWidth, alignment: .leading)
   }
 
   private func heatmapColor(count: Int, isActive: Bool) -> Color {
@@ -591,12 +595,12 @@ struct IslandRootView: View {
       schedule: schedule,
       undatedPending: undated,
       undatedCompleted: undatedCompleted)
-    return VStack(alignment: .leading, spacing: 8) {
+    return VStack(alignment: .leading, spacing: 6) {
       ForEach(rows) { row in
         let accent = listAccent(for: row.list)
         let fraction = row.total > 0 ? Double(row.completed) / Double(row.total) : 0
         let isComplete = row.completed == row.total
-        VStack(alignment: .leading, spacing: 3.5) {
+        VStack(alignment: .leading, spacing: 2.5) {
           HStack(spacing: 3) {
             Circle().fill(accent).frame(width: 3.5, height: 3.5)
             Text(row.list.title)
@@ -618,7 +622,7 @@ struct IslandRootView: View {
                 .frame(width: max(4, proxy.size.width * fraction))
             }
           }
-          .frame(height: 10)
+          .frame(height: 8)
         }
       }
     }
