@@ -144,6 +144,30 @@ final class LocalReminderStoreTests: XCTestCase {
   }
 
   @MainActor
+  func testUndatedCompletedFetchCountsOnlyRecentCompletions() async throws {
+    let store = try LocalReminderStore(isStoredInMemoryOnly: true)
+    let list = try await store.createList(title: "Personal")
+
+    try await store.createReminder(title: "Pool", in: list.id, dueComponents: nil)
+    let pending = try await store.fetchPendingReminders(in: list.id)
+    let pool = try XCTUnwrap(pending.first { $0.title == "Pool" })
+    try await store.setCompleted(true, reminderID: pool.id)
+
+    try await store.createReminder(
+      title: "Dated",
+      in: list.id,
+      dueComponents: DateComponents(year: 2026, month: 9, day: 22, hour: 8)
+    )
+    let pendingAfter = try await store.fetchPendingReminders(in: list.id)
+    let dated = try XCTUnwrap(pendingAfter.first { $0.title == "Dated" })
+    try await store.setCompleted(true, reminderID: dated.id)
+
+    let startOfToday = Calendar.current.startOfDay(for: Date())
+    let completed = try await store.fetchUndatedCompletedReminders(completedFrom: startOfToday)
+    XCTAssertEqual(completed.map(\.title), ["Pool"])
+  }
+
+  @MainActor
   func testSourceAwareDayFetchNamespacesDatedReminders() async throws {
     let local = try LocalReminderStore(isStoredInMemoryOnly: true)
     let store = SourceAwareReminderStore(localStoreFactory: { local })

@@ -164,6 +164,16 @@ final class LocalReminderStore: ReminderBackend {
       .map(Self.snapshot)
   }
 
+  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] {
+    try context.fetch(FetchDescriptor<ReminderRecord>())
+      .filter { record in
+        guard record.isCompleted, record.dueDate == nil, let completedAt = record.completedAt
+        else { return false }
+        return completedAt >= date
+      }
+      .map(Self.snapshot)
+  }
+
   func createReminder(
     title: String,
     in listID: String,

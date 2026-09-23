@@ -422,7 +422,11 @@ struct IslandRootView: View {
     let metrics = ScheduleMetrics.regular
 
     return HStack(alignment: .top, spacing: metrics.paneSpacing) {
-      monthCalendarPane(schedule: schedule, metrics: metrics)
+      monthCalendarPane(
+        schedule: schedule,
+        undated: undated,
+        undatedCompleted: model.completedUndatedToday,
+        metrics: metrics)
         .frame(maxHeight: .infinity, alignment: .top)
         .frame(width: metrics.paneWidth, alignment: .top)
 
@@ -480,6 +484,8 @@ struct IslandRootView: View {
 
   private func monthCalendarPane(
     schedule: ReminderSchedule.DaySchedule,
+    undated: [ReminderSnapshot],
+    undatedCompleted: [ReminderSnapshot],
     metrics: ScheduleMetrics
   ) -> some View {
     let calendar = Calendar.current
@@ -521,7 +527,11 @@ struct IslandRootView: View {
 
       Spacer(minLength: 14)
 
-      dayProgressSection(schedule: schedule, metrics: metrics)
+      dayProgressSection(
+        schedule: schedule,
+        undated: undated,
+        undatedCompleted: undatedCompleted,
+        metrics: metrics)
     }
   }
 
@@ -536,9 +546,17 @@ struct IslandRootView: View {
   /// shown in the Day Schedule.
   private func dayProgressSection(
     schedule: ReminderSchedule.DaySchedule,
+    undated: [ReminderSnapshot],
+    undatedCompleted: [ReminderSnapshot],
     metrics: ScheduleMetrics
   ) -> some View {
-    let rows = dayProgressRows(schedule: schedule)
+    // Undated reminders form the day's standing pool, so they count toward
+    // the day's progress: pending ones as remaining work, ones completed
+    // today as done.
+    let rows = dayProgressRows(
+      schedule: schedule,
+      undatedPending: undated,
+      undatedCompleted: undatedCompleted)
     return VStack(alignment: .leading, spacing: 8) {
       ForEach(rows) { row in
         let accent = listAccent(for: row.list)
@@ -573,10 +591,12 @@ struct IslandRootView: View {
   }
 
   private func dayProgressRows(
-    schedule: ReminderSchedule.DaySchedule
+    schedule: ReminderSchedule.DaySchedule,
+    undatedPending: [ReminderSnapshot],
+    undatedCompleted: [ReminderSnapshot]
   ) -> [DayProgressRow] {
     var counts: [String: (total: Int, completed: Int)] = [:]
-    for reminder in schedule.pending + schedule.completed {
+    for reminder in schedule.pending + schedule.completed + undatedPending + undatedCompleted {
       let entry = counts[reminder.listID] ?? (0, 0)
       counts[reminder.listID] = reminder.isCompleted
         ? (entry.total + 1, entry.completed + 1)

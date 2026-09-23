@@ -260,6 +260,10 @@ private final class LocalOnlyTestReminderStore: ReminderStore {
     }
   }
 
+  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] {
+    []
+  }
+
   func createReminder(
     title: String,
     in listID: String,

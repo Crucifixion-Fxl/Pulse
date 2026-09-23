@@ -296,6 +296,7 @@ private final class HoverTestReminderStore: ReminderStore {
   func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
   func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
   func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] { [] }
 
   func createReminder(
     title: String,
@@ -339,6 +340,7 @@ private final class ListSelectionTestReminderStore: ReminderStore {
   func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
   func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
   func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] { [] }
 
   func createReminder(
     title: String,
@@ -376,6 +378,7 @@ private final class CompletionFeedbackTestReminderStore: ReminderStore {
   func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
   func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
   func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] { [] }
 
   func createReminder(
     title: String,
@@ -402,6 +405,7 @@ private final class NoListTestReminderStore: ReminderStore {
   func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
   func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
   func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] { [] }
 
   func createReminder(
     title: String,

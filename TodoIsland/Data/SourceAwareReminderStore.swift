@@ -112,6 +112,21 @@ final class SourceAwareReminderStore: ReminderStore {
     return reminders
   }
 
+  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] {
+    var reminders: [ReminderSnapshot] = []
+    if authorizationStatus() == .fullAccess,
+      let completed = try? await iCloudStore.fetchUndatedCompletedReminders(completedFrom: date)
+    {
+      reminders += completed.map(Self.namespace)
+    }
+    if let localStore,
+      let completed = try? await localStore.fetchUndatedCompletedReminders(completedFrom: date)
+    {
+      reminders += completed.map(Self.namespace)
+    }
+    return reminders
+  }
+
   func createReminder(
     title: String,
     in listID: String,

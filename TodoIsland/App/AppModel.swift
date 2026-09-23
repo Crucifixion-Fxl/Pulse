@@ -16,6 +16,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var monthReminders: [ReminderSnapshot] = []
   @Published private(set) var undatedReminders: [ReminderSnapshot] = []
   @Published private(set) var overdueReminders: [ReminderSnapshot] = []
+  @Published private(set) var completedUndatedToday: [ReminderSnapshot] = []
   @Published private(set) var selectedDay: Date = Calendar.current.startOfDay(for: Date())
   @Published private(set) var islandState: IslandPresentationState = .collapsed
   @Published private(set) var isLoading = false
@@ -275,10 +276,14 @@ final class AppModel: ObservableObject {
       (try? await store.fetchReminders(dueFrom: interval.start, through: interval.end)) ?? []
     let undated = (try? await store.fetchUndatedPendingReminders()) ?? []
     let overdue = (try? await store.fetchOverduePendingReminders(before: interval.start)) ?? []
+    let completedUndated =
+      (try? await store.fetchUndatedCompletedReminders(
+        completedFrom: Calendar.current.startOfDay(for: Date()))) ?? []
     guard !Task.isCancelled else { return }
     monthReminders = dated
     undatedReminders = ReminderSorter.sorted(undated)
     overdueReminders = overdue
+    completedUndatedToday = completedUndated
     let navigable = keyboardNavigableReminders
     if !navigable.contains(where: { $0.id == selectedReminderID }) {
       selectedReminderID = navigable.first?.id

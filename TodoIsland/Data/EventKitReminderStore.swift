@@ -164,6 +164,25 @@ final class EventKitReminderStore: ReminderBackend {
     }
   }
 
+  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] {
+    let calendars = eventStore.calendars(for: .reminder).filter(Self.isICloudCalendar)
+    guard !calendars.isEmpty else { return [] }
+    let predicate = eventStore.predicateForCompletedReminders(
+      withCompletionDateStarting: date,
+      ending: nil,
+      calendars: calendars
+    )
+
+    return try await withCheckedThrowingContinuation { continuation in
+      eventStore.fetchReminders(matching: predicate) { reminders in
+        DispatchQueue.main.async {
+          let snapshots = (reminders ?? []).filter { $0.dueDateComponents == nil }.map(Self.snapshot)
+          continuation.resume(returning: snapshots)
+        }
+      }
+    }
+  }
+
   func createReminder(
     title: String,
     in listID: String,
