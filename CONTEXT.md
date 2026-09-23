@@ -117,7 +117,7 @@ The Reminders due on the selected date, aggregated across every accessible Remin
 _Avoid_: Day view, daily list, agenda
 
 **Task Input**:
-The compact field beneath the Month Calendar that creates a Pending Reminder from a title, due on the selected date. Focus persists so several tasks can be added in a row.
+The compact field pinned to the bottom corner of the Day Schedule pane that creates a Pending Reminder from a title, due on the selected date. The schedule scrolls above it, and focus persists so several tasks can be added in a row.
 _Avoid_: Quick Add, new-task box, composer
 
 **Completion Heatmap**:

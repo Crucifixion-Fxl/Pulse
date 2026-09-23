@@ -525,10 +525,6 @@ struct IslandRootView: View {
       Spacer(minLength: 8)
 
       heatmapSection(metrics: metrics)
-
-      Spacer(minLength: 10)
-
-      newTaskInput
     }
   }
 
@@ -671,13 +667,16 @@ struct IslandRootView: View {
     undated: [ReminderSnapshot],
     metrics: ScheduleMetrics
   ) -> some View {
-    if schedule.pending.isEmpty && schedule.completed.isEmpty && undated.isEmpty {
-      emptyDaySchedule
-    } else {
-      // No day title or section headers: the calendar already shows the
-      // selected date, completed rows are struck through and muted, and
-      // undated rows carry their own tag.
-      ScrollViewReader { proxy in
+    // The Task Input is pinned to the pane's bottom corner; the schedule
+    // scrolls in the space above it.
+    VStack(spacing: 6) {
+      if schedule.pending.isEmpty && schedule.completed.isEmpty && undated.isEmpty {
+        emptyDaySchedule
+      } else {
+        // No day title or section headers: the calendar already shows the
+        // selected date, completed rows are struck through and muted, and
+        // undated rows carry their own tag.
+        ScrollViewReader { proxy in
         ScrollView(.vertical, showsIndicators: false) {
           LazyVStack(spacing: 0) {
             ForEach(schedule.pending) { reminder in
@@ -714,11 +713,14 @@ struct IslandRootView: View {
           .frame(height: 14)
           .allowsHitTesting(false)
       }
-      .overlay(alignment: .bottom) {
-        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-          .frame(height: 18)
-          .allowsHitTesting(false)
+        .overlay(alignment: .bottom) {
+          LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+            .frame(height: 18)
+            .allowsHitTesting(false)
+        }
       }
+
+      newTaskInput
     }
   }
 
