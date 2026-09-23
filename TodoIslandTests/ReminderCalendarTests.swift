@@ -120,6 +120,66 @@ final class ReminderCalendarTests: XCTestCase {
     XCTAssertTrue(futureSchedule.completed.isEmpty)
   }
 
+  func testHeatmapGridCoversTrailingWeeksAndCountsCompletionsPerDay() {
+    let calendar = self.calendar
+    let now = calendar.date(from: date(2026, 9, 22, hour: 18))!
+    let weekCount = 4
+
+    let completedOnce = ReminderSnapshot(
+      id: "once",
+      listID: "list",
+      title: "once",
+      dueDateComponents: date(2026, 9, 10),
+      priority: .none,
+      isRecurring: false,
+      isCompleted: true,
+      completionDate: calendar.date(from: date(2026, 9, 10, hour: 12))
+    )
+    let completedTwiceA = ReminderSnapshot(
+      id: "twice-a",
+      listID: "list",
+      title: "twice-a",
+      dueDateComponents: date(2026, 9, 15),
+      priority: .none,
+      isRecurring: false,
+      isCompleted: true,
+      completionDate: calendar.date(from: date(2026, 9, 15, hour: 9))
+    )
+    let completedTwiceB = ReminderSnapshot(
+      id: "twice-b",
+      listID: "list",
+      title: "twice-b",
+      dueDateComponents: date(2026, 9, 15),
+      priority: .none,
+      isRecurring: false,
+      isCompleted: true,
+      completionDate: calendar.date(from: date(2026, 9, 15, hour: 20))
+    )
+    let pendingOnly = reminder("pending", due: date(2026, 9, 22, hour: 8))
+
+    let grid = ReminderHeatmap.grid(
+      weekCount: weekCount,
+      in: [completedOnce, completedTwiceA, completedTwiceB, pendingOnly],
+      calendar: calendar,
+      now: now
+    )
+
+    XCTAssertEqual(grid.weeks.count, weekCount)
+    XCTAssertTrue(grid.weeks.allSatisfy { $0.count == 7 })
+
+    // The grid ends with the week containing today; later weekdays are nil.
+    let lastWeek = grid.weeks.last!
+    // September 22 2026 is a Tuesday and the calendar starts on Monday.
+    XCTAssertEqual(lastWeek[1], calendar.startOfDay(for: now))
+    XCTAssertNil(lastWeek[2])
+    XCTAssertNil(lastWeek[6])
+
+    let september15 = calendar.startOfDay(for: calendar.date(from: date(2026, 9, 15))!)
+    let september10 = calendar.startOfDay(for: calendar.date(from: date(2026, 9, 10))!)
+    XCTAssertEqual(grid.counts[september15], 2)
+    XCTAssertEqual(grid.counts[september10], 1)
+  }
+
   func testDayCountsSummarizePendingAndCompletedPerDay() {
     let calendar = self.calendar
     let september22 = calendar.date(from: date(2026, 9, 22))!

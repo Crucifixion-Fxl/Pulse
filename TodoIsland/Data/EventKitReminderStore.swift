@@ -164,7 +164,7 @@ final class EventKitReminderStore: ReminderBackend {
     }
   }
 
-  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] {
+  func fetchCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] {
     let calendars = eventStore.calendars(for: .reminder).filter(Self.isICloudCalendar)
     guard !calendars.isEmpty else { return [] }
     let predicate = eventStore.predicateForCompletedReminders(
@@ -176,8 +176,7 @@ final class EventKitReminderStore: ReminderBackend {
     return try await withCheckedThrowingContinuation { continuation in
       eventStore.fetchReminders(matching: predicate) { reminders in
         DispatchQueue.main.async {
-          let snapshots = (reminders ?? []).filter { $0.dueDateComponents == nil }.map(Self.snapshot)
-          continuation.resume(returning: snapshots)
+          continuation.resume(returning: (reminders ?? []).map(Self.snapshot))
         }
       }
     }
@@ -264,7 +263,8 @@ final class EventKitReminderStore: ReminderBackend {
       dueDateComponents: reminder.dueDateComponents,
       priority: ReminderPriority(eventKitValue: reminder.priority),
       isRecurring: !(reminder.recurrenceRules?.isEmpty ?? true),
-      isCompleted: reminder.isCompleted
+      isCompleted: reminder.isCompleted,
+      completionDate: reminder.completionDate
     )
   }
 

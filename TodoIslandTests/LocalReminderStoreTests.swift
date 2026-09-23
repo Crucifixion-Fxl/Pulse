@@ -144,7 +144,7 @@ final class LocalReminderStoreTests: XCTestCase {
   }
 
   @MainActor
-  func testUndatedCompletedFetchCountsOnlyRecentCompletions() async throws {
+  func testCompletedFetchCarriesCompletionDatesAndHonorsTheCutoff() async throws {
     let store = try LocalReminderStore(isStoredInMemoryOnly: true)
     let list = try await store.createList(title: "Personal")
 
@@ -163,8 +163,13 @@ final class LocalReminderStoreTests: XCTestCase {
     try await store.setCompleted(true, reminderID: dated.id)
 
     let startOfToday = Calendar.current.startOfDay(for: Date())
-    let completed = try await store.fetchUndatedCompletedReminders(completedFrom: startOfToday)
-    XCTAssertEqual(completed.map(\.title), ["Pool"])
+    let completed = try await store.fetchCompletedReminders(completedFrom: startOfToday)
+    XCTAssertEqual(Set(completed.map(\.title)), ["Pool", "Dated"])
+    XCTAssertTrue(completed.allSatisfy { $0.completionDate != nil })
+
+    let futureCutoff = Date().addingTimeInterval(3_600)
+    let none = try await store.fetchCompletedReminders(completedFrom: futureCutoff)
+    XCTAssertTrue(none.isEmpty)
   }
 
   @MainActor

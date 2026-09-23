@@ -17,7 +17,7 @@ protocol ReminderBackend: AnyObject {
   func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot]
   /// Completed Reminders without a Due Date whose completion falls on or
   /// after the given instant, feeding the day progress summary.
-  func fetchUndatedCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot]
+  func fetchCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot]
   func createReminder(
     title: String,
     in listID: String,

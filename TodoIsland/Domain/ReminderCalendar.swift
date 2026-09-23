@@ -114,3 +114,52 @@ enum ReminderSchedule {
     return counts
   }
 }
+
+/// Builds a GitHub-style contribution grid from Reminders completed recently:
+/// one column per week, seven rows per weekday, each cell holding that
+/// day's completion count. Future cells in the current week are nil.
+enum ReminderHeatmap {
+  struct Grid: Equatable, Sendable {
+    let weeks: [[Date?]]
+    let counts: [Date: Int]
+  }
+
+  static let defaultWeekCount = 24
+
+  static func grid(
+    weekCount: Int = defaultWeekCount,
+    in reminders: [ReminderSnapshot],
+    calendar: Calendar = .current,
+    now: Date = Date()
+  ) -> Grid {
+    let today = calendar.startOfDay(for: now)
+    var counts: [Date: Int] = [:]
+    for reminder in reminders {
+      guard let completed = reminder.completionDate else { continue }
+      let day = calendar.startOfDay(for: completed)
+      if day <= today { counts[day, default: 0] += 1 }
+    }
+
+    let todayWeekdayIndex =
+      (calendar.component(.weekday, from: today) - calendar.firstWeekday + 7) % 7
+    let futureCellCount = 6 - todayWeekdayIndex
+    let totalCells = weekCount * 7
+    guard
+      let gridStart = calendar.date(
+        byAdding: .day, value: -(totalCells - 1 - futureCellCount), to: today)
+    else { return Grid(weeks: [], counts: [:]) }
+
+    var days: [Date?] = (0..<totalCells).map { offset in
+      guard let day = calendar.date(byAdding: .day, value: offset, to: gridStart) else {
+        return nil
+      }
+      return day > today ? nil : day
+    }
+    var weeks: [[Date?]] = []
+    while !days.isEmpty {
+      weeks.append(Array(days.prefix(7)))
+      days.removeFirst(min(7, days.count))
+    }
+    return Grid(weeks: weeks, counts: counts)
+  }
+}

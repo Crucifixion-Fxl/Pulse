@@ -525,6 +525,10 @@ struct IslandRootView: View {
       }
       }
 
+      Spacer(minLength: 12)
+
+      heatmapSection
+
       Spacer(minLength: 14)
 
       dayProgressSection(
@@ -532,6 +536,36 @@ struct IslandRootView: View {
         undated: undated,
         undatedCompleted: undatedCompleted,
         metrics: metrics)
+    }
+  }
+
+  /// GitHub-style contribution grid: one square per day, tinted by how many
+  /// Reminders were completed that day.
+  private var heatmapSection: some View {
+    let grid = ReminderHeatmap.grid(in: model.recentlyCompletedReminders)
+    return HStack(alignment: .top, spacing: 1.5) {
+      ForEach(grid.weeks.indices, id: \.self) { column in
+        VStack(spacing: 1.5) {
+          ForEach(0..<7, id: \.self) { row in
+            let day = grid.weeks[column][row]
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+              .fill(heatmapColor(count: day.flatMap { grid.counts[$0] } ?? 0, isActive: day != nil))
+              .frame(width: 7, height: 7)
+          }
+        }
+      }
+    }
+    .frame(maxWidth: .infinity)
+  }
+
+  private func heatmapColor(count: Int, isActive: Bool) -> Color {
+    guard isActive else { return Color.white.opacity(0.05) }
+    switch count {
+    case 0: return Color.white.opacity(0.10)
+    case 1: return accentColor.opacity(0.35)
+    case 2: return accentColor.opacity(0.60)
+    case 3: return accentColor.opacity(0.85)
+    default: return accentColor
     }
   }
 
@@ -571,7 +605,7 @@ struct IslandRootView: View {
               .lineLimit(1)
               .truncationMode(.tail)
             Spacer(minLength: 4)
-            Text("\(row.completed)/\(row.total)")
+            Text("\(Int((fraction * 100).rounded()))%")
               .font(.system(size: metrics.rowDetailSize, weight: .semibold, design: .rounded))
               .monospacedDigit()
               .foregroundStyle(isComplete ? Color.green : ReUITheme.muted)
@@ -584,7 +618,7 @@ struct IslandRootView: View {
                 .frame(width: max(4, proxy.size.width * fraction))
             }
           }
-          .frame(height: 5)
+          .frame(height: 10)
         }
       }
     }

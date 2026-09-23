@@ -74,6 +74,7 @@ struct ReminderSnapshot: Identifiable, Hashable, Sendable {
   var priority: ReminderPriority
   let isRecurring: Bool
   var isCompleted: Bool
+  let completionDate: Date?
 
   init(
     id: String,
@@ -83,7 +84,8 @@ struct ReminderSnapshot: Identifiable, Hashable, Sendable {
     dueDateComponents: DateComponents?,
     priority: ReminderPriority,
     isRecurring: Bool,
-    isCompleted: Bool = false
+    isCompleted: Bool = false,
+    completionDate: Date? = nil
   ) {
     self.id = id
     self.listID = listID
@@ -93,6 +95,7 @@ struct ReminderSnapshot: Identifiable, Hashable, Sendable {
     self.priority = priority
     self.isRecurring = isRecurring
     self.isCompleted = isCompleted
+    self.completionDate = completionDate
   }
 
   func dueDate(in calendar: Calendar) -> Date? {
