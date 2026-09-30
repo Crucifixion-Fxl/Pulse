@@ -29,25 +29,21 @@ struct SettingsView: View {
 
       Section("settings.island") {
         LabeledContent("settings.collapsed-island") {
-          if model.needsCollapsedIslandVisibilityChoice {
-            Button("settings.complete-in-island") { openIsland() }
-          } else {
-            Picker(
-              "settings.collapsed-island",
-              selection: Binding(
-                get: { model.collapsedIslandVisibility ?? .alwaysVisible },
-                set: { model.setCollapsedIslandVisibility($0) }
-              )
-            ) {
-              Text("setup.visibility.always-visible")
-                .tag(CollapsedIslandVisibility.alwaysVisible)
-              Text("setup.visibility.auto-hide")
-                .tag(CollapsedIslandVisibility.autoHide)
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .frame(width: 230)
+          Picker(
+            "settings.collapsed-island",
+            selection: Binding(
+              get: { model.collapsedIslandVisibility ?? .alwaysVisible },
+              set: { model.setCollapsedIslandVisibility($0) }
+            )
+          ) {
+            Text("setup.visibility.always-visible")
+              .tag(CollapsedIslandVisibility.alwaysVisible)
+            Text("setup.visibility.auto-hide")
+              .tag(CollapsedIslandVisibility.autoHide)
           }
+          .labelsHidden()
+          .pickerStyle(.segmented)
+          .frame(width: 230)
         }
 
         LabeledContent("settings.fullscreen") {

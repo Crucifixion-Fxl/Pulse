@@ -4,6 +4,7 @@
 "common.ok" = "好";
 "common.cancel" = "取消";
 "common.save" = "保存";
+"common.close" = "关闭";
 
 "error.title" = "出现问题";
 "error.list-not-found" = "所选提醒事项列表已不可用。";
@@ -37,7 +38,6 @@
 
 "reminder.complete" = "完成 %@";
 "reminder.recurring" = "重复提醒事项";
-"reminder.reopen" = "重新打开 %@";
 "reminder.edit" = "编辑";
 "reminder.delete" = "删除";
 "reminder.actions" = "%@ 的操作";
@@ -60,6 +60,7 @@
 
 "calendar.undated" = "未安排日期";
 "task.add.placeholder" = "给这一天添加任务…";
+"task.add.list" = "选择新任务所属的列表";
 "task.add.accessibility" = "新任务标题";
 "task.add.submit" = "添加任务";
 "calendar.empty-day" = "这一天没有事项";
@@ -93,3 +94,6 @@
 "menu.about" = "关于 Todo Island";
 "menu.quit" = "退出 Todo Island";
 "sidebar.reminders" = "提醒事项";
+"heatmap.cell.tooltip" = "%1$@：完成 %2$d 项";
+"sidebar.placeholder" = "待添加";
+"sidebar.placeholder.detail" = "待添加";

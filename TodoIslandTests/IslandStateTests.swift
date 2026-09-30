@@ -3,6 +3,57 @@ import XCTest
 @testable import TodoIsland
 
 final class IslandStateTests: XCTestCase {
+  @MainActor
+  func testExpandedContentHeightRejectsInvalidMeasurementsAndRoundsUp() {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+    let model = AppModel(store: HoverTestReminderStore(), defaults: defaults)
+
+    XCTAssertNil(model.expandedContentHeight)
+    let invalidHeights: [CGFloat] = [0, -1, .nan, .infinity, -.infinity]
+    for invalid in invalidHeights {
+      model.updateExpandedContentHeight(invalid)
+      XCTAssertNil(model.expandedContentHeight)
+    }
+
+    model.updateExpandedContentHeight(310.2)
+    XCTAssertEqual(model.expandedContentHeight, 311)
+    model.updateExpandedContentHeight(310.8)
+    XCTAssertEqual(model.expandedContentHeight, 311)
+    model.updateExpandedContentHeight(.nan)
+    XCTAssertEqual(model.expandedContentHeight, 311)
+  }
+
+  @MainActor
+  func testWindowAppliesLatestContentHeightWithoutChangingPresentationState() {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defaults.set(
+      CollapsedIslandVisibility.alwaysVisible.rawValue,
+      forKey: "collapsed-island-visibility"
+    )
+    defer { defaults.removePersistentDomain(forName: #function) }
+    let model = AppModel(store: HoverTestReminderStore(), defaults: defaults)
+    let controller = IslandWindowController(model: model)
+
+    model.pinIsland()
+    model.updateExpandedContentHeight(310.2)
+    XCTAssertEqual(controller.appliedExpandedContentHeight, 311)
+    XCTAssertEqual(model.islandState, .pinned)
+    XCTAssertEqual(controller.appliedState, .pinned)
+
+    model.updateExpandedContentHeight(280)
+    XCTAssertEqual(controller.appliedExpandedContentHeight, 280)
+
+    model.collapseIsland()
+    model.updateExpandedContentHeight(300)
+    XCTAssertEqual(model.islandState, .collapsed)
+    XCTAssertEqual(controller.appliedState, .collapsed)
+    model.pinIsland()
+    XCTAssertEqual(controller.appliedExpandedContentHeight, 300)
+  }
+
   func testMotionProfilesUseSmoothStateSpecificTiming() {
     XCTAssertEqual(
       IslandPresentationState.preview.motionProfile,
@@ -19,7 +70,7 @@ final class IslandStateTests: XCTestCase {
   }
 
   @MainActor
-  func testCompletedReminderShowsCheckForTwoHundredMillisecondsBeforeRemoval() async throws {
+  func testCompletedReminderShowsCheckThroughTheConfettiBeforeRemoval() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)
     defer { defaults.removePersistentDomain(forName: #function) }
@@ -38,7 +89,12 @@ final class IslandStateTests: XCTestCase {
     XCTAssertTrue(model.completingReminderIDs.contains(reminder.id))
     XCTAssertTrue(model.reminders.contains(where: { $0.id == reminder.id }))
 
-    try await Task.sleep(for: .milliseconds(140))
+    // The row stays through the confetti (~750ms) before fading away.
+    try await Task.sleep(for: .milliseconds(500))
+    XCTAssertTrue(model.completingReminderIDs.contains(reminder.id))
+    XCTAssertTrue(model.reminders.contains(where: { $0.id == reminder.id }))
+
+    try await Task.sleep(for: .milliseconds(400))
     XCTAssertFalse(model.completingReminderIDs.contains(reminder.id))
     XCTAssertFalse(model.reminders.contains(where: { $0.id == reminder.id }))
     XCTAssertEqual(store.completedReminderIDs, [reminder.id])

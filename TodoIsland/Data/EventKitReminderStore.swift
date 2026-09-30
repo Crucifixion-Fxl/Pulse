@@ -85,11 +85,9 @@ final class EventKitReminderStore: ReminderBackend {
     )
 
     return try await withCheckedThrowingContinuation { continuation in
-      eventStore.fetchReminders(matching: predicate) { reminders in
-        DispatchQueue.main.async {
-          let snapshots = (reminders ?? []).map(Self.snapshot)
-          continuation.resume(returning: snapshots)
-        }
+      eventStore.fetchReminders(matching: predicate) { @Sendable reminders in
+        let snapshots = (reminders ?? []).map(Self.snapshot)
+        continuation.resume(returning: snapshots)
       }
     }
   }
@@ -103,18 +101,18 @@ final class EventKitReminderStore: ReminderBackend {
     let predicate = eventStore.predicateForReminders(in: calendars)
 
     return try await withCheckedThrowingContinuation { continuation in
-      eventStore.fetchReminders(matching: predicate) { reminders in
-        DispatchQueue.main.async {
-          let calendar = Calendar.current
-          let snapshots = (reminders ?? []).filter { reminder in
-            guard let due = reminder.dueDateComponents.flatMap({ calendar.date(from: $0) }) else {
-              return false
-            }
-            return due >= dueFrom && due <= through
+      eventStore.fetchReminders(matching: predicate) { @Sendable reminders in
+        // Filter and snapshot on EventKit's callback queue — mapping
+        // thousands of reminders here must not stall the main thread.
+        let calendar = Calendar.current
+        let snapshots = (reminders ?? []).filter { reminder in
+          guard let due = reminder.dueDateComponents.flatMap({ calendar.date(from: $0) }) else {
+            return false
           }
-          .map(Self.snapshot)
-          continuation.resume(returning: snapshots)
+          return due >= dueFrom && due <= through
         }
+        .map(Self.snapshot)
+        continuation.resume(returning: snapshots)
       }
     }
   }
@@ -129,11 +127,9 @@ final class EventKitReminderStore: ReminderBackend {
     )
 
     return try await withCheckedThrowingContinuation { continuation in
-      eventStore.fetchReminders(matching: predicate) { reminders in
-        DispatchQueue.main.async {
-          let snapshots = (reminders ?? []).filter { $0.dueDateComponents == nil }.map(Self.snapshot)
-          continuation.resume(returning: snapshots)
-        }
+      eventStore.fetchReminders(matching: predicate) { @Sendable reminders in
+        let snapshots = (reminders ?? []).filter { $0.dueDateComponents == nil }.map(Self.snapshot)
+        continuation.resume(returning: snapshots)
       }
     }
   }
@@ -148,18 +144,16 @@ final class EventKitReminderStore: ReminderBackend {
     )
 
     return try await withCheckedThrowingContinuation { continuation in
-      eventStore.fetchReminders(matching: predicate) { reminders in
-        DispatchQueue.main.async {
-          let calendar = Calendar.current
-          let snapshots = (reminders ?? []).filter { reminder in
-            guard let components = reminder.dueDateComponents,
-              let due = calendar.date(from: components)
-            else { return false }
-            return due < date
-          }
-          .map(Self.snapshot)
-          continuation.resume(returning: snapshots)
+      eventStore.fetchReminders(matching: predicate) { @Sendable reminders in
+        let calendar = Calendar.current
+        let snapshots = (reminders ?? []).filter { reminder in
+          guard let components = reminder.dueDateComponents,
+            let due = calendar.date(from: components)
+          else { return false }
+          return due < date
         }
+        .map(Self.snapshot)
+        continuation.resume(returning: snapshots)
       }
     }
   }
@@ -174,10 +168,8 @@ final class EventKitReminderStore: ReminderBackend {
     )
 
     return try await withCheckedThrowingContinuation { continuation in
-      eventStore.fetchReminders(matching: predicate) { reminders in
-        DispatchQueue.main.async {
-          continuation.resume(returning: (reminders ?? []).map(Self.snapshot))
-        }
+      eventStore.fetchReminders(matching: predicate) { @Sendable reminders in
+        continuation.resume(returning: (reminders ?? []).map(Self.snapshot))
       }
     }
   }
@@ -245,7 +237,10 @@ final class EventKitReminderStore: ReminderBackend {
     }
   }
 
-  private static func snapshot(_ calendar: EKCalendar) -> ReminderListSnapshot {
+  /// Nonisolated so the fetch callbacks can snapshot on EventKit's own
+  /// queue; snapshots are plain value types, and NSColor conversions are
+  /// thread-safe.
+  private nonisolated static func snapshot(_ calendar: EKCalendar) -> ReminderListSnapshot {
     ReminderListSnapshot(
       id: calendar.calendarIdentifier,
       title: calendar.title,
@@ -254,7 +249,7 @@ final class EventKitReminderStore: ReminderBackend {
     )
   }
 
-  private static func snapshot(_ reminder: EKReminder) -> ReminderSnapshot {
+  private nonisolated static func snapshot(_ reminder: EKReminder) -> ReminderSnapshot {
     ReminderSnapshot(
       id: reminder.calendarItemIdentifier,
       listID: reminder.calendar.calendarIdentifier,
@@ -268,7 +263,7 @@ final class EventKitReminderStore: ReminderBackend {
     )
   }
 
-  private static func accent(from cgColor: CGColor?) -> AccentSnapshot {
+  private nonisolated static func accent(from cgColor: CGColor?) -> AccentSnapshot {
     guard
       let cgColor,
       let color = NSColor(cgColor: cgColor)?.usingColorSpace(.sRGB)

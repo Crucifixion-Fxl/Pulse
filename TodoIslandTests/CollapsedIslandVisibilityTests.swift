@@ -4,22 +4,25 @@ import XCTest
 
 final class CollapsedIslandVisibilityTests: XCTestCase {
   @MainActor
-  func testMissingPreferenceRequiresExplicitInitialSetupChoice() async {
+  func testMissingPreferenceDefaultsToAlwaysVisibleAndPersists() async {
     let defaults = makeDefaults()
     defer { clear(defaults) }
 
     let model = AppModel(store: VisibilityTestReminderStore(), defaults: defaults)
-    await model.start()
 
-    XCTAssertTrue(model.needsCollapsedIslandVisibilityChoice)
-    XCTAssertNil(model.collapsedIslandVisibility)
-    XCTAssertEqual(model.islandState, .pinned)
+    XCTAssertEqual(model.collapsedIslandVisibility, .alwaysVisible)
+    XCTAssertEqual(
+      defaults.string(forKey: "collapsed-island-visibility"),
+      CollapsedIslandVisibility.alwaysVisible.rawValue
+    )
     XCTAssertTrue(model.isCollapsedIslandVisible)
+
+    await model.start()
     XCTAssertEqual(model.activeListID, VisibilityTestReminderStore.listID)
   }
 
   @MainActor
-  func testVisibilityChoicePersistsWithoutChangingCurrentPinnedState() async {
+  func testVisibilityChoicePersists() async {
     let defaults = makeDefaults()
     defer { clear(defaults) }
 
@@ -28,14 +31,11 @@ final class CollapsedIslandVisibilityTests: XCTestCase {
 
     model.setCollapsedIslandVisibility(.autoHide)
 
-    XCTAssertFalse(model.needsCollapsedIslandVisibilityChoice)
     XCTAssertEqual(model.collapsedIslandVisibility, .autoHide)
     XCTAssertEqual(
       defaults.string(forKey: "collapsed-island-visibility"),
       CollapsedIslandVisibility.autoHide.rawValue
     )
-    XCTAssertEqual(model.islandState, .pinned)
-    XCTAssertTrue(model.isCollapsedIslandVisible)
   }
 
   @MainActor
@@ -145,7 +145,7 @@ final class CollapsedIslandVisibilityTests: XCTestCase {
   }
 
   @MainActor
-  func testAuthorizationActionIsBlockedUntilVisibilityChoiceExists() async {
+  func testAuthorizationRequestWorksWithoutSavedVisibilityChoice() async {
     let defaults = makeDefaults()
     defer { clear(defaults) }
 
@@ -153,14 +153,9 @@ final class CollapsedIslandVisibilityTests: XCTestCase {
     let model = AppModel(store: store, defaults: defaults)
 
     await model.requestAccess()
-    XCTAssertEqual(store.authorizationRequestCount, 0)
-
-    model.setCollapsedIslandVisibility(.alwaysVisible)
-    await model.requestAccess()
 
     XCTAssertEqual(store.authorizationRequestCount, 1)
     XCTAssertEqual(model.authorization, .fullAccess)
-    XCTAssertEqual(model.collapsedIslandVisibility, .alwaysVisible)
   }
 
   @MainActor

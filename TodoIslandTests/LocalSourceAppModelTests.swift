@@ -104,8 +104,23 @@ final class LocalSourceAppModelTests: XCTestCase {
     let listID = try XCTUnwrap(model.activeListID)
 
     let calendar = Calendar.current
-    let target = calendar.date(byAdding: .day, value: 3, to: model.selectedDay)!
-    model.createTask("Planned task", on: target)
+    // A target later today but inside the loaded month — a plain +3 days
+    // crosses into the next month near the month's end and the month-scoped
+    // fetch would never return it. On the month's last day the fallback
+    // lands before today, where the task intentionally greets as overdue.
+    let monthEnd = calendar.dateInterval(of: .month, for: model.selectedDay)!.end
+    let lastDayInMonth = calendar.startOfDay(for: monthEnd.addingTimeInterval(-1))
+    var target = calendar.date(byAdding: .day, value: 1, to: model.selectedDay)!
+    if calendar.startOfDay(for: target) > lastDayInMonth {
+      target = calendar.date(byAdding: .day, value: -3, to: model.selectedDay)!
+    }
+    let targetIsFuture =
+      calendar.startOfDay(for: target) > calendar.startOfDay(for: model.selectedDay)
+    XCTAssertNotEqual(
+      calendar.startOfDay(for: target),
+      calendar.startOfDay(for: model.selectedDay)
+    )
+    model.createTask("Planned task", on: target, in: listID)
     try await Task.sleep(for: .milliseconds(50))
 
     let created = try XCTUnwrap(model.monthReminders.first)
@@ -114,10 +129,15 @@ final class LocalSourceAppModelTests: XCTestCase {
     XCTAssertEqual(created.dueDateComponents?.month, calendar.component(.month, from: target))
     XCTAssertEqual(created.dueDateComponents?.day, calendar.component(.day, from: target))
     XCTAssertNil(created.dueDateComponents?.hour)
-    // The task lands on its own day, not on today's schedule.
+    // The task lands on its own day; a future one never reaches today's
+    // schedule, while a past-date fallback greets today as overdue.
     let targetSchedule = ReminderSchedule.schedule(on: target, in: model.monthReminders)
     XCTAssertEqual(targetSchedule.pending.map(\.title), ["Planned task"])
-    XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
+    if targetIsFuture {
+      XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
+    } else {
+      XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["Planned task"])
+    }
   }
 
   @MainActor
@@ -143,8 +163,12 @@ final class LocalSourceAppModelTests: XCTestCase {
     XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["Dated task"])
 
     model.complete(reminder)
-    try await Task.sleep(for: .milliseconds(400))
 
+    // Mid-celebration: the row is still pending while the confetti plays.
+    try await Task.sleep(for: .milliseconds(400))
+    XCTAssertEqual(try XCTUnwrap(model.monthReminders.first).isCompleted, false)
+
+    try await Task.sleep(for: .milliseconds(550))
     XCTAssertEqual(try XCTUnwrap(model.monthReminders.first).isCompleted, true)
     XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
     XCTAssertEqual(model.selectedDaySchedule.completed.map(\.title), ["Dated task"])

@@ -70,6 +70,7 @@ enum ReminderSchedule {
   static func schedule(
     on day: Date,
     in reminders: [ReminderSnapshot],
+    listRank: [String: Int] = [:],
     calendar: Calendar = .current,
     now: Date = Date()
   ) -> DaySchedule {
@@ -92,7 +93,8 @@ enum ReminderSchedule {
     }
     return DaySchedule(
       date: target,
-      pending: ReminderSorter.sorted(pending, now: now, calendar: calendar),
+      pending: ReminderSorter.sorted(
+        pending, listRank: listRank, now: now, calendar: calendar),
       completed: ReminderSorter.sorted(dueThatDay.filter(\.isCompleted), calendar: calendar)
     )
   }

@@ -3,3 +3,11 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 build/
+
+# Swift code coverage
+default.profraw
+
+# Agent tooling (local only)
+.claude/
+.codex/
+.cursor/

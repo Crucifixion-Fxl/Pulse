@@ -4,6 +4,77 @@ import SwiftUI
 @testable import TodoIsland
 
 final class DisplayGeometryTests: XCTestCase {
+  func testRemindersFeatureAllocatesRoomForMonthCalendarAndHeatmap() {
+    // The six-week Month Calendar and trailing 24-week Completion Heatmap
+    // share the selected feature's content height: tall enough to show both
+    // without clipping, tight enough that no dead space trails the heatmap.
+    let height = IslandSidebarItem.reminders.preferredContentHeight
+    XCTAssertEqual(height, IslandRootView.ScheduleMetrics.regular.remindersContentHeight)
+    XCTAssertGreaterThanOrEqual(height, 325)
+    XCTAssertLessThanOrEqual(height, 370)
+  }
+
+  func testContentHeightSizesBothExpandedStatesAndPreservesTopAnchor() {
+    for (safeAreaTop, expectedHeight) in [(32.0, 355.0), (0.0, 333.0)] {
+      let display = DisplayMetrics(
+        frame: CGRect(x: 100, y: 50, width: 1512, height: 982),
+        visibleFrame: CGRect(x: 100, y: 50, width: 1512, height: 950),
+        safeAreaTop: safeAreaTop,
+        auxiliaryLeftWidth: nil,
+        auxiliaryRightWidth: nil
+      )
+      let geometry = DisplayGeometryCalculator.geometry(
+        for: display, expandedContentHeight: 310
+      )
+
+      XCTAssertEqual(geometry.expandedSize, CGSize(width: 760, height: expectedHeight))
+      XCTAssertEqual(geometry.previewSize, geometry.expandedSize)
+      for state in [IslandPresentationState.preview, .pinned] {
+        let origin = geometry.origin(for: state, in: display)
+        XCTAssertEqual(origin.y + geometry.size(for: state).height, display.frame.maxY)
+        XCTAssertEqual(origin.x + geometry.size(for: state).width / 2, display.frame.midX)
+      }
+    }
+  }
+
+  func testContentHeightIsLimitedToAvailableScreenHeight() {
+    let display = DisplayMetrics(
+      frame: CGRect(x: 0, y: 0, width: 1024, height: 600),
+      visibleFrame: CGRect(x: 0, y: 0, width: 1024, height: 570),
+      safeAreaTop: 0,
+      auxiliaryLeftWidth: nil,
+      auxiliaryRightWidth: nil
+    )
+
+    let geometry = DisplayGeometryCalculator.geometry(
+      for: display, expandedContentHeight: 900
+    )
+
+    XCTAssertEqual(geometry.expandedSize.height, 584)
+    XCTAssertEqual(geometry.previewSize, geometry.expandedSize)
+  }
+
+  func testCalendarAndHeatmapFitOnTheShortHostDisplay() {
+    let display = DisplayMetrics(
+      frame: CGRect(x: 0, y: 0, width: 1520, height: 496),
+      visibleFrame: CGRect(x: 0, y: 0, width: 1520, height: 470),
+      safeAreaTop: 32,
+      auxiliaryLeftWidth: nil,
+      auxiliaryRightWidth: nil
+    )
+
+    let geometry = DisplayGeometryCalculator.geometry(
+      for: display, expandedContentHeight: IslandSidebarItem.reminders.preferredContentHeight
+    )
+
+    let requested = IslandSidebarItem.reminders.preferredContentHeight
+      + DisplayGeometryCalculator.expandedContentTopInset(for: display)
+      + DisplayGeometryCalculator.expandedBottomInset
+    XCTAssertEqual(
+      geometry.expandedSize.height,
+      min(requested, display.frame.height - DisplayGeometryCalculator.expandedDisplayMargin))
+  }
+
   func testExpandedShouldersJoinFullTopEdgeAndTaperInwardSymmetrically() {
     let path = IslandSurfaceShape(
       shoulderInset: 8, topShoulderDepth: 8, bottomRadius: 36

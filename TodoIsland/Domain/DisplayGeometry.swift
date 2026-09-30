@@ -50,13 +50,32 @@ enum IslandAnimatedSurfaceLayout {
 
 enum DisplayGeometryCalculator {
   static let collapsedNotchSideWidth: CGFloat = 72
+  static let expandedBottomInset: CGFloat = 7
+  static let expandedDisplayMargin: CGFloat = 16
 
-  static func geometry(for display: DisplayMetrics) -> IslandGeometry {
+  static func expandedContentTopInset(for display: DisplayMetrics) -> CGFloat {
+    max(16, display.safeAreaTop + 6)
+  }
+
+  static func geometry(
+    for display: DisplayMetrics,
+    expandedContentHeight: CGFloat? = nil
+  ) -> IslandGeometry {
     let availableWidth = max(320, display.frame.width - 32)
+    let contentHeight = expandedContentHeight.flatMap {
+      $0.isFinite && $0 > 0 ? $0 : nil
+    }
+    let requestedHeight = contentHeight.map {
+      $0 + expandedContentTopInset(for: display) + expandedBottomInset
+    } ?? 420
+    // Keep the surface inside the display while allowing the selected
+    // feature's calendar and completion heatmap to use the available height.
+    // The old fixed 80-point deduction clipped the bottom of short displays.
+    let maximumExpandedHeight = max(0, display.frame.height - expandedDisplayMargin)
     let expanded = CGSize(
-      width: min(760, availableWidth), height: min(420, max(300, display.frame.height - 80)))
-    // The Preview presents the maximum size immediately; pinning only adds
-    // keyboard focus, so both states share one geometry.
+      width: min(760, availableWidth),
+      height: min(requestedHeight, maximumExpandedHeight))
+    // Preview and pinned states share the selected feature's content height.
     let preview = expanded
 
     let collapsedHeight: CGFloat

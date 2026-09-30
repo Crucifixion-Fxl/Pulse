@@ -4,6 +4,7 @@
 "common.ok" = "OK";
 "common.cancel" = "Cancel";
 "common.save" = "Save";
+"common.close" = "Close";
 
 "error.title" = "Something Went Wrong";
 "error.list-not-found" = "The selected reminder list is no longer available.";
@@ -37,7 +38,6 @@
 
 "reminder.complete" = "Complete %@";
 "reminder.recurring" = "Recurring reminder";
-"reminder.reopen" = "Reopen %@";
 "reminder.edit" = "Edit";
 "reminder.delete" = "Delete";
 "reminder.actions" = "Actions for %@";
@@ -60,6 +60,7 @@
 
 "calendar.undated" = "Undated";
 "task.add.placeholder" = "Add a task for this day…";
+"task.add.list" = "Choose a list for the new task";
 "task.add.accessibility" = "New task title";
 "task.add.submit" = "Add task";
 "calendar.empty-day" = "Nothing scheduled";
@@ -93,3 +94,6 @@
 "menu.about" = "About Todo Island";
 "menu.quit" = "Quit Todo Island";
 "sidebar.reminders" = "Reminders";
+"heatmap.cell.tooltip" = "%1$@: %2$d completed";
+"sidebar.placeholder" = "Coming soon";
+"sidebar.placeholder.detail" = "Nothing here yet.";

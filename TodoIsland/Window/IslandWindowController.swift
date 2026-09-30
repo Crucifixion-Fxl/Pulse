@@ -9,6 +9,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   private let panel = IslandPanel()
   private let frameSpring = IslandFrameSpring()
   private(set) var appliedState: IslandPresentationState?
+  private(set) var appliedExpandedContentHeight: CGFloat?
   private(set) var appliedHostDisplayID: String?
   private(set) var isCollapsedSurfaceVisible = true
   private(set) var isActivationZoneActive = false
@@ -56,6 +57,19 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       .removeDuplicates()
       .sink { [weak self] _ in
         self?.updateVisibility(animated: true)
+      }
+      .store(in: &cancellables)
+
+    model.$expandedContentHeight
+      .removeDuplicates()
+      .sink { [weak self] height in
+        guard let self else { return }
+        self.applyState(
+          state: self.model.islandState,
+          displayID: self.model.hostDisplayID,
+          animated: true,
+          expandedContentHeight: height
+        )
       }
       .store(in: &cancellables)
 
@@ -210,16 +224,20 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   private func applyState(
     state: IslandPresentationState,
     displayID: String?,
-    animated: Bool
+    animated: Bool,
+    expandedContentHeight: CGFloat? = nil
   ) {
     appliedState = state
+    // Published values arrive before the model's stored property changes.
+    appliedExpandedContentHeight = expandedContentHeight ?? model.expandedContentHeight
     guard let screen = DisplaySupport.screen(id: displayID) else {
       panel.orderOut(nil)
       return
     }
 
     let metrics = DisplaySupport.metrics(for: screen)
-    let geometry = DisplayGeometryCalculator.geometry(for: metrics)
+    let geometry = DisplayGeometryCalculator.geometry(
+      for: metrics, expandedContentHeight: appliedExpandedContentHeight)
     let frame = NSRect(
       origin: geometry.origin(for: state, in: metrics), size: geometry.size(for: state))
 
@@ -280,6 +298,28 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       isCollapsedSurfaceVisible = false
       isActivationZoneActive = false
       return
+    }
+
+    // Watchdog: a collapsed island must sit exactly on the bar frame. If a
+    // spring was interrupted mid-flight by fast hover in/out, snap it back
+    // instead of leaving a stale wide surface on screen.
+    if state == .collapsed, !frameSpring.isRunning {
+      let metrics = DisplaySupport.metrics(for: screen)
+      let geometry = DisplayGeometryCalculator.geometry(
+        for: metrics,
+        expandedContentHeight: model.expandedContentHeight
+      )
+      let frame = NSRect(
+        origin: geometry.origin(for: .collapsed, in: metrics),
+        size: geometry.collapsedSize
+      )
+      if abs(panel.frame.width - frame.width) > 1
+        || abs(panel.frame.height - frame.height) > 1
+        || abs(panel.frame.midX - frame.midX) > 1
+      {
+        frameSpring.settle(at: frame)
+        panel.setFrame(frame, display: true)
+      }
     }
 
     if !panel.isVisible {
@@ -343,7 +383,21 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       panel.isVisible
     else { return }
 
-    let pointerInsideZone = panel.frame.contains(NSEvent.mouseLocation)
+    // The window may be mid-flight — much larger than the bar while the
+    // collapse spring settles. Gate the activation zone on the settled bar
+    // frame, never the animating one: a pointer inside the shrinking surface
+    // would otherwise re-trigger preview and race the collapse into a stuck
+    // wide surface.
+    let metrics = DisplaySupport.metrics(for: screen)
+    let geometry = DisplayGeometryCalculator.geometry(
+      for: metrics,
+      expandedContentHeight: model.expandedContentHeight
+    )
+    let settledBarFrame = CGRect(
+      origin: geometry.origin(for: .collapsed, in: metrics),
+      size: geometry.collapsedSize
+    )
+    let pointerInsideZone = settledBarFrame.contains(NSEvent.mouseLocation)
     guard pointerInsideZone else {
       model.setIslandHovered(false)
       return

@@ -17,8 +17,20 @@ final class AppModel: ObservableObject {
   @Published private(set) var undatedReminders: [ReminderSnapshot] = []
   @Published private(set) var overdueReminders: [ReminderSnapshot] = []
   @Published private(set) var recentlyCompletedReminders: [ReminderSnapshot] = []
+  /// Completion heatmap derived once per data reload, not per view render.
+  @Published private(set) var heatmapGrid: ReminderHeatmap.Grid = ReminderHeatmap.Grid(
+    weeks: [], counts: [:])
   @Published private(set) var selectedDay: Date = Calendar.current.startOfDay(for: Date())
-  @Published private(set) var islandState: IslandPresentationState = .collapsed
+  @Published private(set) var islandState: IslandPresentationState = .collapsed {
+    didSet {
+      // Collapsing ends any date exploration — the next opening starts on
+      // today instead of wherever the last sweep left the selection.
+      if islandState == .collapsed, oldValue != .collapsed {
+        selectDay(Calendar.current.startOfDay(for: Date()))
+      }
+    }
+  }
+  @Published private(set) var expandedContentHeight: CGFloat?
   @Published private(set) var isLoading = false
   @Published private(set) var isRequestingAccess = false
   @Published private(set) var isEditingDraftValidated = true
@@ -46,6 +58,9 @@ final class AppModel: ObservableObject {
   private var refreshTask: Task<Void, Never>?
   private var scheduleTask: Task<Void, Never>?
   private var hoverTask: Task<Void, Never>?
+  /// The month whose data is currently in memory; a same-month day switch
+  /// reuses it instead of re-running the EventKit queries.
+  private var loadedMonthInterval: DateInterval?
   private var isPointerInsideIsland = false
   private var suspendedEditingFocus: SuspendedEditingFocus?
 
@@ -65,13 +80,19 @@ final class AppModel: ObservableObject {
   ) {
     self.store = store
     self.defaults = defaults
+    // The stay-mode onboarding was removed; a missing choice defaults to
+    // always-visible (and is persisted so Settings shows the same value).
     let savedCollapsedVisibility = defaults.string(forKey: Keys.collapsedIslandVisibility)
       .flatMap(CollapsedIslandVisibility.init(rawValue:))
-    collapsedIslandVisibility = savedCollapsedVisibility
-    isCollapsedIslandVisible = savedCollapsedVisibility != .autoHide
+    let initialVisibility = savedCollapsedVisibility ?? .alwaysVisible
+    collapsedIslandVisibility = initialVisibility
+    if savedCollapsedVisibility == nil {
+      defaults.set(initialVisibility.rawValue, forKey: Keys.collapsedIslandVisibility)
+    }
+    isCollapsedIslandVisible = initialVisibility != .autoHide
     authorization = store.authorizationStatus()
     localStoreAvailability = store.localStoreAvailability
-    if savedCollapsedVisibility == nil || authorization == .notDetermined {
+    if authorization == .notDetermined {
       islandState = .pinned
     }
     activeListID = defaults.string(forKey: Keys.activeListID)
@@ -101,19 +122,33 @@ final class AppModel: ObservableObject {
     guard let activeList else { return false }
     return canAccess(source: activeList.source)
   }
-  var needsCollapsedIslandVisibilityChoice: Bool { collapsedIslandVisibility == nil }
   var usesAutoHiddenCollapsedIsland: Bool { collapsedIslandVisibility == .autoHide }
   var nextReminder: ReminderSnapshot? { reminders.first }
   var remainingCount: Int { reminders.count }
+  /// Sidebar order of the Lists — the schedule groups same-List Reminders
+  /// together in this order.
+  var listRankByListID: [String: Int] {
+    var rank: [String: Int] = [:]
+    for (index, list) in lists.enumerated() {
+      rank[list.id] = index
+    }
+    return rank
+  }
+
   var selectedDaySchedule: ReminderSchedule.DaySchedule {
     // Overdue entries only land on the current day; the schedule decides
     // how they merge with that day's own reminders.
-    ReminderSchedule.schedule(on: selectedDay, in: monthReminders + overdueReminders)
+    ReminderSchedule.schedule(
+      on: selectedDay,
+      in: monthReminders + overdueReminders,
+      listRank: listRankByListID
+    )
   }
   /// Every Reminder the Day Schedule pane can display, in display order.
+  /// Completed Reminders are not listed — completing one removes its row.
   var visibleScheduleReminders: [ReminderSnapshot] {
     let schedule = selectedDaySchedule
-    return schedule.pending + schedule.completed + undatedReminders
+    return schedule.pending + undatedReminders
   }
   /// The Island Preview shows the Active List's pending reminders; the Pinned
   /// Island's Day Schedule additionally includes completed and undated ones.
@@ -141,9 +176,7 @@ final class AppModel: ObservableObject {
   func start() async {
     authorization = store.authorizationStatus()
     await reload()
-    if needsCollapsedIslandVisibilityChoice {
-      pinIsland()
-    } else if authorization == .notDetermined, activeList?.source != .local {
+    if authorization == .notDetermined, activeList?.source != .local {
       pinIsland()
     } else if activeList?.source == .local, islandState == .pinned {
       collapseIsland()
@@ -153,7 +186,6 @@ final class AppModel: ObservableObject {
 
   func requestAccess() async {
     guard
-      !needsCollapsedIslandVisibilityChoice,
       authorization == .notDetermined,
       !isRequestingAccess
     else { return }
@@ -192,7 +224,7 @@ final class AppModel: ObservableObject {
       if newLists.contains(where: { $0.source == .local }) {
         defaults.set(true, forKey: Keys.didInitializeLocalSource)
       }
-      await reloadScheduleData()
+      await reloadScheduleData(force: true)
 
       if !newLists.contains(where: { $0.id == activeListID }) {
         if let activeListID,
@@ -256,17 +288,20 @@ final class AppModel: ObservableObject {
 
   /// Moves the Day Schedule to another date. Crossing into a different month
   /// refetches the month's dated reminders.
-  /// Creates a Pending Reminder in the Active List, due on the given day —
-  /// the Task Input beneath the calendar adds work straight onto the
+  /// Creates a Pending Reminder in the chosen list, due on the given day —
+  /// the Task Input beneath the schedule adds work straight onto the
   /// selected date.
-  func createTask(_ title: String, on day: Date) {
+  func createTask(_ title: String, on day: Date, in listID: String) {
     let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard canUseActiveList, !normalized.isEmpty, let activeListID else { return }
+    guard !normalized.isEmpty,
+      let list = lists.first(where: { $0.id == listID }),
+      canAccess(source: list.source)
+    else { return }
     let components = Calendar.current.dateComponents([.year, .month, .day], from: day)
     Task {
       do {
         try await store.createReminder(
-          title: normalized, in: activeListID, dueComponents: components)
+          title: normalized, in: listID, dueComponents: components)
         await reload()
       } catch {
         present(error)
@@ -283,27 +318,66 @@ final class AppModel: ObservableObject {
     scheduleTask = Task { await reloadScheduleData() }
   }
 
-  private func reloadScheduleData() async {
+  /// Refreshes the schedule caches. Undated, overdue, and completion
+  /// history never depend on the selected day, and a same-month day switch
+  /// reuses the month already in memory — so a plain selection change skips
+  /// all four EventKit queries. `force` re-queries after the store (or the
+  /// selected month) actually changed.
+  private func reloadScheduleData(force: Bool = false) async {
     let calendar = Calendar.current
     guard let interval = calendar.dateInterval(of: .month, for: selectedDay) else {
       monthReminders = []
       undatedReminders = []
+      overdueReminders = []
+      recentlyCompletedReminders = []
+      heatmapGrid = ReminderHeatmap.Grid(weeks: [], counts: [:])
+      loadedMonthInterval = nil
       return
     }
-    let dated =
-      (try? await store.fetchReminders(dueFrom: interval.start, through: interval.end)) ?? []
-    let undated = (try? await store.fetchUndatedPendingReminders()) ?? []
-    let overdue = (try? await store.fetchOverduePendingReminders(before: interval.start)) ?? []
-    let completedRecently =
-      (try? await store.fetchCompletedReminders(
-        completedFrom: Calendar.current.date(
-          byAdding: .day, value: -180, to: Calendar.current.startOfDay(for: Date())
-        ) ?? Date())) ?? []
-    guard !Task.isCancelled else { return }
-    monthReminders = dated
-    undatedReminders = ReminderSorter.sorted(undated)
-    overdueReminders = overdue
-    recentlyCompletedReminders = completedRecently
+    if force || loadedMonthInterval != interval {
+      var dated =
+        (try? await store.fetchReminders(dueFrom: interval.start, through: interval.end)) ?? []
+      var undated = (try? await store.fetchUndatedPendingReminders()) ?? []
+      var overdue = (try? await store.fetchOverduePendingReminders(before: interval.start)) ?? []
+      let completedRecently =
+        (try? await store.fetchCompletedReminders(
+          completedFrom: calendar.date(
+            byAdding: .day, value: -180, to: calendar.startOfDay(for: Date())
+          ) ?? Date())) ?? []
+      guard !Task.isCancelled else { return }
+      // Rows mid-celebration stay visible: the backend already marked them
+      // completed, but their confetti is still playing.
+      let celebrating = completingReminderIDs
+      if !celebrating.isEmpty {
+        func keepPending(_ reminders: [ReminderSnapshot]) -> [ReminderSnapshot] {
+          reminders.map { reminder in
+            var reminder = reminder
+            if celebrating.contains(reminder.id) { reminder.isCompleted = false }
+            return reminder
+          }
+        }
+        dated = keepPending(dated)
+        overdue = keepPending(overdue)
+        undated = keepPending(undated)
+        // Completed undated/overdue Reminders drop out of the pending-only
+        // fetches — carry them over from the previous lists until the
+        // celebration ends.
+        let undatedIDs = Set(undated.map(\.id))
+        undated += undatedReminders.filter {
+          celebrating.contains($0.id) && !undatedIDs.contains($0.id)
+        }
+        let overdueIDs = Set(overdue.map(\.id))
+        overdue += overdueReminders.filter {
+          celebrating.contains($0.id) && !overdueIDs.contains($0.id)
+        }
+      }
+      monthReminders = dated
+      undatedReminders = ReminderSorter.sorted(undated, listRank: listRankByListID)
+      overdueReminders = overdue
+      recentlyCompletedReminders = completedRecently
+      heatmapGrid = ReminderHeatmap.grid(in: completedRecently)
+      loadedMonthInterval = interval
+    }
     let navigable = keyboardNavigableReminders
     if !navigable.contains(where: { $0.id == selectedReminderID }) {
       selectedReminderID = navigable.first?.id
@@ -367,34 +441,10 @@ final class AppModel: ObservableObject {
     Task {
       do {
         try await store.setCompleted(true, reminderID: reminder.id)
-        try await Task.sleep(for: .milliseconds(200))
+        // Hold the row until the confetti finishes, then let it fade while
+        // the rows below slide up.
+        try await Task.sleep(for: .milliseconds(750))
         removeCompletedReminder(id: reminder.id)
-        await reload()
-      } catch {
-        completingReminderIDs.remove(reminder.id)
-        present(error)
-      }
-    }
-  }
-
-  /// Clears the completed flag of a Day Schedule row so it returns to the
-  /// pending side of its day.
-  func reopen(_ reminder: ReminderSnapshot) {
-    guard
-      canAccess(source: reminder.source),
-      reminder.isCompleted,
-      monthReminders.contains(where: { $0.id == reminder.id }),
-      completingReminderIDs.insert(reminder.id).inserted
-    else { return }
-
-    Task {
-      do {
-        try await store.setCompleted(false, reminderID: reminder.id)
-        try await Task.sleep(for: .milliseconds(200))
-        if let index = monthReminders.firstIndex(where: { $0.id == reminder.id }) {
-          monthReminders[index].isCompleted = false
-        }
-        completingReminderIDs.remove(reminder.id)
         await reload()
       } catch {
         completingReminderIDs.remove(reminder.id)
@@ -499,7 +549,6 @@ final class AppModel: ObservableObject {
   }
 
   func useLocal() async {
-    guard !needsCollapsedIslandVisibilityChoice else { return }
     pinIsland()
     guard localStoreAvailability == .available else {
       errorMessage = ReminderStoreError.localStoreUnavailable.localizedDescription
@@ -604,6 +653,13 @@ final class AppModel: ObservableObject {
 
   func setHostDisplayID(_ displayID: String?) {
     hostDisplayID = displayID
+  }
+
+  func updateExpandedContentHeight(_ height: CGFloat) {
+    guard height.isFinite, height > 0 else { return }
+    let measuredHeight = ceil(height)
+    guard expandedContentHeight != measuredHeight else { return }
+    expandedContentHeight = measuredHeight
   }
 
   func markApplicationActive() {
