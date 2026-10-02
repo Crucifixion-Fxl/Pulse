@@ -1,0 +1,3 @@
+# Fetch lyrics over the network
+
+Todo Island will fetch time-synced lyrics over HTTPS from NetEase's unofficial lyric API first (best Chinese catalog, includes Chinese translations) and fall back to the open LRCLIB index, displaying the original text plus the translation when one exists. Requests carry a browser User-Agent, a 5-second timeout, and an in-memory cache keyed by normalized title/artist/duration with remembered misses; failures surface as a quiet not-found state and never block the player UI. The `com.apple.security.network.client` entitlement is added for this; no third-party dependency is introduced and no Reminder data leaves the device (ADR 0004 scope unchanged).

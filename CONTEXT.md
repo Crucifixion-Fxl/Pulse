@@ -123,3 +123,15 @@ _Avoid_: Quick Add, new-task box, composer
 **Completion Heatmap**:
 The trailing twenty-four week grid of squares under the Month Calendar, one per day, tinted by how many Reminders were completed that day.
 _Avoid_: Contribution graph, streak chart
+
+**Music Panel**:
+The expanded Island's third sidebar feature: a player card driven by the system Now Playing state on the left, and time-synced lyrics on the right.
+_Avoid_: Media widget, song page
+
+**Now Playing**:
+The system-wide playing item the Island reads through the private MediaRemote framework — title, artist, album, artwork, duration, elapsed time, and playback commands — covering any player, including 网易云音乐.
+_Avoid_: Music.app state, media session
+
+**Lyrics**:
+The time-synced lines shown beside the player, fetched over HTTPS from NetEase's lyric API first with LRCLIB as fallback, showing the original text plus a translation when one exists; a quiet not-found state appears when neither source has the song.
+_Avoid_: Subtitles file, lyrics view
