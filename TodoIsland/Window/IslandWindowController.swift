@@ -146,6 +146,15 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     // closes when the application deactivates, not during an in-app menu handoff.
   }
 
+  func windowDidBecomeKey(_ notification: Notification) {
+    // A click on the hover preview pins the Island mid-mouse-down, while key
+    // status is still in flight; the caret lands only once the panel is key.
+    // Hopped to a Task because becoming key can happen synchronously inside
+    // makeKeyAndOrderFront, before the model's islandState assignment (which
+    // triggered it) has finished writing .pinned.
+    Task { @MainActor in model.notePanelDidBecomeKey() }
+  }
+
   @discardableResult
   private func refreshHostDisplay(
     now: TimeInterval = ProcessInfo.processInfo.systemUptime,
