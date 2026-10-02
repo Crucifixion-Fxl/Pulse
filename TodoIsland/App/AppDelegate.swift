@@ -5,6 +5,11 @@ import SwiftUI
 enum TodoIslandApplication {
   @MainActor
   static func main() {
+    // Hidden diagnostic: runs the perl-helper transport test inside the
+    // real (sandboxed) process and exits. `TodoIsland --media-harness-test`
+    if CommandLine.arguments.contains("--media-harness-test") {
+      NowPlayingController.runSandboxedHarness()
+    }
     let application = NSApplication.shared
     let delegate = AppDelegate()
     application.delegate = delegate
@@ -26,6 +31,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     islandController = IslandWindowController(model: model)
     configureStatusItem()
+
+    // Now Playing observer lives for the process lifetime; elapsed polling
+    // is gated on the music panel being visible.
+    let nowPlaying = NowPlayingController.shared
+    nowPlaying.onUpdate = { [weak model] track in
+      model?.nowPlayingDidChange(track)
+    }
+    nowPlaying.onLiveTemplatesChanged = { [weak model] keys in
+      model?.mediaKeysReady = keys
+    }
+    nowPlaying.start()
 
     Task {
       await model.start()

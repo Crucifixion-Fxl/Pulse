@@ -69,8 +69,8 @@ enum ListCreationDraftPolicy {
 /// add a case here without changing the shell or window geometry.
 enum IslandSidebarItem: String, CaseIterable, Identifiable {
   case reminders
-  case placeholder
-  case placeholder2
+  case aiUsage
+  case music
   case placeholder3
   case placeholder4
   case placeholder5
@@ -82,7 +82,9 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
   var title: LocalizedStringKey {
     switch self {
     case .reminders: "sidebar.reminders"
-    case .placeholder, .placeholder2, .placeholder3,
+    case .aiUsage: "sidebar.ai-usage"
+    case .music: "sidebar.music"
+    case .placeholder3,
       .placeholder4, .placeholder5, .placeholder6, .placeholder7:
       "sidebar.placeholder"
     }
@@ -91,8 +93,8 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
   var symbol: String {
     switch self {
     case .reminders: "checklist"
-    case .placeholder: "sparkles"
-    case .placeholder2: "square.grid.2x2"
+    case .aiUsage: "sparkles"
+    case .music: "music.note"
     case .placeholder3: "tray"
     case .placeholder4: "flag"
     case .placeholder5: "clock"
@@ -110,8 +112,14 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
     // 24-week completion heatmap; the window is sized to their exact
     // natural height so no dead space trails the heatmap.
     case .reminders: IslandRootView.ScheduleMetrics.regular.remindersContentHeight
+    // The AI usage pane's height is fully deterministic — hero, trend and
+    // subscription cards all use fixed metrics.
+    case .aiUsage: AIUsagePanelView.Metrics.contentHeight
+    // Player and lyrics cards use fixed metrics matching the AI pane, so
+    // the island height stays uniform across features.
+    case .music: MusicPanelView.Metrics.contentHeight
     // The stub pane is one centered line of text; keep the surface compact.
-    case .placeholder, .placeholder2, .placeholder3,
+    case .placeholder3,
       .placeholder4, .placeholder5, .placeholder6, .placeholder7:
       240
     }
@@ -215,17 +223,6 @@ struct IslandRootView: View {
 
   private var isPinned: Bool { model.islandState == .pinned }
 
-  /// Native equivalents of ReUI's shadcn surface tokens.
-  private enum ReUITheme {
-    static let panel = Color(red: 0.055, green: 0.063, blue: 0.078)
-    static let item = Color(red: 0.095, green: 0.106, blue: 0.13)
-    static let itemHover = Color(red: 0.135, green: 0.15, blue: 0.18)
-    static let itemSelected = Color(red: 0.11, green: 0.16, blue: 0.22)
-    static let border = Color.white.opacity(0.105)
-    static let subtleBorder = Color.white.opacity(0.065)
-    static let muted = Color.white.opacity(0.58)
-  }
-
   var body: some View {
     GeometryReader { proxy in
       let surfaceSize = IslandAnimatedSurfaceLayout.surfaceSize(
@@ -314,19 +311,27 @@ struct IslandRootView: View {
           newTaskFocused = false
         }
         // A pinned island is the typing surface: put the caret straight
-        // into the Task Input so the first keystroke lands there.
+        // into the Task Input so the first keystroke lands there. When the
+        // click that pinned the Island is still in flight, the panel has
+        // not become key yet and this request cannot land — the
+        // taskInputFocusRequestID handler below re-issues it when it can.
         if state == .pinned, model.editingReminderID == nil {
           newTaskFocused = true
-          Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(80))
-            if model.islandState == .pinned, model.editingReminderID == nil {
-              newTaskFocused = true
-            }
-          }
         }
       }
-      .onAppear { updateExpandedContentHeight() }
+      .onChange(of: model.taskInputFocusRequestID) { _, _ in
+        guard model.islandState == .pinned, model.editingReminderID == nil else { return }
+        // Pass through false first: the pin already left the state true,
+        // and re-asserting true alone would not re-issue the focus request.
+        newTaskFocused = false
+        Task { @MainActor in newTaskFocused = true }
+      }
+      .onAppear {
+        updateExpandedContentHeight()
+        syncMusicPanelActivity()
+      }
       .onChange(of: selectedSidebarItem) { _, _ in updateExpandedContentHeight() }
+      .onChange(of: model.islandState) { _, _ in syncMusicPanelActivity() }
       // Height must track exactly what expandedFeatureContent branches on.
       // canUseActiveList (not lists.count) is the real gate: it also flips
       // when the local store becomes available or the active list changes,
@@ -490,6 +495,18 @@ struct IslandRootView: View {
     withAnimation(reduceMotion ? nil : .bouncy(duration: 0.35, extraBounce: 0.2)) {
       selectedSidebarItem = item
     }
+    if item == .aiUsage {
+      model.refreshAIUsage()
+    }
+    syncMusicPanelActivity()
+  }
+
+  /// Elapsed-time polling runs only while the expanded island actually
+  /// shows the music panel. Re-selected items never re-fire selectSidebar
+  /// on re-expansion, so every visibility input reconciles here instead.
+  private func syncMusicPanelActivity() {
+    let active = model.islandState != .collapsed && selectedSidebarItem == .music
+    model.setMusicPanelActive(active)
   }
 
   @ViewBuilder
@@ -497,7 +514,11 @@ struct IslandRootView: View {
     switch selectedSidebarItem {
     case .reminders:
       remindersFeatureContent.transition(.opacity)
-    case .placeholder, .placeholder2, .placeholder3,
+    case .aiUsage:
+      AIUsagePanelView(snapshot: model.aiUsage).transition(.opacity)
+    case .music:
+      MusicPanelView().transition(.opacity)
+    case .placeholder3,
       .placeholder4, .placeholder5, .placeholder6, .placeholder7:
       placeholderFeatureContent.transition(.opacity)
     }
@@ -950,7 +971,7 @@ struct IslandRootView: View {
   private func updateExpandedContentHeight() {
     let contentHeight: CGFloat
     switch selectedSidebarItem {
-    case .placeholder, .placeholder2, .placeholder3,
+    case .aiUsage, .music, .placeholder3,
       .placeholder4, .placeholder5, .placeholder6, .placeholder7:
       contentHeight = selectedSidebarItem.preferredContentHeight
     case .reminders:

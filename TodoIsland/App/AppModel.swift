@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import os
 
 enum ICloudSourceMenuState: Equatable, Sendable {
   case authorizationRequired
@@ -41,6 +42,33 @@ final class AppModel: ObservableObject {
   @Published private(set) var preferredEmptySource: ReminderSource?
   @Published var requestedListCreationSource: ReminderSource?
   @Published private(set) var editingFocusRequestID = UUID()
+  /// Re-issued when the panel actually becomes key, so a Task Input focus
+  /// requested mid-pin (before key status landed) can be applied for real.
+  @Published private(set) var taskInputFocusRequestID = UUID()
+  /// Snapshot shown by the AI usage sidebar panel; nil renders the skeleton.
+  @Published private(set) var aiUsage: AIUsageSnapshot?
+  /// Latest Now Playing snapshot; nil renders the music panel's empty state.
+  @Published private(set) var nowPlaying: NowPlayingTrack?
+  @Published private(set) var lyricsState: LyricsState = .idle
+  /// Media keys with live hardware templates this session; empty after a
+  /// restart until the user presses the real keys once.
+  @Published var mediaKeysReady: Set<Int32> = []
+  /// Global lyric lead/lag the user nudges in the lyrics pane; positive
+  /// delays lines. Persisted — source drift differs per song upload, one
+  /// knob covers it.
+  @Published var lyricOffset: TimeInterval = 0 {
+    didSet {
+      guard oldValue != lyricOffset else { return }
+      defaults.set(lyricOffset, forKey: Keys.lyricOffset)
+    }
+  }
+
+  enum LyricsState: Equatable {
+    case idle
+    case loading
+    case loaded(Lyrics)
+    case notFound
+  }
   @Published private(set) var collapsedIslandVisibility: CollapsedIslandVisibility?
   @Published private(set) var isCollapsedIslandVisible: Bool
   @Published var errorMessage: String?
@@ -55,6 +83,15 @@ final class AppModel: ObservableObject {
 
   private let store: ReminderStore
   private let defaults: UserDefaults
+  private let aiUsageProvider: AIUsageProvider
+  private let lyricsService: LyricsService
+  private let nowPlayingController: any NowPlayingControlling
+  /// Guards refreshAIUsage against refetching on every hover-select.
+  private var lastAIUsageRefresh: Date?
+  /// Identity whose lyrics are loaded or being fetched; elapsed/rate
+  /// jitter must never re-trigger a fetch.
+  private var currentLyricsIdentity: LyricsIdentity?
+  private var lyricsTask: Task<Void, Never>?
   private var refreshTask: Task<Void, Never>?
   private var scheduleTask: Task<Void, Never>?
   private var hoverTask: Task<Void, Never>?
@@ -72,14 +109,22 @@ final class AppModel: ObservableObject {
     static let activeListID = "active-list-id"
     static let didInitializeLocalSource = "did-initialize-local-source"
     static let collapsedIslandVisibility = "collapsed-island-visibility"
+    static let lyricOffset = "lyric-offset"
   }
 
   init(
     store: ReminderStore = SourceAwareReminderStore(),
-    defaults: UserDefaults = .standard
+    defaults: UserDefaults = .standard,
+    aiUsageProvider: AIUsageProvider = SampleAIUsageProvider(),
+    lyricsService: LyricsService = LyricsService(),
+    nowPlayingController: any NowPlayingControlling = NowPlayingController.shared
   ) {
     self.store = store
     self.defaults = defaults
+    self.aiUsageProvider = aiUsageProvider
+    self.lyricsService = lyricsService
+    self.nowPlayingController = nowPlayingController
+    lyricOffset = defaults.object(forKey: Keys.lyricOffset) as? Double ?? 0
     // The stay-mode onboarding was removed; a missing choice defaults to
     // always-visible (and is persisted so Settings shows the same value).
     let savedCollapsedVisibility = defaults.string(forKey: Keys.collapsedIslandVisibility)
@@ -624,6 +669,13 @@ final class AppModel: ObservableObject {
     editingFocusRequestID = UUID()
   }
 
+  /// The panel just became the key window. Focus set earlier in the pin
+  /// transition could not land in a non-key window; now it can.
+  func notePanelDidBecomeKey() {
+    guard islandState == .pinned, editingReminderID == nil else { return }
+    taskInputFocusRequestID = UUID()
+  }
+
   func collapseIsland() {
     hoverTask?.cancel()
     suspendedEditingFocus = nil
@@ -662,11 +714,85 @@ final class AppModel: ObservableObject {
     expandedContentHeight = measuredHeight
   }
 
+  /// Refreshes the AI usage panel on panel selection and app activation;
+  /// throttled to five minutes so hover-selecting the sidebar icon doesn't
+  /// refetch. Stale data is kept when a fetch fails.
+  func refreshAIUsage() {
+    let staleness = lastAIUsageRefresh.map { Date().timeIntervalSince($0) } ?? .infinity
+    guard aiUsage == nil || staleness > 300 else { return }
+    lastAIUsageRefresh = Date()
+    Task { @MainActor in
+      if let snapshot = try? await aiUsageProvider.fetchUsage() {
+        aiUsage = snapshot
+      }
+    }
+  }
+
+  // MARK: Music
+
+  /// Entry point for NowPlayingController updates (wired in AppDelegate).
+  func nowPlayingDidChange(_ track: NowPlayingTrack?) {
+    nowPlaying = track
+    guard let track else {
+      lyricsTask?.cancel()
+      currentLyricsIdentity = nil
+      lyricsState = .idle
+      return
+    }
+    guard track.lyricsIdentity != currentLyricsIdentity else { return }
+    currentLyricsIdentity = track.lyricsIdentity
+    fetchLyrics(for: track)
+  }
+
+  private func fetchLyrics(for track: NowPlayingTrack) {
+    lyricsTask?.cancel()
+    guard !track.title.isEmpty else {
+      lyricsState = .idle
+      return
+    }
+    lyricsState = .loading
+    let identity = track.lyricsIdentity
+    lyricsTask = Task { @MainActor in
+      let found = await lyricsService.lyrics(
+        title: track.title, artist: track.artist, duration: track.duration
+      )
+      guard !Task.isCancelled, identity == currentLyricsIdentity else { return }
+      lyricsState = found.map { .loaded($0) } ?? .notFound
+      Self.logLyricsOutcome(
+        title: track.title, artist: track.artist, found: found != nil
+      )
+    }
+  }
+
+  private nonisolated static let lyricsLog = os.Logger(
+    subsystem: "com.fxl.TodoIsland", category: "lyrics"
+  )
+
+  private static func logLyricsOutcome(title: String, artist: String, found: Bool) {
+    lyricsLog.info(
+      "lyrics \(found ? "found" : "not found", privacy: .public) for \(title, privacy: .public) — \(artist, privacy: .public)"
+    )
+  }
+
+  /// Sidebar activity gate for elapsed-time polling; idempotent under
+  /// hover-repeat.
+  func setMusicPanelActive(_ active: Bool) {
+    nowPlayingController.setPanelActive(active)
+  }
+
+  var nowPlayingSupportsSeeking: Bool { nowPlayingController.supportsSeeking }
+
+  func musicTogglePlayPause() { nowPlayingController.togglePlayPause() }
+  func musicSkipForward() { nowPlayingController.next() }
+  func musicSkipBackward() { nowPlayingController.previous() }
+  func musicSeek(to seconds: TimeInterval) { nowPlayingController.seek(to: seconds) }
+
   func markApplicationActive() {
     let newAuthorization = store.authorizationStatus()
     authorization = newAuthorization
     localStoreAvailability = store.localStoreAvailability
     scheduleRefresh(delay: .milliseconds(50))
+    refreshAIUsage()
     if newAuthorization != .fullAccess,
       let editingReminderID,
       reminders.first(where: { $0.id == editingReminderID })?.source == .iCloud
