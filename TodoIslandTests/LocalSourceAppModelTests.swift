@@ -263,7 +263,7 @@ final class LocalSourceAppModelTests: XCTestCase {
 }
 
 @MainActor
-private final class LocalOnlyTestReminderStore: ReminderStore {
+final class LocalOnlyTestReminderStore: ReminderStore {
   var onStoreChanged: (() -> Void)?
   private var lists: [ReminderListSnapshot]
   private var reminders: [ReminderSnapshot] = []
