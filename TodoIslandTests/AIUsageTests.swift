@@ -21,11 +21,11 @@ final class AIUsageTests: XCTestCase {
 
   // MARK: Sample snapshot shape
 
-  func testSampleSnapshotHasSevenAscendingDaysEndingToday() {
+  func testSampleSnapshotHasFifteenAscendingDaysEndingToday() {
     let now = fixedNow()
     let snapshot = AIUsageSample.makeSnapshot(now: now, calendar: calendar)
 
-    XCTAssertEqual(snapshot.days.count, 7)
+    XCTAssertEqual(snapshot.days.count, 15)
     XCTAssertEqual(snapshot.days.last?.day, calendar.startOfDay(for: now))
     for pair in zip(snapshot.days, snapshot.days.dropFirst()) {
       let dayApart = calendar.date(
@@ -151,7 +151,7 @@ final class AIUsageTests: XCTestCase {
     try await Task.sleep(for: .milliseconds(50))
     let snapshot = try XCTUnwrap(model.aiUsage)
     XCTAssertTrue(snapshot.isSample)
-    XCTAssertEqual(snapshot.days.count, 7)
+    XCTAssertEqual(snapshot.days.count, 15)
     XCTAssertEqual(snapshot.days.last?.day, calendar.startOfDay(for: now))
 
     // Within the throttle window a second call must not refetch: the

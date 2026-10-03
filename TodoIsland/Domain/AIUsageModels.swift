@@ -78,7 +78,7 @@ struct AISubscription: Hashable, Sendable, Identifiable {
 
 /// Everything the AI usage panel renders for one fetch.
 struct AIUsageSnapshot: Hashable, Sendable {
-  /// Exactly seven entries, ascending; the last entry is today.
+  /// Exactly fifteen entries (half a month), ascending; the last is today.
   var days: [AIUsageDay]
   var subscriptions: [AISubscription]
   /// True while the numbers are fabricated; real providers clear it so the
@@ -143,12 +143,15 @@ private extension Double {
 }
 
 /// Deterministic sample data; dates are anchored to `now` so the panel
-/// always shows a plausible "last seven days" ending today.
+/// always shows a plausible trailing half month ending today.
 enum AIUsageSample {
   static func makeSnapshot(now: Date, calendar: Calendar = .current) -> AIUsageSnapshot {
     let today = calendar.startOfDay(for: now)
-    // Daily totals in thousands, oldest → today.
-    let dailyTotals = [612, 878, 1312, 742, 956, 1418, 1252]
+    // Daily totals in thousands, oldest → today (half a month).
+    let dailyTotals = [
+      520, 1043, 689, 1187, 830, 1364, 715, 972,
+      612, 878, 1312, 742, 956, 1418, 1252,
+    ]
     let days = dailyTotals.enumerated().map { offset, totalK -> AIUsageDay in
       let date = calendar.date(byAdding: .day, value: offset - (dailyTotals.count - 1), to: today)!
       // Today's split is exact; earlier days use the ~31/41/28% profile.

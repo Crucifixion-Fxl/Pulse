@@ -105,7 +105,7 @@
 "ai.today.input" = "Input";
 "ai.today.output" = "Output";
 "ai.today.cache" = "Cache";
-"ai.trend.title" = "Last 7 Days";
+"ai.trend.title" = "Last 15 Days";
 "ai.trend.week-total" = "%@ this week";
 "ai.trend.tooltip" = "%1$@ · %2$@";
 "ai.subscriptions.title" = "Subscriptions & Weekly Quotas";

@@ -18,7 +18,7 @@ xattr -cr /Applications/TodoIsland.app
 - **Completion celebration** — checking a task bursts confetti at the checkmark; the row holds until it finishes, then fades while the rows below slide up.
 - **Day Schedule grouped by List** — same-List tasks stay together, ordered like the Lists themselves, with overdue items greeting today.
 - **Quick Add** — the Task Input creates a reminder on the selected day in any List; the first click on the hover preview pins the Island and puts the caret in the field.
-- **AI usage dashboard** — today's tokens with an input/output/cache split, a seven-day trend, and per-subscription weekly quota cards (sample data until real providers land).
+- **AI usage dashboard** — today's tokens with an input/output/cache split, a fifteen-day trend, and per-subscription weekly quota cards (sample data until real providers land).
 - **Music panel** — the system Now Playing (any player, e.g. NetEase Cloud Music) with artwork, progress, and controls on the left; time-synced lyrics with translations on the right, fetched from NetEase with an LRCLIB fallback.
 - **List management** — iCloud Reminders plus a private local source with per-List accents, renaming, and deletion summaries.
 - **Keyboard support** — arrows move the selection or shift the day, Return edits, Space completes, ⌘N focuses the Task Input, ESC dismisses.

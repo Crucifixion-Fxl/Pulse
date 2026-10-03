@@ -105,7 +105,7 @@
 "ai.today.input" = "输入";
 "ai.today.output" = "输出";
 "ai.today.cache" = "缓存";
-"ai.trend.title" = "近 7 日";
+"ai.trend.title" = "近 15 日";
 "ai.trend.week-total" = "本周 %@";
 "ai.trend.tooltip" = "%1$@ · %2$@";
 "ai.subscriptions.title" = "订阅与周限额";
