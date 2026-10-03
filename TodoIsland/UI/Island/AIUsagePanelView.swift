@@ -13,9 +13,10 @@ private enum Layout {
 private enum Palette {
   // Brand hues live only on the vendor tiles (点缀); trend bars and quota
   // bars stay in the app's neutral white system, like the heatmap.
-  static let input = Color.white.opacity(0.92)
-  static let output = Color.white.opacity(0.62)
-  static let cache = Color.white.opacity(0.38)
+  // One hue per token component so the breakdown rows read apart.
+  static let input = Color(hue: 0.58, saturation: 0.72, brightness: 0.95)
+  static let output = Color(hue: 0.88, saturation: 0.58, brightness: 0.95)
+  static let cache = Color(hue: 0.45, saturation: 0.55, brightness: 0.82)
   static let warning = Color(red: 0.95, green: 0.72, blue: 0.25)
   static let danger = Color(red: 0.92, green: 0.36, blue: 0.32)
 }
@@ -98,17 +99,18 @@ struct AIUsagePanelView: View {
         .font(.system(size: 11, weight: .medium))
         .foregroundStyle(ReUITheme.muted)
 
-      Text(AIUsageFormat.grouped(today?.totalTokens ?? 0))
-        .font(.system(size: 27, weight: .bold, design: .rounded))
-        .monospacedDigit()
-        .minimumScaleFactor(0.75)
-        .lineLimit(1)
-        .foregroundStyle(.white)
-        .shadow(
-          color: heroHovered ? .white.opacity(0.45) : .clear,
-          radius: heroHovered ? 10 : 0
-        )
-        .scaleEffect(heroHovered && !reduceMotion ? 1.03 : 1)
+      RollingNumber(
+        value: today?.totalTokens ?? 0,
+        spinUp: !reduceMotion
+      )
+      .font(.system(size: 27, weight: .bold, design: .rounded))
+      .foregroundStyle(.white)
+      .lineLimit(1)
+      .shadow(
+        color: heroHovered ? .white.opacity(0.45) : .clear,
+        radius: heroHovered ? 10 : 0
+      )
+      .scaleEffect(heroHovered && !reduceMotion ? 1.03 : 1)
 
       VStack(alignment: .leading, spacing: 5) {
         breakdownRow(color: Palette.input, key: "ai.today.input", value: today?.inputTokens ?? 0)
@@ -140,7 +142,7 @@ struct AIUsagePanelView: View {
       Circle().fill(color).frame(width: 4, height: 4)
       Text(key)
         .font(.system(size: 10.5, weight: .medium))
-        .foregroundStyle(ReUITheme.muted)
+        .foregroundStyle(color)
       Spacer(minLength: 0)
       Text(AIUsageFormat.grouped(value))
         .font(.system(size: 11, weight: .semibold))
@@ -204,6 +206,63 @@ struct AIUsagePanelView: View {
   /// One trend column on the cold-to-warm half-month spectrum: the older
   /// the bar, the cooler its hue; today sits at the warm end. Hovering
   /// lifts and brightens the bar and shows the value tooltip.
+  /// Mechanical odometer: when the value changes, digit slots roll — the
+  /// last digit turns first and carries ripple leftward. On first appear
+  /// the number spins up from a lower seed so the effect is visible.
+  private struct RollingNumber: View {
+    let value: Int
+    let spinUp: Bool
+
+    @State private var displayed: Int?
+
+    var body: some View {
+      let current = displayed ?? value
+      HStack(spacing: 0) {
+        let text = AIUsageFormat.grouped(current)
+        let characters = Array(text)
+        ForEach(Array(characters.enumerated()), id: \.offset) { position, character in
+          digitSlot(character, position: position, total: characters.count)
+        }
+      }
+      .fixedSize()
+      .onAppear {
+        guard spinUp, displayed == nil else { return }
+        displayed = Int((Double(value) * 0.83 / 1_000).rounded()) * 1_000
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+          displayed = value
+        }
+      }
+    }
+
+    @ViewBuilder
+    private func digitSlot(_ character: Character, position: Int, total: Int) -> some View {
+      let isDigit = character.isNumber
+      let carryDelay = Double(total - 1 - position) * 0.06
+
+      if isDigit {
+        Text(String(character))
+          .monospacedDigit()
+          .id(character)
+          .transition(
+            .asymmetric(
+              insertion: .move(edge: .bottom).combined(with: .opacity),
+              removal: .move(edge: .top).combined(with: .opacity)
+            )
+          )
+          .animation(
+            .spring(response: 0.45, dampingFraction: 0.82).delay(carryDelay),
+            value: character
+          )
+          .frame(minWidth: 16)
+          .clipped()
+      } else {
+        Text(String(character))
+          .monospacedDigit()
+          .frame(minWidth: 8)
+      }
+    }
+  }
+
   private struct TrendColumn: View {
     let day: AIUsageDay
     let index: Int
