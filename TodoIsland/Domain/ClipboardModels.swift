@@ -26,7 +26,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     case .text:
       (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     case .image:
-      "image"
+      fileURL?.lastPathComponent ?? "image"
     case .video:
       fileURL?.lastPathComponent ?? "video"
     }
@@ -45,21 +45,28 @@ enum ClipboardClassification {
     "mp4", "mov", "m4v", "avi", "mkv", "webm",
   ]
 
+  static let imageExtensions: Set<String> = [
+    "png", "jpg", "jpeg", "tiff", "tif", "heic", "gif", "webp", "bmp",
+  ]
+
   static func isConcealed(typeNames: Set<String>) -> Bool {
     !typeNames.isDisjoint(with: concealedTypes)
   }
 
-  /// Priority: video file > image > text. Nil when nothing usable.
+  /// Priority: video file > image (file bytes first, then pasteboard
+  /// image data) > text. Nil when nothing usable.
   static func classify(
     typeNames: Set<String>,
     fileURLs: [URL],
     imageBytes: Data?,
     text: String?
   ) -> ClipboardItem.Kind? {
-    let video = fileURLs.first {
-      videoExtensions.contains($0.pathExtension.lowercased())
+    if fileURLs.contains(where: { videoExtensions.contains($0.pathExtension.lowercased()) }) {
+      return .video
     }
-    if let video { _ = video; return .video }
+    if fileURLs.contains(where: { imageExtensions.contains($0.pathExtension.lowercased()) }) {
+      return .image
+    }
     if let imageBytes, !imageBytes.isEmpty { return .image }
     if let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
       return .text

@@ -67,10 +67,13 @@ final class ClipboardHistoryService {
       options: [.urlReadingFileURLsOnly: true]
     ) as? [URL]) ?? []
 
+    // Pasteboard TIFF for a Finder-copied image is a system thumbnail —
+    // prefer PNG (full-size for web/screen copies), and treat image
+    // FILES below by loading the original bytes straight from disk.
     let imageBytes =
       (typeNames.contains(NSPasteboard.PasteboardType.tiff.rawValue)
         || typeNames.contains(NSPasteboard.PasteboardType.png.rawValue))
-      ? pasteboard.data(forType: .tiff) ?? pasteboard.data(forType: .png)
+      ? pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
       : nil
 
     let text =
@@ -83,23 +86,40 @@ final class ClipboardHistoryService {
       )
     else { return nil }
 
-    let hash = ClipboardHistoryService.contentHash(
-      kind: kind, text: text, imageBytes: imageBytes, fileURLs: fileURLs
-    )
+    // Image FILES: read the original bytes, not the thumbnail the
+    // Finder preview put on the pasteboard.
+    var resolvedImageData = imageBytes
+    var sourceFileURL = kind == .video ? fileURLs.first : nil
+    if kind == .image, imageBytes == nil || fileURLs.contains(where: {
+      ClipboardClassification.imageExtensions.contains($0.pathExtension.lowercased())
+    }) {
+      let imageFile = fileURLs.first {
+        ClipboardClassification.imageExtensions.contains($0.pathExtension.lowercased())
+      }
+      if let imageFile,
+        let original = try? Data(contentsOf: imageFile),
+        NSImage(data: original) != nil
+      {
+        resolvedImageData = original
+        sourceFileURL = imageFile
+      }
+    }
 
     let id = UUID()
-    if kind == .image, let imageBytes {
-      blobPaths[id] = writeBlob(imageBytes)
+    if kind == .image, let resolvedImageData {
+      blobPaths[id] = writeBlob(resolvedImageData)
     }
 
     return ClipboardItem(
       id: id,
       kind: kind,
       text: text,
-      imageData: kind == .image ? imageBytes : nil,
-      fileURL: kind == .video ? fileURLs.first : nil,
+      imageData: kind == .image ? resolvedImageData : nil,
+      fileURL: sourceFileURL,
       capturedAt: Date(),
-      contentHash: hash
+      contentHash: ClipboardHistoryService.contentHash(
+        kind: kind, text: text, imageBytes: resolvedImageData, fileURLs: fileURLs
+      )
     )
   }
 

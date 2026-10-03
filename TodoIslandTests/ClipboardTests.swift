@@ -54,6 +54,29 @@ final class ClipboardTests: XCTestCase {
     )
   }
 
+  func testImageFileURLClassifiesAsImage() {
+    let kind = ClipboardClassification.classify(
+      typeNames: ["public.file-url", "public.tiff"],
+      fileURLs: [URL(fileURLWithPath: "/tmp/photo.HEIC")],
+      imageBytes: nil,
+      text: "file:///tmp/photo.HEIC"
+    )
+    XCTAssertEqual(kind, .image)
+  }
+
+  func testVideoFileStillWinsOverImageFile() {
+    let kind = ClipboardClassification.classify(
+      typeNames: ["public.file-url"],
+      fileURLs: [
+        URL(fileURLWithPath: "/tmp/pic.png"),
+        URL(fileURLWithPath: "/tmp/clip.mov"),
+      ],
+      imageBytes: nil,
+      text: nil
+    )
+    XCTAssertEqual(kind, .video)
+  }
+
   func testNonVideoFileAloneDoesNotClassify() {
     XCTAssertNil(
       ClipboardClassification.classify(
