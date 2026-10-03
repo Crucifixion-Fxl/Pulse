@@ -164,6 +164,28 @@ struct MusicPanelView: View {
         .frame(width: Layout.artworkSize, height: Layout.artworkSize)
         .clipShape(shape)
         .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
+    } else if let title = model.nowPlaying?.title, !title.isEmpty {
+      // No artwork: the song title's first glyph on a cold-to-warm
+      // gradient — each track gets its own visual identity.
+      let glyph = String(title.prefix(1))
+      shape
+        .fill(
+          LinearGradient(
+            colors: [
+              Color(hue: 0.58, saturation: 0.45, brightness: 0.28),
+              Color(hue: 0.08, saturation: 0.40, brightness: 0.22),
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+          )
+        )
+        .frame(width: Layout.artworkSize, height: Layout.artworkSize)
+        .overlay(
+          Text(glyph)
+            .font(.system(size: Layout.artworkSize * 0.42, weight: .medium, design: .rounded))
+            .foregroundStyle(.white.opacity(0.85))
+            .minimumScaleFactor(0.5)
+        )
+        .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
     } else {
       shape
         .fill(ReUITheme.itemHover)
