@@ -228,7 +228,7 @@ struct AIUsagePanelView: View {
     @State private var startedAt: Date?
 
     private static let span = 10_000
-    private static let duration: TimeInterval = 0.7
+    private static let duration: TimeInterval = 1.4
 
     /// The count-up math, testable without a display link: eased
     /// progress → the integer shown at that frame.
