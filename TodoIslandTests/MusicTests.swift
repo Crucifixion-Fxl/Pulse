@@ -427,7 +427,7 @@ private final class FakeNowPlayingController: NowPlayingControlling {
     XCTAssertEqual(FavoritePlaylistParse.trackIDs(Data(v6.utf8)), [5, 6])
 
     let v3 = """
-      {"songs":[{"id":6,"name":"B","dt":250000,"ar":[{"name":"X"},{"name":"Y"}]}]}
+      {"songs":[{"id":6,"name":"B","dt":250000,"ar":[{"name":"X"},{"name":"Y"}],"fee":0}]}
       """
     let tracks = try! XCTUnwrap(FavoritePlaylistParse.v3Tracks(Data(v3.utf8)))
     XCTAssertEqual(tracks, [FavoriteTrack(id: 6, name: "B", artist: "X/Y", duration: 250)])

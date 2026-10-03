@@ -287,7 +287,8 @@ enum FavoritePlaylistParse {
     return response.playlist?.trackIds?.map(\.id)
   }
 
-  /// v3/song/detail shape: `{"songs":[{"id","name","dt"(ms),"ar":[{"name"}]}]}`.
+  /// v3/song/detail shape: `{"songs":[{"id","name","dt"(ms),"ar":[{"name"}],"fee"}]}`.
+  /// fee 0/8 = free (playable anonymously), 1 = VIP-only.
   static func v3Tracks(_ data: Data) -> [FavoriteTrack]? {
     struct Response: Decodable {
       struct Song: Decodable {
@@ -295,6 +296,7 @@ enum FavoritePlaylistParse {
         let name: String?
         let dt: Double?
         let ar: [Artist]?
+        let fee: Int?
       }
       struct Artist: Decodable {
         let name: String?
@@ -306,6 +308,7 @@ enum FavoritePlaylistParse {
     else { return nil }
     return (response.songs ?? []).compactMap { song in
       guard let name = song.name, !name.isEmpty else { return nil }
+      guard song.fee == 0 || song.fee == 8 else { return nil }  // drop VIP
       return FavoriteTrack(
         id: song.id,
         name: name,
