@@ -224,24 +224,34 @@ struct AIUsagePanelView: View {
     let value: Int
     let spinUp: Bool
 
-    @State private var displayed: Int?
+    // Seed painted on the very first frame (no flash of the final value),
+    // then rolled up to `value` inside an animation context — the .id
+    // swap transitions only animate when the state change is animated.
+    @State private var displayed: Int
+
+    init(value: Int, spinUp: Bool) {
+      self.value = value
+      self.spinUp = spinUp
+      _displayed = State(
+        initialValue: spinUp ? max(0, value - 10_000) : value
+      )
+    }
 
     var body: some View {
-      let current = displayed ?? value
-      HStack(spacing: 0) {
-        let text = AIUsageFormat.grouped(current)
-        let characters = Array(text)
+      let text = AIUsageFormat.grouped(displayed)
+      let characters = Array(text)
+      return HStack(spacing: 0) {
         ForEach(Array(characters.enumerated()), id: \.offset) { position, character in
           digitSlot(character, position: position, total: characters.count)
         }
       }
       .fixedSize()
       .onAppear {
-        guard spinUp, displayed == nil else { return }
-        // Quick 10k roll-up: only the low digits turn, and briefly.
-        displayed = max(0, value - 10_000)
+        guard spinUp, displayed != value else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-          displayed = value
+          withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+            displayed = value
+          }
         }
       }
     }
