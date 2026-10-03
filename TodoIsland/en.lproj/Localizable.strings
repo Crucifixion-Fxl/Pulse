@@ -132,3 +132,12 @@
 "music.lyrics.seek" = "Jump to this line";
 "music.lyrics.offset.accessibility" = "Lyrics timing offset";
 "music.controls.seed-hint" = "Press ⏯ once to arm controls";
+"sidebar.clipboard" = "Clipboard";
+"clipboard.title" = "Clipboard";
+"clipboard.count" = "%d kept";
+"clipboard.empty" = "Copy something to start the history";
+"clipboard.copied" = "Copied";
+"clipboard.kind.text" = "Text";
+"clipboard.kind.image" = "Image";
+"clipboard.kind.video" = "Video";
+"clipboard.copy.accessibility" = "Click to copy again";

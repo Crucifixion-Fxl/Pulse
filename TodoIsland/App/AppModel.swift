@@ -53,6 +53,8 @@ final class AppModel: ObservableObject {
   /// Media keys with live hardware templates this session; empty after a
   /// restart until the user presses the real keys once.
   @Published var mediaKeysReady: Set<Int32> = []
+  /// Clipboard history, newest first; at most seven entries.
+  @Published private(set) var clipboardItems: [ClipboardItem] = []
   /// Global lyric lead/lag the user nudges in the lyrics pane; positive
   /// delays lines. Persisted — source drift differs per song upload, one
   /// knob covers it.
@@ -786,6 +788,16 @@ final class AppModel: ObservableObject {
   func musicSkipForward() { nowPlayingController.next() }
   func musicSkipBackward() { nowPlayingController.previous() }
   func musicSeek(to seconds: TimeInterval) { nowPlayingController.seek(to: seconds) }
+
+  // MARK: Clipboard
+
+  func clipboardHistoryDidChange(_ items: [ClipboardItem]) {
+    clipboardItems = items
+  }
+
+  func recopyClipboardItem(_ item: ClipboardItem) {
+    ClipboardHistoryService.shared.recopy(item)
+  }
 
   func markApplicationActive() {
     let newAuthorization = store.authorizationStatus()

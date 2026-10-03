@@ -71,7 +71,7 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
   case reminders
   case aiUsage
   case music
-  case placeholder3
+  case clipboard
   case placeholder4
   case placeholder5
   case placeholder6
@@ -84,8 +84,8 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
     case .reminders: "sidebar.reminders"
     case .aiUsage: "sidebar.ai-usage"
     case .music: "sidebar.music"
-    case .placeholder3,
-      .placeholder4, .placeholder5, .placeholder6, .placeholder7:
+    case .clipboard: "sidebar.clipboard"
+    case .placeholder4, .placeholder5, .placeholder6, .placeholder7:
       "sidebar.placeholder"
     }
   }
@@ -95,7 +95,7 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
     case .reminders: "checklist"
     case .aiUsage: "sparkles"
     case .music: "music.note"
-    case .placeholder3: "tray"
+    case .clipboard: "doc.on.clipboard"
     case .placeholder4: "flag"
     case .placeholder5: "clock"
     case .placeholder6: "folder"
@@ -118,9 +118,9 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
     // Player and lyrics cards use fixed metrics matching the AI pane, so
     // the island height stays uniform across features.
     case .music: MusicPanelView.Metrics.contentHeight
+    case .clipboard: ClipboardPanelView.Metrics.contentHeight
     // The stub pane is one centered line of text; keep the surface compact.
-    case .placeholder3,
-      .placeholder4, .placeholder5, .placeholder6, .placeholder7:
+    case .placeholder4, .placeholder5, .placeholder6, .placeholder7:
       240
     }
   }
@@ -518,8 +518,9 @@ struct IslandRootView: View {
       AIUsagePanelView(snapshot: model.aiUsage).transition(.opacity)
     case .music:
       MusicPanelView().transition(.opacity)
-    case .placeholder3,
-      .placeholder4, .placeholder5, .placeholder6, .placeholder7:
+    case .clipboard:
+      ClipboardPanelView().transition(.opacity)
+    case .placeholder4, .placeholder5, .placeholder6, .placeholder7:
       placeholderFeatureContent.transition(.opacity)
     }
   }
@@ -971,8 +972,8 @@ struct IslandRootView: View {
   private func updateExpandedContentHeight() {
     let contentHeight: CGFloat
     switch selectedSidebarItem {
-    case .aiUsage, .music, .placeholder3,
-      .placeholder4, .placeholder5, .placeholder6, .placeholder7:
+    case .aiUsage, .music, .clipboard, .placeholder4,
+      .placeholder5, .placeholder6, .placeholder7:
       contentHeight = selectedSidebarItem.preferredContentHeight
     case .reminders:
       if model.canUseActiveList {

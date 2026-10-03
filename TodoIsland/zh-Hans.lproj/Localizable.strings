@@ -132,3 +132,12 @@
 "music.lyrics.seek" = "跳转到这一句";
 "music.lyrics.offset.accessibility" = "歌词时间偏移";
 "music.controls.seed-hint" = "按一次 ⏯ 键激活控制";
+"sidebar.clipboard" = "剪贴板";
+"clipboard.title" = "剪贴板";
+"clipboard.count" = "留存 %d 条";
+"clipboard.empty" = "复制点内容,历史从这里开始";
+"clipboard.copied" = "已复制";
+"clipboard.kind.text" = "文字";
+"clipboard.kind.image" = "图片";
+"clipboard.kind.video" = "视频";
+"clipboard.copy.accessibility" = "点击再次复制";

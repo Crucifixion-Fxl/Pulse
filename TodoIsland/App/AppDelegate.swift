@@ -43,6 +43,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     nowPlaying.start()
 
+    let clipboard = ClipboardHistoryService.shared
+    clipboard.onItemsChanged = { [weak model] items in
+      model?.clipboardHistoryDidChange(items)
+    }
+    clipboard.start()
+
     Task {
       await model.start()
       islandController?.show()
