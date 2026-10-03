@@ -32,5 +32,10 @@
 	<string>Todo Island uses Reminders access to show and manage your selected iCloud reminder list. Your reminder content stays on this Mac.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
