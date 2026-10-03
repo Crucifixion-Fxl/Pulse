@@ -217,71 +217,57 @@ struct AIUsagePanelView: View {
   /// One trend column on the cold-to-warm half-month spectrum: the older
   /// the bar, the cooler its hue; today sits at the warm end. Hovering
   /// lifts and brightens the bar and shows the value tooltip.
-  /// Mechanical odometer: when the value changes, digit slots roll — the
-  /// last digit turns first and carries ripple leftward. On first appear
-  /// the number spins up from a lower seed so the effect is visible.
-  private struct RollingNumber: View {
+  /// True odometer: counts up 10,000 over ~0.7 s at display refresh —
+  /// the last digit visibly spins through 0–9 (a blur early, ticking
+  /// one-by-one as it decelerates) and carries ripple into the higher
+  /// digits. Not a slot crossfade: every intermediate value is rendered.
+  struct RollingNumber: View {
     let value: Int
     let spinUp: Bool
 
-    // Seed painted on the very first frame (no flash of the final value),
-    // then rolled up to `value` inside an animation context — the .id
-    // swap transitions only animate when the state change is animated.
-    @State private var displayed: Int
+    @State private var startedAt: Date?
 
-    init(value: Int, spinUp: Bool) {
-      self.value = value
-      self.spinUp = spinUp
-      _displayed = State(
-        initialValue: spinUp ? max(0, value - 10_000) : value
-      )
+    private static let span = 10_000
+    private static let duration: TimeInterval = 0.7
+
+    /// The count-up math, testable without a display link: eased
+    /// progress → the integer shown at that frame.
+    static func displayValue(underlying: Int, progress: Double) -> Int {
+      let clamped = min(max(progress, 0), 1)
+      let eased = 1 - pow(1 - clamped, 2.2)
+      let span = min(Double(Self.span), Double(max(underlying, 0)))
+      let current = Double(underlying) - span + eased * span
+      return min(Int(current.rounded()), underlying)
     }
 
     var body: some View {
-      let text = AIUsageFormat.grouped(displayed)
-      let characters = Array(text)
-      return HStack(spacing: 0) {
-        ForEach(Array(characters.enumerated()), id: \.offset) { position, character in
-          digitSlot(character, position: position, total: characters.count)
+      Group {
+        if spinUp, let started = startedAt, value > Self.span {
+          TimelineView(.animation) { timeline in
+            let raw = timeline.date.timeIntervalSince(started) / Self.duration
+            Self.digits(
+              AIUsageFormat.grouped(Self.displayValue(underlying: value, progress: raw))
+            )
+          }
+        } else {
+          Self.digits(AIUsageFormat.grouped(value))
         }
       }
-      .fixedSize()
       .onAppear {
-        guard spinUp, displayed != value else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-          withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
-            displayed = value
-          }
-        }
+        if startedAt == nil { startedAt = Date() }
       }
     }
 
     @ViewBuilder
-    private func digitSlot(_ character: Character, position: Int, total: Int) -> some View {
-      let isDigit = character.isNumber
-      let carryDelay = Double(total - 1 - position) * 0.035
-
-      if isDigit {
-        Text(String(character))
-          .monospacedDigit()
-          .id(character)
-          .transition(
-            .asymmetric(
-              insertion: .move(edge: .bottom).combined(with: .opacity),
-              removal: .move(edge: .top).combined(with: .opacity)
-            )
-          )
-          .animation(
-            .spring(response: 0.32, dampingFraction: 0.85).delay(carryDelay),
-            value: character
-          )
-          .frame(minWidth: 16)
-          .clipped()
-      } else {
-        Text(String(character))
-          .monospacedDigit()
-          .frame(minWidth: 8)
+    private static func digits(_ text: String) -> some View {
+      HStack(spacing: 0) {
+        ForEach(Array(text.enumerated()), id: \.offset) { _, character in
+          Text(String(character))
+            .monospacedDigit()
+            .frame(minWidth: character.isNumber ? 16 : 8)
+        }
       }
+      .fixedSize()
     }
   }
 

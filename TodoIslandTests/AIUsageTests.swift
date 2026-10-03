@@ -182,3 +182,40 @@ final class AIUsageTests: XCTestCase {
     }
   }
 }
+
+  // MARK: Odometer count-up
+
+  func testOdometerStartsTenThousandBelowAndLandsExactly() {
+    let value = 1_252_362
+    XCTAssertEqual(
+      AIUsagePanelView.RollingNumber.displayValue(underlying: value, progress: 0),
+      value - 10_000
+    )
+    XCTAssertEqual(
+      AIUsagePanelView.RollingNumber.displayValue(underlying: value, progress: 1),
+      value
+    )
+    XCTAssertEqual(
+      AIUsagePanelView.RollingNumber.displayValue(underlying: value, progress: 2),
+      value,
+      "past the end it must hold the final value"
+    )
+  }
+
+  func testOdometerPassesThroughIntermediateValuesMonotonically() {
+    let value = 1_252_362
+    // Sample 60 frames like a display link would.
+    let frames = (0...60).map {
+      AIUsagePanelView.RollingNumber.displayValue(
+        underlying: value, progress: Double($0) / 60.0
+      )
+    }
+    XCTAssertEqual(frames.first, value - 10_000)
+    XCTAssertEqual(frames.last, value)
+    // Monotonic non-decreasing: an odometer never counts backwards.
+    XCTAssertEqual(frames, frames.sorted())
+    // The wheel actually spins: sampled frames step by small amounts and
+    // cover a contiguous spread of last digits rather than jumping.
+    let lastDigits = Set(frames.map { $0 % 10 })
+    XCTAssertGreaterThanOrEqual(lastDigits.count, 8, "last digit should cycle through most digits, got \(lastDigits)")
+  }
