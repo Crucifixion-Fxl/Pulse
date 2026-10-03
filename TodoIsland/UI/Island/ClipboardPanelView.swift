@@ -273,6 +273,13 @@ private struct ClipboardCard: View {
   @State private var isHovering = false
 
   var body: some View {
+    Button(action: onCopy) {
+      cardBody
+    }
+    .buttonStyle(.plain)
+  }
+
+  private var cardBody: some View {
     VStack(alignment: .leading, spacing: 0) {
       preview
 
@@ -306,6 +313,7 @@ private struct ClipboardCard: View {
         .background(.black.opacity(0.45))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .transition(.opacity)
+        .allowsHitTesting(false)
       }
     }
     .scaleEffect(isHovering && !reduceMotion ? 1.02 : 1)
@@ -314,7 +322,6 @@ private struct ClipboardCard: View {
       withAnimation(.easeOut(duration: 0.15)) { isHovering = inside }
     }
     .animation(.easeOut(duration: 0.15), value: isHovering)
-    .onTapGesture(perform: onCopy)
     .accessibilityLabel(Text("\(kindLabel), \(item.displayName)"))
     .accessibilityHint(Text("clipboard.copy.accessibility"))
   }
