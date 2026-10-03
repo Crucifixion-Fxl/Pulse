@@ -21,7 +21,7 @@ final class InternalPlayerService: NSObject, ObservableObject {
   @Published private(set) var elapsed: TimeInterval = 0
   @Published private(set) var isBuffering = false
   /// Album art fetched async after playback starts.
-  private(set) var artworkData: Data?
+  @Published private(set) var artworkData: Data?
 
   /// Fires when the current track ends (auto-advance hook).
   var onTrackEnded: (() -> Void)?
@@ -46,17 +46,19 @@ final class InternalPlayerService: NSObject, ObservableObject {
     currentTrack = track
     artworkData = nil
 
-    async let artwork: Data? = fetchArtwork(for: track.id)
     guard let url = await streamURL(for: track.id) else {
       Self.log.error("no stream URL for \(track.id)")
       isBuffering = false
       currentTrack = nil
       return false
     }
-    // Artwork arrives after playback starts — the panel re-renders when
-    // it lands via the objectWillChange publisher.
+    // Artwork arrives after playback starts; the objectWillChange from
+    // @Published elapsed ticks re-renders the panel and picks it up.
     Task { @MainActor in
-      self.artworkData = await artwork
+      let art = await self.fetchArtwork(for: track.id)
+      if self.currentTrack?.id == track.id {
+        self.artworkData = art
+      }
     }
 
     let item = AVPlayerItem(url: url)

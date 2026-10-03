@@ -933,8 +933,17 @@ final class AppModel: ObservableObject {
   /// overriding mediaremoted while active.
   func syncInternalPlayer() {
     let service = InternalPlayerService.shared
-    if service.isActive {
-      nowPlaying = service.nowPlayingSnapshot
+    guard service.isActive, let snapshot = service.nowPlayingSnapshot else {
+      return
+    }
+    // Only push a new track when something meaningful changed (title,
+    // artwork presence, playing state) — not on every elapsed tick. The
+    // lyrics view extrapolates from receivedAt + rate on its own.
+    if nowPlaying?.title != snapshot.title
+      || nowPlaying?.isPlaying != snapshot.isPlaying
+      || (nowPlaying?.artworkData == nil) != (snapshot.artworkData == nil)
+    {
+      nowPlaying = snapshot
     }
   }
 
