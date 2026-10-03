@@ -20,6 +20,8 @@ final class InternalPlayerService: NSObject, ObservableObject {
   @Published private(set) var duration: TimeInterval = 0
   @Published private(set) var elapsed: TimeInterval = 0
   @Published private(set) var isBuffering = false
+  /// Album art fetched async after playback starts.
+  private(set) var artworkData: Data?
 
   /// Fires when the current track ends (auto-advance hook).
   var onTrackEnded: (() -> Void)?
@@ -42,12 +44,19 @@ final class InternalPlayerService: NSObject, ObservableObject {
     Self.log.info("playing \(track.name, privacy: .public)")
     isBuffering = true
     currentTrack = track
+    artworkData = nil
 
+    async let artwork: Data? = fetchArtwork(for: track.id)
     guard let url = await streamURL(for: track.id) else {
       Self.log.error("no stream URL for \(track.id)")
       isBuffering = false
       currentTrack = nil
       return false
+    }
+    // Artwork arrives after playback starts — the panel re-renders when
+    // it lands via the objectWillChange publisher.
+    Task { @MainActor in
+      self.artworkData = await artwork
     }
 
     let item = AVPlayerItem(url: url)
@@ -89,6 +98,34 @@ final class InternalPlayerService: NSObject, ObservableObject {
     player?.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
   }
 
+  /// NetEase `/api/v3/song/detail` → album cover URL → image bytes.
+  private func fetchArtwork(for id: Int) async -> Data? {
+    guard let base = URL(string: "https://music.163.com/api/v3/song/detail") else {
+      return nil
+    }
+    let url = base.appending(queryItems: [
+      URLQueryItem(name: "c", value: "[{\"id\":\(id)}]"),
+    ])
+    var request = URLRequest(url: url, timeoutInterval: 8)
+    request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+    request.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
+    guard
+      let (data, _) = try? await session.data(for: request),
+      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let songs = json["songs"] as? [[String: Any]],
+      let song = songs.first,
+      let album = song["al"] as? [String: Any],
+      let coverURLString = album["picUrl"] as? String,
+      let coverURL = URL(string: coverURLString)
+    else { return nil }
+    var imgRequest = URLRequest(url: coverURL, timeoutInterval: 8)
+    imgRequest.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+    guard let (imgData, _) = try? await session.data(for: imgRequest) else {
+      return nil
+    }
+    return imgData
+  }
+
   func stop() {
     player?.pause()
     player?.replaceCurrentItem(with: nil)
@@ -97,6 +134,7 @@ final class InternalPlayerService: NSObject, ObservableObject {
     isPlaying = false
     duration = 0
     elapsed = 0
+    artworkData = nil
   }
 
   /// The NowPlayingTrack the panel should render while we're active.
@@ -106,7 +144,7 @@ final class InternalPlayerService: NSObject, ObservableObject {
       title: track.name,
       artist: track.artist,
       album: "",
-      artworkData: nil,
+      artworkData: artworkData,
       duration: duration,
       elapsed: elapsed,
       isPlaying: isPlaying,
