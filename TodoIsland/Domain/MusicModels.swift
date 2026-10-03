@@ -269,13 +269,13 @@ enum FavoritePlaylistParse {
     }
   }
 
-  /// The v6 playlist's full id list (`trackIds[].rid`) — the embedded
+  /// The v6 playlist's full id list (`trackIds[].id`) — the embedded
   /// `tracks` array caps at ten.
   static func trackIDs(_ data: Data) -> [Int]? {
     struct Response: Decodable {
       struct Playlist: Decodable {
         struct Entry: Decodable {
-          let rid: Int
+          let id: Int
         }
         let trackIds: [Entry]?
       }
@@ -284,7 +284,7 @@ enum FavoritePlaylistParse {
     guard
       let response = try? JSONDecoder().decode(Response.self, from: data)
     else { return nil }
-    return response.playlist?.trackIds?.map(\.rid)
+    return response.playlist?.trackIds?.map(\.id)
   }
 
   /// v3/song/detail shape: `{"songs":[{"id","name","dt"(ms),"ar":[{"name"}]}]}`.

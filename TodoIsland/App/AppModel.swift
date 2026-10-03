@@ -245,6 +245,12 @@ final class AppModel: ObservableObject {
       collapseIsland()
     }
     reconcileCollapsedIslandVisibility(hideImmediately: true)
+    // Accessory apps don't become "active" at launch; warm the favorites
+    // rail here instead of waiting for panel hover.
+    Self.favoritesLog.info(
+      "startup: netease-uid=\(self.neteaseUID.map(String.init) ?? "nil", privacy: .public)"
+    )
+    refreshFavorites()
   }
 
   func requestAccess() async {
@@ -848,17 +854,22 @@ final class AppModel: ObservableObject {
         favoriteTracks = stored
         favoritesState = .loaded
       }
-      guard
-        let fetched = await provider.tracks(playlistID: uid), !fetched.isEmpty
-      else {
+      Self.favoritesLog.info("fetching playlist \(uid) (cached \(self.favoriteTracks.count))")
+      guard let fetched = await provider.tracks(playlistID: uid), !fetched.isEmpty else {
+        Self.favoritesLog.error("playlist fetch came back empty — state .failed")
         if favoriteTracks.isEmpty { favoritesState = .failed }
         return
       }
+      Self.favoritesLog.info("playlist fetched: \(fetched.count) tracks")
       favoriteTracks = fetched
       favoritesState = .loaded
       await favoritesStore.store(fetched, playlistID: uid)
     }
   }
+
+  private nonisolated static let favoritesLog = Logger(
+    subsystem: "com.fxl.TodoIsland", category: "favorites"
+  )
 
   /// Hands the track to the NetEase desktop app via orpheus://; the panel
   /// follows whatever starts playing.
@@ -872,6 +883,7 @@ final class AppModel: ObservableObject {
     localStoreAvailability = store.localStoreAvailability
     scheduleRefresh(delay: .milliseconds(50))
     refreshAIUsage()
+    refreshFavorites()
     if newAuthorization != .fullAccess,
       let editingReminderID,
       reminders.first(where: { $0.id == editingReminderID })?.source == .iCloud

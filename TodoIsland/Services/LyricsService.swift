@@ -222,7 +222,9 @@ struct FavoritePlaylistProvider: Sendable {
     else { return embedded }
 
     var detailed = embedded
-    let remaining = ids.dropFirst(embedded.count)
+    // Materialise: dropFirst keeps original indices, and 0-based slicing
+    // below would trap (the crash that emptied the rail).
+    let remaining = Array(ids.dropFirst(embedded.count))
     for chunk in stride(from: 0, to: remaining.count, by: 100).map({
       Array(remaining[$0..<min($0 + 100, remaining.count)])
     }) {

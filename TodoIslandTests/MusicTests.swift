@@ -421,7 +421,7 @@ private final class FakeNowPlayingController: NowPlayingControlling {
 
   func testFavoriteTrackIDsAndV3Parsing() {
     let v6 = """
-      {"playlist":{"trackIds":[{"rid":5},{"rid":6}],"tracks":[
+      {"playlist":{"trackIds":[{"id":5},{"id":6}],"tracks":[
         {"id":5,"name":"A","duration":1000,"artists":[]}],"name":"x"}}
       """
     XCTAssertEqual(FavoritePlaylistParse.trackIDs(Data(v6.utf8)), [5, 6])
