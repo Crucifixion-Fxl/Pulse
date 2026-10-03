@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// A lyrics source. Implementations never throw: failures surface as nil
@@ -183,5 +184,82 @@ actor LyricsService {
     }
     misses.insert(key)
     return nil
+  }
+}
+
+
+// MARK: - Favorites playlist
+
+/// Fetches the NetEase "我喜欢的音乐" playlist anonymously (the playlist id
+/// equals the account's numeric uid) and plays tracks through the
+/// orpheus:// URL scheme the desktop app registers.
+struct FavoritePlaylistProvider: Sendable {
+  var session: URLSession = .shared
+
+  private static let userAgent =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
+    + " (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+
+  /// The "我喜欢的音乐" playlist is private: its tracks only come back with
+  /// the owner's MUSIC_U session cookie (defaults key netease-music-u).
+  var musicU: String?
+
+  func tracks(playlistID: Int) async -> [FavoriteTrack]? {
+    guard let base = URL(string: "https://music.163.com/api/v6/playlist/detail") else {
+      return nil
+    }
+    let url = base.appending(queryItems: [
+      URLQueryItem(name: "id", value: String(playlistID)),
+      URLQueryItem(name: "n", value: "1000"),
+    ])
+    var request = URLRequest(url: url, timeoutInterval: 8)
+    request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+    request.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
+    if let musicU, !musicU.isEmpty {
+      request.setValue("MUSIC_U=\(musicU); NMTID=0", forHTTPHeaderField: "Cookie")
+    }
+    guard let data = try? await session.data(for: request).0 else { return nil }
+    return FavoritePlaylistParse.tracks(data)
+  }
+
+  /// Hands the song to the NetEase desktop app; the island's Now Playing
+  /// follows automatically once it starts.
+  static func play(trackID: Int) {
+    guard let url = URL(string: "orpheus://song/?id=\(trackID)") else { return }
+    NSWorkspace.shared.open(url)
+  }
+}
+
+/// Favorites cache: session memory + JSON in Application Support so the
+/// rail renders instantly on relaunch.
+actor FavoritePlaylistStore {
+  private var cached: [Int: [FavoriteTrack]] = [:]
+
+  private var fileURL: URL {
+    FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Application Support/TodoIsland/favorites.json")
+  }
+
+  func tracks(playlistID: Int) async -> [FavoriteTrack]? {
+    if let cached = cached[playlistID] { return cached }
+    guard
+      let data = try? Data(contentsOf: fileURL),
+      let persisted = try? JSONDecoder().decode([Int: [FavoriteTrack]].self, from: data),
+      let tracks = persisted[playlistID]
+    else { return nil }
+    cached[playlistID] = tracks
+    return tracks
+  }
+
+  func store(_ tracks: [FavoriteTrack], playlistID: Int) async {
+    cached[playlistID] = tracks
+    var persisted = (try? Data(contentsOf: fileURL))
+      .flatMap { try? JSONDecoder().decode([Int: [FavoriteTrack]].self, from: $0) } ?? [:]
+    persisted[playlistID] = tracks
+    if let data = try? JSONEncoder().encode(persisted) {
+      try? FileManager.default.createDirectory(
+        at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try? data.write(to: fileURL)
+    }
   }
 }

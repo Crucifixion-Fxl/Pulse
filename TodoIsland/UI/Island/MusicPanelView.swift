@@ -1,8 +1,9 @@
 import SwiftUI
 
 private enum Layout {
-  static let playerCardWidth: CGFloat = 268
-  static let artworkSize: CGFloat = 136
+  static let favoritesWidth: CGFloat = 168
+  static let playerCardWidth: CGFloat = 236
+  static let artworkSize: CGFloat = 128
   static let artworkRadius: CGFloat = 12
   static let cardSpacing: CGFloat = 10
   static let cardHeight: CGFloat = 324
@@ -23,6 +24,7 @@ struct MusicPanelView: View {
 
   var body: some View {
     HStack(alignment: .top, spacing: Layout.cardSpacing) {
+      favoritesCard
       if let track = model.nowPlaying {
         playerCard(track)
         lyricsCard(track)
@@ -31,6 +33,79 @@ struct MusicPanelView: View {
         lyricsWaitingCard
       }
     }
+  }
+
+  // MARK: Favorites
+
+  private var favoritesCard: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 5) {
+        Image(systemName: "heart.fill")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(Color(hue: 0.98, saturation: 0.62, brightness: 0.9))
+        Text("music.favorites.title")
+          .font(.system(size: 11.5, weight: .semibold))
+          .lineLimit(1)
+        Spacer(minLength: 0)
+        Text(String(format: L10n.text("music.favorites.count"), model.favoriteTracks.count))
+          .font(.system(size: 9, weight: .medium))
+          .foregroundStyle(ReUITheme.muted)
+      }
+      .padding(.bottom, 7)
+
+      switch model.favoritesState {
+      case .idle, .loading:
+        VStack(spacing: 8) {
+          ForEach(0..<6, id: \.self) { _ in
+            Capsule(style: .continuous)
+              .fill(.white.opacity(0.05))
+              .frame(width: 110, height: 9)
+          }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+      case .unconfigured, .failed:
+        VStack(spacing: 6) {
+          Image(systemName: "heart")
+            .font(.system(size: 16, weight: .medium))
+            .foregroundStyle(ReUITheme.muted)
+          Text(
+            model.favoritesState == .unconfigured
+              ? "music.favorites.unconfigured"
+              : model.neteaseMusicU == nil
+                ? "music.favorites.needs-login"
+                : "music.favorites.failed")
+            .font(.system(size: 9.5, weight: .medium))
+            .foregroundStyle(ReUITheme.muted)
+            .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      case .loaded:
+        ScrollView(showsIndicators: false) {
+          LazyVStack(alignment: .leading, spacing: 2) {
+            ForEach(model.favoriteTracks) { track in
+              FavoriteRow(
+                track: track,
+                isCurrent: isCurrentlyPlaying(track)
+              ) {
+                model.playFavorite(track)
+              }
+            }
+          }
+          .padding(.vertical, 6)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+      }
+    }
+    .padding(10)
+    .frame(width: Layout.favoritesWidth, height: Layout.cardHeight, alignment: .top)
+    .panelCard()
+  }
+
+  private func isCurrentlyPlaying(_ track: FavoriteTrack) -> Bool {
+    guard let now = model.nowPlaying else { return false }
+    return LyricsIdentity.normalize(now.title) == LyricsIdentity.normalize(track.name)
+      && (track.artist.isEmpty
+        || LyricsIdentity.normalize(now.artist).contains(LyricsIdentity.normalize(track.artist)))
   }
 
   // MARK: Player
@@ -380,6 +455,59 @@ struct MusicPanelView: View {
       .foregroundStyle(ReUITheme.muted)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .frame(height: Layout.cardHeight, alignment: .center)
+  }
+}
+
+// MARK: - Favorite row
+
+private struct FavoriteRow: View {
+  let track: FavoriteTrack
+  let isCurrent: Bool
+  let onPlay: () -> Void
+
+  @State private var isHovering = false
+
+  var body: some View {
+    Button(action: onPlay) {
+      HStack(spacing: 6) {
+        Image(systemName: isCurrent ? "waveform" : "play.fill")
+          .font(.system(size: 8, weight: .semibold))
+          .foregroundStyle(
+            isCurrent ? Color(hue: 0.98, saturation: 0.62, brightness: 0.9) : ReUITheme.muted
+          )
+          .opacity(isCurrent || isHovering ? 1 : 0.45)
+
+        VStack(alignment: .leading, spacing: 1) {
+          Text(track.name)
+            .font(.system(size: 10, weight: isCurrent ? .semibold : .regular))
+            .foregroundStyle(isCurrent ? .white : .white.opacity(0.82))
+            .lineLimit(1)
+          Text(track.artist)
+            .font(.system(size: 8.5))
+            .foregroundStyle(ReUITheme.muted)
+            .lineLimit(1)
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 6)
+      .padding(.vertical, 3.5)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .contentShape(Rectangle())
+      .background(
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+          .fill(
+            isCurrent
+              ? Color.white.opacity(0.09)
+              : isHovering ? ReUITheme.itemHover : .clear
+          )
+      )
+    }
+    .buttonStyle(.plain)
+    .onHover { inside in
+      withAnimation(.easeOut(duration: 0.12)) { isHovering = inside }
+    }
+    .accessibilityLabel(Text("\(track.name), \(track.artist)"))
+    .accessibilityHint(Text("music.favorites.play.accessibility"))
   }
 }
 

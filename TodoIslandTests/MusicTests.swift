@@ -395,3 +395,26 @@ private final class FakeNowPlayingController: NowPlayingControlling {
   func previous() {}
   func seek(to seconds: Double) {}
 }
+
+  // MARK: Favorites parsing
+
+  func testFavoritePlaylistParseExtractsTracks() {
+    let json = """
+      {"playlist":{"tracks":[
+        {"id":1,"name":"晴天","duration":269000,"artists":[{"name":"周杰伦"}]},
+        {"id":2,"name":"Reset","duration":210500,"artists":[{"name":"A"},{"name":"B"}]}
+      ]}}
+      """
+    let tracks = try! XCTUnwrap(FavoritePlaylistParse.tracks(Data(json.utf8)))
+    XCTAssertEqual(tracks.count, 2)
+    XCTAssertEqual(tracks[0].name, "晴天")
+    XCTAssertEqual(tracks[0].artist, "周杰伦")
+    XCTAssertEqual(tracks[0].duration, 269, accuracy: 0.001)
+    XCTAssertEqual(tracks[1].artist, "A/B")
+    XCTAssertEqual(tracks[1].duration, 210.5, accuracy: 0.001)
+  }
+
+  func testFavoritePlaylistParseRejectsUnusable() {
+    XCTAssertNil(FavoritePlaylistParse.tracks(Data("{}".utf8)))
+    XCTAssertNil(FavoritePlaylistParse.tracks(Data("nope".utf8)))
+  }

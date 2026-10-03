@@ -225,3 +225,47 @@ enum MusicSearch {
       .joined(separator: " ")
   }
 }
+
+/// One entry of the NetEase "我喜欢的音乐" playlist.
+struct FavoriteTrack: Equatable, Hashable, Sendable, Identifiable, Codable {
+  let id: Int
+  var name: String
+  var artist: String
+  /// Seconds; 0 when the API omits it.
+  var duration: TimeInterval
+}
+
+/// Pure parsing of the anonymous playlist-detail response.
+enum FavoritePlaylistParse {
+  /// `{"playlist":{"tracks":[{"id","name","duration"(ms),
+  /// "artists":[{"name"}]}]}}` — nil on anything unusable.
+  static func tracks(_ data: Data) -> [FavoriteTrack]? {
+    struct Response: Decodable {
+      struct Playlist: Decodable {
+        struct Track: Decodable {
+          let id: Int
+          let name: String
+          let duration: Double?
+          let artists: [Artist]?
+        }
+        struct Artist: Decodable {
+          let name: String?
+        }
+        let tracks: [Track]?
+      }
+      let playlist: Playlist?
+    }
+    guard
+      let response = try? JSONDecoder().decode(Response.self, from: data),
+      let tracks = response.playlist?.tracks
+    else { return nil }
+    return tracks.map { track in
+      FavoriteTrack(
+        id: track.id,
+        name: track.name,
+        artist: track.artists?.compactMap(\.name).joined(separator: "/") ?? "",
+        duration: (track.duration ?? 0) / 1000
+      )
+    }
+  }
+}

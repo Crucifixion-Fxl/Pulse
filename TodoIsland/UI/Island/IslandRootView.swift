@@ -489,6 +489,9 @@ struct IslandRootView: View {
     if item == .aiUsage {
       model.refreshAIUsage()
     }
+    if item == .music {
+      model.refreshFavorites()
+    }
     syncMusicPanelActivity()
   }
 

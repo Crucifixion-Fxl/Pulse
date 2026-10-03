@@ -141,3 +141,9 @@
 "clipboard.kind.image" = "图片";
 "clipboard.kind.video" = "视频";
 "clipboard.copy.accessibility" = "点击再次复制";
+"music.favorites.title" = "我喜欢的音乐";
+"music.favorites.count" = "%d 首";
+"music.favorites.unconfigured" = "配置网易云 ID 后显示歌单";
+"music.favorites.failed" = "歌单加载失败";
+"music.favorites.play.accessibility" = "播放这首歌";
+"music.favorites.needs-login" = "需要登录 Cookie 才能读取私藏歌单";

@@ -141,3 +141,9 @@
 "clipboard.kind.image" = "Image";
 "clipboard.kind.video" = "Video";
 "clipboard.copy.accessibility" = "Click to copy again";
+"music.favorites.title" = "My Favorites";
+"music.favorites.count" = "%d";
+"music.favorites.unconfigured" = "Set netease-uid to show your favorites";
+"music.favorites.failed" = "Couldn't load the playlist";
+"music.favorites.play.accessibility" = "Play this song";
+"music.favorites.needs-login" = "Favorites need your MUSIC_U cookie";

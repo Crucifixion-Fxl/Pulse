@@ -55,6 +55,18 @@ final class AppModel: ObservableObject {
   @Published var mediaKeysReady: Set<Int32> = []
   /// Clipboard history, newest first; at most seven entries.
   @Published private(set) var clipboardItems: [ClipboardItem] = []
+  /// NetEase "我喜欢的音乐"; empty until the uid is configured and the
+  /// first fetch lands.
+  @Published private(set) var favoriteTracks: [FavoriteTrack] = []
+  @Published private(set) var favoritesState: FavoritesState = .idle
+
+  enum FavoritesState: Equatable {
+    case idle
+    case unconfigured
+    case loading
+    case loaded
+    case failed
+  }
   /// Global lyric lead/lag the user nudges in the lyrics pane; positive
   /// delays lines. Persisted — source drift differs per song upload, one
   /// knob covers it.
@@ -87,6 +99,8 @@ final class AppModel: ObservableObject {
   private let defaults: UserDefaults
   private let aiUsageProvider: AIUsageProvider
   private let lyricsService: LyricsService
+  private var favoriteProvider = FavoritePlaylistProvider()
+  private let favoritesStore = FavoritePlaylistStore()
   private let nowPlayingController: any NowPlayingControlling
   /// Guards refreshAIUsage against refetching on every hover-select.
   private var lastAIUsageRefresh: Date?
@@ -112,6 +126,8 @@ final class AppModel: ObservableObject {
     static let didInitializeLocalSource = "did-initialize-local-source"
     static let collapsedIslandVisibility = "collapsed-island-visibility"
     static let lyricOffset = "lyric-offset"
+    static let neteaseUID = "netease-uid"
+    static let neteaseMusicU = "netease-music-u"
   }
 
   init(
@@ -797,6 +813,57 @@ final class AppModel: ObservableObject {
 
   func recopyClipboardItem(_ item: ClipboardItem) {
     ClipboardHistoryService.shared.recopy(item)
+  }
+
+  // MARK: Favorites
+
+  /// The NetEase numeric account id — the "我喜欢的音乐" playlist id equals
+  /// it. Configure via: defaults write com.fxl.TodoIsland netease-uid -int <id>
+  var neteaseUID: Int? {
+    defaults.object(forKey: Keys.neteaseUID) as? Int
+  }
+
+  /// Browser-session cookie for the private favorites playlist
+  /// (defaults key netease-music-u).
+  var neteaseMusicU: String? {
+    defaults.string(forKey: Keys.neteaseMusicU)
+  }
+
+  private var lastFavoritesRefresh: Date?
+
+  func refreshFavorites() {
+    guard let uid = neteaseUID else {
+      favoritesState = .unconfigured
+      return
+    }
+    let staleness = lastFavoritesRefresh.map { Date().timeIntervalSince($0) } ?? .infinity
+    guard staleness > 600 else { return }
+    lastFavoritesRefresh = Date()
+
+    if favoriteTracks.isEmpty { favoritesState = .loading }
+    var provider = favoriteProvider
+    provider.musicU = neteaseMusicU
+    Task { @MainActor in
+      if let stored = await favoritesStore.tracks(playlistID: uid), !stored.isEmpty {
+        favoriteTracks = stored
+        favoritesState = .loaded
+      }
+      guard
+        let fetched = await provider.tracks(playlistID: uid), !fetched.isEmpty
+      else {
+        if favoriteTracks.isEmpty { favoritesState = .failed }
+        return
+      }
+      favoriteTracks = fetched
+      favoritesState = .loaded
+      await favoritesStore.store(fetched, playlistID: uid)
+    }
+  }
+
+  /// Hands the track to the NetEase desktop app via orpheus://; the panel
+  /// follows whatever starts playing.
+  func playFavorite(_ track: FavoriteTrack) {
+    FavoritePlaylistProvider.play(trackID: track.id)
   }
 
   func markApplicationActive() {
