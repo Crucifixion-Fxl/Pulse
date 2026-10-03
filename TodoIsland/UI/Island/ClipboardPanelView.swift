@@ -21,6 +21,8 @@ struct ClipboardPanelView: View {
   }
 
   @State private var scrollOffset: CGFloat = 0
+  @State private var pendingScroll: CGFloat = 0
+  @State private var pendingDecay: Task<Void, Never>?
   @State private var wheelMonitor: Any?
   @State private var copiedFlashID: UUID?
 
@@ -76,7 +78,11 @@ struct ClipboardPanelView: View {
     .clipped()
   }
 
-  /// Wheel-down and left-swipe page toward older items.
+  /// Wheel paging with a threshold: tiny movements accumulate silently
+  /// and only a crossing (≈ one firm notch) commits a one-card step, so
+  /// high-resolution wheels and trackpad jitter don't crawl the rail.
+  private static let scrollThreshold: CGFloat = 42
+
   private func installWheelMonitor() {
     guard wheelMonitor == nil else { return }
     wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
@@ -84,10 +90,30 @@ struct ClipboardPanelView: View {
       let deltaX = event.scrollingDeltaX
       guard deltaY != 0 || deltaX != 0 else { return event }
       let primary = deltaY != 0 ? deltaY : -deltaX
-      withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.86)) {
-        scrollOffset = min(max(scrollOffset + primary, 0), maxOffset)
-      }
+      onWheel(primary)
       return event
+    }
+  }
+
+  private func onWheel(_ delta: CGFloat) {
+    pendingScroll += delta
+    pendingDecay?.cancel()
+    pendingDecay = Task { @MainActor in
+      try? await Task.sleep(for: .milliseconds(180))
+      guard !Task.isCancelled else { return }
+      pendingScroll = 0
+    }
+    while abs(pendingScroll) >= Self.scrollThreshold {
+      let direction: CGFloat = pendingScroll > 0 ? 1 : -1
+      pendingScroll -= direction * Self.scrollThreshold
+      let target = min(max(scrollOffset + direction * cardPitch, 0), maxOffset)
+      guard target != scrollOffset else {
+        pendingScroll = 0
+        break
+      }
+      withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.86)) {
+        scrollOffset = target
+      }
     }
   }
 
@@ -255,51 +281,98 @@ private struct ClipboardCard: View {
   private var preview: some View {
     switch item.kind {
     case .text:
-      Text(item.text ?? "")
-        .font(.system(size: 10))
-        .foregroundStyle(.white.opacity(0.85))
-        .lineSpacing(2)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .lineLimit(12)
-        .truncationMode(.tail)
-        .padding(8)
-        .frame(maxHeight: .infinity)
-        .background(
-          RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(.white.opacity(0.045))
+      // Full-bleed text well with a fade at the bottom so truncation
+      // reads as "more below" rather than a hard cut.
+      ScrollView(.vertical, showsIndicators: false) {
+        Text(item.text ?? "")
+          .font(.system(size: 10.5))
+          .foregroundStyle(.white.opacity(0.88))
+          .lineSpacing(2.5)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(9)
+      }
+      .frame(maxHeight: .infinity)
+      .background(
+        RoundedRectangle(cornerRadius: 9, style: .continuous)
+          .fill(.white.opacity(0.05))
+      )
+      .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+      .overlay(alignment: .bottom) {
+        LinearGradient(
+          colors: [.clear, .black.opacity(0.55)],
+          startPoint: .top, endPoint: .bottom
         )
-        .overlay(alignment: .bottomTrailing) {
-          Image(systemName: "text.quote")
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(ReUITheme.muted)
-            .padding(6)
-        }
+        .frame(height: 26)
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .allowsHitTesting(false)
+      }
+      .overlay(alignment: .bottomTrailing) {
+        Image(systemName: "text.quote")
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(ReUITheme.muted)
+          .padding(6)
+      }
     case .image:
       if let data = item.imageData, let image = NSImage(data: data) {
         Image(nsImage: image)
           .resizable()
           .scaledToFit()
+          .padding(6)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+          .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+              .fill(ReUITheme.itemHover)
+          )
+          .overlay(alignment: .bottomTrailing) {
+            Text("\(Int(image.size.width))×\(Int(image.size.height))")
+              .font(.system(size: 8.5, weight: .semibold))
+              .monospacedDigit()
+              .foregroundStyle(.white.opacity(0.85))
+              .padding(.horizontal, 5)
+              .padding(.vertical, 2)
+              .background(
+                Capsule(style: .continuous).fill(.black.opacity(0.5))
+              )
+              .padding(5)
+          }
       } else {
         missingPreview(icon: "photo")
       }
     case .video:
       ZStack {
         RoundedRectangle(cornerRadius: 9, style: .continuous)
-          .fill(ReUITheme.itemHover)
-        VStack(spacing: 6) {
+          .fill(
+            LinearGradient(
+              colors: [kindTint.opacity(0.28), ReUITheme.itemHover],
+              startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+          )
+        VStack(spacing: 5) {
           Image(systemName: "film.fill")
-            .font(.system(size: 26, weight: .medium))
-            .foregroundStyle(kindTint.opacity(0.85))
-          Text(item.fileURL?.pathExtension.uppercased() ?? "VIDEO")
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(ReUITheme.muted)
+            .font(.system(size: 30, weight: .medium))
+            .foregroundStyle(kindTint.opacity(0.95))
+            Text(item.fileURL?.pathExtension.uppercased() ?? "VIDEO")
+            .font(.system(size: 9.5, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.85))
+          if let size = fileSize {
+            Text(size)
+              .font(.system(size: 8.5, weight: .medium))
+              .monospacedDigit()
+              .foregroundStyle(ReUITheme.muted)
+          }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
       .frame(maxHeight: .infinity)
     }
+  }
+
+  private var fileSize: String? {
+    guard let url = item.fileURL,
+      let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size]
+        as? Int
+    else { return nil }
+    return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
   }
 
   private func missingPreview(icon: String) -> some View {
