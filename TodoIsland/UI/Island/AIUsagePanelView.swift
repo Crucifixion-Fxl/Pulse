@@ -28,9 +28,13 @@ private enum Palette {
 struct AIUsagePanelView: View {
   let snapshot: AIUsageSnapshot?
 
+  @EnvironmentObject private var model: AppModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var hoveredTrendIndex: Int?
   @State private var heroHovered = false
+  /// Bumped on every island expansion so the odometer re-spins each open
+  /// even though the sample value never changes.
+  @State private var odometerGeneration = 0
   @State private var trendAppeared = false
   @State private var skeletonBreathing = false
 
@@ -69,6 +73,12 @@ struct AIUsagePanelView: View {
       subscriptionsSection(snapshot)
     }
     .onAppear { beginTrendReveal() }
+    .onChange(of: model.islandState) { _, state in
+      if state != .collapsed {
+        // A fresh identity per expansion restarts the odometer spin-up.
+        odometerGeneration += 1
+      }
+    }
   }
 
   private func header(isSample: Bool) -> some View {
@@ -103,6 +113,7 @@ struct AIUsagePanelView: View {
         value: today?.totalTokens ?? 0,
         spinUp: !reduceMotion
       )
+      .id(odometerGeneration)
       .font(.system(size: 27, weight: .bold, design: .rounded))
       .foregroundStyle(.white)
       .lineLimit(1)
