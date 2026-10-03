@@ -70,12 +70,8 @@ final class AppModel: ObservableObject {
   /// Global lyric lead/lag the user nudges in the lyrics pane; positive
   /// delays lines. Persisted — source drift differs per song upload, one
   /// knob covers it.
-  @Published var lyricOffset: TimeInterval = 0 {
-    didSet {
-      guard oldValue != lyricOffset else { return }
-      defaults.set(lyricOffset, forKey: Keys.lyricOffset)
-    }
-  }
+  /// Retained for potential future use; no longer wired to the UI.
+  @Published var lyricOffset: TimeInterval = 0
 
   enum LyricsState: Equatable {
     case idle
@@ -143,7 +139,6 @@ final class AppModel: ObservableObject {
     self.aiUsageProvider = aiUsageProvider
     self.lyricsService = lyricsService
     self.nowPlayingController = nowPlayingController
-    lyricOffset = defaults.object(forKey: Keys.lyricOffset) as? Double ?? 0
     // The stay-mode onboarding was removed; a missing choice defaults to
     // always-visible (and is persisted so Settings shows the same value).
     let savedCollapsedVisibility = defaults.string(forKey: Keys.collapsedIslandVisibility)

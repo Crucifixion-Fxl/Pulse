@@ -330,49 +330,6 @@ struct MusicPanelView: View {
       }
     }
     .overlay(lyricsEdgeFades)
-    .overlay(alignment: .bottomTrailing) { lyricOffsetControls }
-  }
-
-  /// ±0.25 s lyric lead/lag; the value label resets to zero.
-  private var lyricOffsetControls: some View {
-    HStack(spacing: 6) {
-      Button {
-        model.lyricOffset -= 0.25
-      } label: {
-        Image(systemName: "minus")
-          .font(.system(size: 8.5, weight: .semibold))
-          .frame(width: 16, height: 16)
-      }
-      .buttonStyle(.plain)
-
-      Button {
-        model.lyricOffset = 0
-      } label: {
-        Text(
-          model.lyricOffset == 0
-            ? "0s"
-            : String(format: "%+.2fs", model.lyricOffset)
-        )
-          .font(.system(size: 9, weight: .medium))
-          .monospacedDigit()
-          .foregroundStyle(ReUITheme.muted)
-          .frame(minWidth: 34)
-      }
-      .buttonStyle(.plain)
-
-      Button {
-        model.lyricOffset += 0.25
-      } label: {
-        Image(systemName: "plus")
-          .font(.system(size: 8.5, weight: .semibold))
-          .frame(width: 16, height: 16)
-      }
-      .buttonStyle(.plain)
-    }
-    .foregroundStyle(ReUITheme.muted)
-    .padding(6)
-    .accessibilityLabel(Text("music.lyrics.offset.accessibility"))
-    .accessibilityValue(Text(String(format: "%+.2fs", model.lyricOffset)))
   }
 
   private func lyricLine(_ line: LyricLine, index: Int, currentIndex: Int?) -> some View {
