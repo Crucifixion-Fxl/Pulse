@@ -1202,7 +1202,7 @@ struct IslandRootView: View {
           reminder.title)))
 
       VStack(alignment: .leading, spacing: 1) {
-        HStack(spacing: 4) {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
           Text(reminder.title)
             .font(.system(size: metrics.rowTitleSize, weight: .medium))
             .lineLimit(1)
@@ -1210,6 +1210,7 @@ struct IslandRootView: View {
             Text(overdue)
               .font(.system(size: metrics.rowDetailSize))
               .foregroundStyle(.red)
+              .offset(y: 1)
           }
         }
         if let time = dueTimeLabel(for: reminder) {
