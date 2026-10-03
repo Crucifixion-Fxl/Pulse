@@ -358,38 +358,41 @@ struct IslandRootView: View {
 
   @ViewBuilder
   private var collapsedContent: some View {
+    // With the feature expansion the collapsed bar no longer shows the
+    // active-list title or the pending-count ring — the surface stays an
+    // empty capsule (still hover-expandable). Recovery states keep their
+    // lock/empty hints until replacement content lands.
     if hostDisplayHasNotch {
       HStack(spacing: 0) {
-        HStack(spacing: 4) {
-          if model.canUseActiveList {
-            sourceGlyph
-          } else {
+        if model.canUseActiveList {
+          Color.clear.frame(width: collapsedSideWidth)
+        } else {
+          HStack(spacing: 4) {
             Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")
+            Text(model.authorization == .fullAccess ? "list.none" : "island.locked")
+              .lineLimit(1)
           }
-          Text(model.activeList?.title ?? L10n.text("list.none"))
-            .lineLimit(1)
-            .truncationMode(.tail)
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(.white)
+          .padding(.leading, 12)
+          .padding(.trailing, 6)
+          .frame(width: collapsedSideWidth, alignment: .leading)
+          .clipped()
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 6)
-        .frame(width: collapsedSideWidth, alignment: .leading)
-        .clipped()
 
         // Reserve the camera housing; all visible content stays outside it.
         Color.clear.frame(width: hostPhysicalNotchWidth)
 
-        Group {
-          if model.canUseActiveList {
-            remainingCountRing
-          } else {
-            Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")
-          }
+        if model.canUseActiveList {
+          Color.clear.frame(width: collapsedSideWidth)
+        } else {
+          Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.trailing, 12)
+            .frame(width: collapsedSideWidth, alignment: .trailing)
         }
-        .padding(.trailing, 12)
-        .frame(width: collapsedSideWidth, alignment: .trailing)
       }
-      .font(.system(size: 11, weight: .semibold))
-      .foregroundStyle(.white)
       .frame(maxHeight: .infinity)
       .accessibilityElement(children: .combine)
       .accessibilityLabel(collapsedAccessibilityLabel)
@@ -406,22 +409,10 @@ struct IslandRootView: View {
       .accessibilityLabel(
         Text(model.authorization == .fullAccess ? "list.none" : "island.locked.accessibility"))
     } else {
-      HStack(alignment: .center, spacing: 8) {
-        sourceGlyph
-          .frame(width: 18, height: 18, alignment: .center)
-        Text(model.activeList?.title ?? L10n.text("list.none"))
-          .lineLimit(1)
-          .truncationMode(.tail)
-          .frame(height: 18, alignment: .center)
-        Spacer(minLength: 4)
-        remainingCountRing
-      }
-      .font(.system(size: 12, weight: .semibold))
-      .foregroundStyle(.white)
-      .padding(.horizontal, 14)
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel(collapsedAccessibilityLabel)
+      Color.clear
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(collapsedAccessibilityLabel)
     }
   }
 
