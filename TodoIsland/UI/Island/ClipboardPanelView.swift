@@ -143,6 +143,57 @@ struct ClipboardPanelView: View {
   }
 }
 
+// MARK: - Animated check
+
+/// The copy confirmation: the disc pops in with a spring and the tick
+/// draws itself stroke-by-stroke, then the overlay lingers briefly.
+private struct AnimatedCheckmark: View {
+  let reduceMotion: Bool
+
+  @State private var discScale: CGFloat = 0.4
+  @State private var trim: CGFloat = 0
+
+  var body: some View {
+    ZStack {
+      Circle()
+        .fill(Color.green)
+        .frame(width: 44, height: 44)
+        .shadow(color: .green.opacity(0.45), radius: 9, y: 1)
+        .scaleEffect(discScale)
+      CheckShape()
+        .trim(from: 0, to: trim)
+        .stroke(
+          Color.white,
+          style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round)
+        )
+        .frame(width: 19, height: 14)
+    }
+    .onAppear {
+      if reduceMotion {
+        discScale = 1
+        trim = 1
+        return
+      }
+      withAnimation(.spring(response: 0.32, dampingFraction: 0.62)) {
+        discScale = 1
+      }
+      withAnimation(.easeOut(duration: 0.26).delay(0.1)) {
+        trim = 1
+      }
+    }
+  }
+
+  private struct CheckShape: Shape {
+    func path(in rect: CGRect) -> Path {
+      var path = Path()
+      path.move(to: CGPoint(x: rect.minX, y: rect.midY + rect.height * 0.08))
+      path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.36, y: rect.maxY))
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+      return path
+    }
+  }
+}
+
 // MARK: - Card
 
 private struct ClipboardCard: View {
@@ -178,9 +229,7 @@ private struct ClipboardCard: View {
     .overlay {
       if flashCopied {
         VStack(spacing: 5) {
-          Image(systemName: "checkmark.circle.fill")
-            .font(.system(size: 26, weight: .semibold))
-            .foregroundStyle(.green)
+          AnimatedCheckmark(reduceMotion: reduceMotion)
           Text("clipboard.copied")
             .font(.system(size: 10.5, weight: .medium))
             .foregroundStyle(.white)
