@@ -108,6 +108,7 @@ final class AppModel: ObservableObject {
   /// jitter must never re-trigger a fetch.
   private var currentLyricsIdentity: LyricsIdentity?
   private var lyricsTask: Task<Void, Never>?
+  private var internalPlayerCancellable: Set<AnyCancellable> = []
   private var refreshTask: Task<Void, Never>?
   private var scheduleTask: Task<Void, Never>?
   private var hoverTask: Task<Void, Never>?
@@ -245,6 +246,13 @@ final class AppModel: ObservableObject {
       collapseIsland()
     }
     reconcileCollapsedIslandVisibility(hideImmediately: true)
+    // Bridge internal player's state into the panel continuously.
+    InternalPlayerService.shared.objectWillChange.sink { [weak self] _ in
+      self?.syncInternalPlayer()
+    }.store(in: &internalPlayerCancellable)
+    InternalPlayerService.shared.onTrackEnded = { [weak self] in
+      self?.skipInternal(delta: 1)
+    }
     // Accessory apps don't become "active" at launch; warm the favorites
     // rail here instead of waiting for panel hover.
     Self.favoritesLog.info(
@@ -712,6 +720,13 @@ final class AppModel: ObservableObject {
     }
     islandState = .collapsed
     reconcileCollapsedIslandVisibility(hideImmediately: true)
+    // Bridge internal player's state into the panel continuously.
+    InternalPlayerService.shared.objectWillChange.sink { [weak self] _ in
+      self?.syncInternalPlayer()
+    }.store(in: &internalPlayerCancellable)
+    InternalPlayerService.shared.onTrackEnded = { [weak self] in
+      self?.skipInternal(delta: 1)
+    }
   }
 
   func setCollapsedIslandVisibility(_ visibility: CollapsedIslandVisibility) {
@@ -756,6 +771,10 @@ final class AppModel: ObservableObject {
 
   /// Entry point for NowPlayingController updates (wired in AppDelegate).
   func nowPlayingDidChange(_ track: NowPlayingTrack?) {
+    // The internal player owns the panel while it has a track loaded;
+    // mediaremoted updates are suppressed so external players don't
+    // fight for the surface.
+    if InternalPlayerService.shared.isActive { return }
     nowPlaying = track
     guard let track else {
       lyricsTask?.cancel()
@@ -806,10 +825,38 @@ final class AppModel: ObservableObject {
 
   var nowPlayingSupportsSeeking: Bool { nowPlayingController.supportsSeeking }
 
-  func musicTogglePlayPause() { nowPlayingController.togglePlayPause() }
-  func musicSkipForward() { nowPlayingController.next() }
-  func musicSkipBackward() { nowPlayingController.previous() }
-  func musicSeek(to seconds: TimeInterval) { nowPlayingController.seek(to: seconds) }
+  func musicTogglePlayPause() {
+    if InternalPlayerService.shared.isActive {
+      InternalPlayerService.shared.togglePlayPause()
+      syncInternalPlayer()
+    } else {
+      nowPlayingController.togglePlayPause()
+    }
+  }
+  func musicSkipForward() { skipInternal(delta: 1) }
+  func musicSkipBackward() { skipInternal(delta: -1) }
+
+  private func skipInternal(delta: Int) {
+    let service = InternalPlayerService.shared
+    if service.isActive, let current = service.currentTrack,
+      let idx = favoriteTracks.firstIndex(where: { $0.id == current.id })
+    {
+      let nextIdx = idx + delta
+      let next = min(max(nextIdx, 0), favoriteTracks.count - 1)
+      playFavorite(favoriteTracks[next])
+    } else {
+      if delta > 0 { nowPlayingController.next() } else { nowPlayingController.previous() }
+    }
+  }
+
+  func musicSeek(to seconds: TimeInterval) {
+    if InternalPlayerService.shared.isActive {
+      InternalPlayerService.shared.seek(to: seconds)
+      syncInternalPlayer()
+    } else {
+      nowPlayingController.seek(to: seconds)
+    }
+  }
 
   // MARK: Clipboard
 
@@ -871,10 +918,24 @@ final class AppModel: ObservableObject {
     subsystem: "com.fxl.TodoIsland", category: "favorites"
   )
 
-  /// Hands the track to the NetEase desktop app via orpheus://; the panel
-  /// follows whatever starts playing.
+  /// Plays through the internal AVPlayer — the panel, lyrics, and media
+  /// keys all follow our own playback state.
   func playFavorite(_ track: FavoriteTrack) {
-    FavoritePlaylistProvider.play(trackID: track.id)
+    Task { @MainActor in
+      let ok = await InternalPlayerService.shared.play(track: track)
+      if ok {
+        syncInternalPlayer()
+      }
+    }
+  }
+
+  /// Bridges the internal player's state into the panel's NowPlayingTrack,
+  /// overriding mediaremoted while active.
+  func syncInternalPlayer() {
+    let service = InternalPlayerService.shared
+    if service.isActive {
+      nowPlaying = service.nowPlayingSnapshot
+    }
   }
 
   func markApplicationActive() {
@@ -946,6 +1007,13 @@ final class AppModel: ObservableObject {
 
     islandState = .collapsed
     reconcileCollapsedIslandVisibility(hideImmediately: true)
+    // Bridge internal player's state into the panel continuously.
+    InternalPlayerService.shared.objectWillChange.sink { [weak self] _ in
+      self?.syncInternalPlayer()
+    }.store(in: &internalPlayerCancellable)
+    InternalPlayerService.shared.onTrackEnded = { [weak self] in
+      self?.skipInternal(delta: 1)
+    }
   }
 
   private var canAutoHideCollapsedIsland: Bool {
