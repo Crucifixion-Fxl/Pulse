@@ -98,7 +98,9 @@ struct ClipboardPanelView: View {
       if event.hasPreciseScrollingDeltas {
         onPreciseScroll(primary)
       } else {
-        stepPage(primary > 0 ? 1 : -1)
+        // Wheel-down returns toward the newest items (natural reading
+        // direction for a history rail): down = newer, up = older.
+        stepPage(primary > 0 ? -1 : 1)
       }
       return event
     }
@@ -113,7 +115,7 @@ struct ClipboardPanelView: View {
       pendingPrecise = 0
     }
     if abs(pendingPrecise) >= Self.preciseThreshold {
-      stepPage(pendingPrecise > 0 ? 1 : -1)
+      stepPage(pendingPrecise > 0 ? -1 : 1)
       pendingPrecise = 0
     }
   }
