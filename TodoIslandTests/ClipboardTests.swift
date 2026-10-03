@@ -146,3 +146,30 @@ final class ClipboardTests: XCTestCase {
     XCTAssertEqual(items.map(\.text), ["a", "c", "b"])
   }
 }
+
+  // MARK: Image normalization
+
+  func testNormalizationRoundTripsRealImageAndRejectsGarbage() {
+    let rep = NSBitmapImageRep(
+      bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 3, bitsPerSample: 8,
+      samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+      colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+    )!
+    rep.setColor(NSColor.red, atX: 0, y: 0)
+    let tiff = rep.representation(using: .tiff, properties: [:])!
+
+    let normalized = ClipboardImageNormalization.tiffRepresentation(of: tiff)
+    XCTAssertNotNil(normalized, "a TIFF must normalize to TIFF")
+    XCTAssertNotNil(NSImage(data: normalized!))
+
+    XCTAssertNil(
+      ClipboardImageNormalization.tiffRepresentation(of: Data("junk".utf8)),
+      "garbage must fail cleanly"
+    )
+  }
+
+  func testWideFormatSet() {
+    for ext in ["heic", "heif", "avif", "webp", "svg"] {
+      XCTAssertTrue(ClipboardClassification.imageExtensions.contains(ext), ext)
+    }
+  }

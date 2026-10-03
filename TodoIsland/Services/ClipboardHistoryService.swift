@@ -87,21 +87,24 @@ final class ClipboardHistoryService {
     else { return nil }
 
     // Image FILES: read the original bytes, not the thumbnail the
-    // Finder preview put on the pasteboard.
-    var resolvedImageData = imageBytes
+    // Finder preview put on the pasteboard, then normalize to TIFF so
+    // the preview renders regardless of source format (HEIC, AVIF…).
+    var resolvedImageData: Data?
     var sourceFileURL = kind == .video ? fileURLs.first : nil
-    if kind == .image, imageBytes == nil || fileURLs.contains(where: {
-      ClipboardClassification.imageExtensions.contains($0.pathExtension.lowercased())
-    }) {
+    if kind == .image {
       let imageFile = fileURLs.first {
         ClipboardClassification.imageExtensions.contains($0.pathExtension.lowercased())
       }
-      if let imageFile,
-        let original = try? Data(contentsOf: imageFile),
-        NSImage(data: original) != nil
-      {
-        resolvedImageData = original
+      if let imageFile, let original = try? Data(contentsOf: imageFile) {
+        resolvedImageData = ClipboardImageNormalization.tiffRepresentation(of: original)
         sourceFileURL = imageFile
+      }
+      if resolvedImageData == nil {
+        // No usable file (or decode failed) — fall back to the
+        // pasteboard bytes, normalized the same way.
+        resolvedImageData = imageBytes.flatMap {
+          ClipboardImageNormalization.tiffRepresentation(of: $0)
+        } ?? imageBytes
       }
     }
 
@@ -151,7 +154,11 @@ final class ClipboardHistoryService {
         pasteboard.setString(text, forType: .string)
       }
     case .image:
-      if let data = item.imageData {
+      // Prefer the original file (format-preserving paste); fall back
+      // to the normalized TIFF bytes for screen captures.
+      if let url = item.fileURL {
+        pasteboard.writeObjects([url as NSURL])
+      } else if let data = item.imageData {
         pasteboard.setData(data, forType: .tiff)
       }
     case .video:
