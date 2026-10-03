@@ -76,7 +76,7 @@ struct ClipboardPanelView: View {
     }
     .offset(x: -CGFloat(clampedIndex) * cardPitch)
     .animation(
-      reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.86),
+      reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.9),
       value: clampedIndex
     )
     .frame(width: Layout.viewport, height: Layout.cardHeight, alignment: .leading)
@@ -114,14 +114,17 @@ struct ClipboardPanelView: View {
       guard !Task.isCancelled else { return }
       pendingPrecise = 0
     }
-    if abs(pendingPrecise) >= Self.preciseThreshold {
-      stepPage(pendingPrecise > 0 ? -1 : 1)
-      pendingPrecise = 0
-    }
+    // Keep the remainder: a fast fling carries many crossings, and
+    // discarding them turned speed into single-card crawls.
+    let crossings = Int(abs(pendingPrecise) / Self.preciseThreshold)
+    guard crossings > 0 else { return }
+    let sign: CGFloat = pendingPrecise > 0 ? 1 : -1
+    pendingPrecise -= CGFloat(crossings) * Self.preciseThreshold * sign
+    stepPage((pendingPrecise > 0 ? -1 : 1) * min(crossings, 4))
   }
 
-  private func stepPage(_ direction: Int) {
-    let target = min(max(clampedIndex + direction, 0), pageCount - 1)
+  private func stepPage(_ delta: Int) {
+    let target = min(max(clampedIndex + delta, 0), pageCount - 1)
     guard target != clampedIndex else { return }
     pageIndex = target
   }
