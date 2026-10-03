@@ -15,6 +15,32 @@ struct ClipboardPanelView: View {
   @EnvironmentObject private var model: AppModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+  /// Decoded-once thumbnails: decoding at render time hitches the first
+  /// scroll frame, so every item's image is preloaded into an NSCache the
+  /// moment the history changes — paging then only moves textures.
+  @MainActor
+  final class ThumbnailCache {
+    static let shared = ThumbnailCache()
+    private let cache = NSCache<NSUUID, NSImage>()
+
+    func image(for item: ClipboardItem) -> NSImage? {
+      if let cached = cache.object(forKey: item.id as NSUUID) { return cached }
+      guard
+        let data = item.previewImageData ?? item.imageData,
+        let image = NSImage(data: data)
+      else { return nil }
+      image.cacheMode = .always
+      cache.setObject(image, forKey: item.id as NSUUID)
+      return image
+    }
+
+    func preload(_ items: [ClipboardItem]) {
+      for item in items where item.kind == .image {
+        _ = image(for: item)
+      }
+    }
+  }
+
   enum Metrics {
     /// Matches the other feature panes so the island height stays uniform.
     static let contentHeight: CGFloat = 324
@@ -47,8 +73,14 @@ struct ClipboardPanelView: View {
       }
     }
     .padding(.top, 2)
-    .onAppear { installWheelMonitor() }
+    .onAppear {
+      installWheelMonitor()
+      ThumbnailCache.shared.preload(model.clipboardItems)
+    }
     .onDisappear { removeWheelMonitor() }
+    .onChange(of: model.clipboardItems) { _, items in
+      ThumbnailCache.shared.preload(items)
+    }
   }
 
   private var header: some View {
@@ -323,9 +355,10 @@ private struct ClipboardCard: View {
           .padding(6)
       }
     case .image:
-      if let data = item.imageData, let image = NSImage(data: data) {
+      if let image = ClipboardPanelView.ThumbnailCache.shared.image(for: item) {
         Image(nsImage: image)
           .resizable()
+          .interpolation(.medium)
           .scaledToFit()
           .padding(6)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -333,6 +366,7 @@ private struct ClipboardCard: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
               .fill(ReUITheme.itemHover)
           )
+          .drawingGroup()
           .overlay(alignment: .bottomTrailing) {
             Text("\(Int(image.size.width))×\(Int(image.size.height))")
               .font(.system(size: 8.5, weight: .semibold))

@@ -15,8 +15,11 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
   let id: UUID
   let kind: Kind
   var text: String?
-  /// Runtime image bytes; on disk this lives in the blob file.
+  /// Full-fidelity image bytes (re-copy source); on disk in the blob file.
   var imageData: Data?
+  /// Downscaled JPEG for display — full-res bitmaps stall the rail's
+  /// animation. Falls back to imageData when absent.
+  var previewImageData: Data?
   var fileURL: URL?
   var capturedAt: Date
   /// Content fingerprint for consecutive-duplicate suppression.
@@ -89,6 +92,32 @@ enum ClipboardImageNormalization {
     else { return nil }
     let bitmap = NSBitmapImageRep(cgImage: image)
     return bitmap.representation(using: .tiff, properties: [:])
+  }
+
+  /// Small JPEG for on-card display: full-resolution TIFFs re-composite
+  /// every animation frame and stall the rail. Fit within `maxPixel`,
+  /// preserving alpha as PNG when present.
+  static func previewRepresentation(of data: Data, maxPixel: CGFloat = 720) -> Data? {
+    guard let image = NSImage(data: data) else { return nil }
+    let size = image.size
+    let scale = min(1, maxPixel / max(size.width, size.height, 1))
+    let target = NSSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
+    guard target.width >= 1, target.height >= 1 else { return nil }
+
+    let rep = NSBitmapImageRep(
+      bitmapDataPlanes: nil,
+      pixelsWide: Int(target.width), pixelsHigh: Int(target.height),
+      bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+      colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+    )!
+    rep.size = target
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+    image.draw(in: NSRect(origin: .zero, size: target))
+    NSGraphicsContext.restoreGraphicsState()
+    return rep.representation(
+      using: .jpeg, properties: [.compressionFactor: 0.85]
+    )
   }
 }
 

@@ -109,8 +109,13 @@ final class ClipboardHistoryService {
     }
 
     let id = UUID()
+    var previewData: Data?
     if kind == .image, let resolvedImageData {
       blobPaths[id] = writeBlob(resolvedImageData)
+      previewData = ClipboardImageNormalization.previewRepresentation(of: resolvedImageData)
+      if let previewData {
+        previewBlobPaths[id] = writeBlob(previewData, prefix: "prev-")
+      }
     }
 
     return ClipboardItem(
@@ -118,6 +123,7 @@ final class ClipboardHistoryService {
       kind: kind,
       text: text,
       imageData: kind == .image ? resolvedImageData : nil,
+      previewImageData: previewData,
       fileURL: sourceFileURL,
       capturedAt: Date(),
       contentHash: ClipboardHistoryService.contentHash(
@@ -178,16 +184,17 @@ final class ClipboardHistoryService {
     let kind: String
     let text: String?
     let blob: String?
+    let previewBlob: String?
     let fileURL: String?
     let capturedAt: Date
     let contentHash: Int
   }
 
-  private func writeBlob(_ data: Data) -> String? {
+  private func writeBlob(_ data: Data, prefix: String = "blob-") -> String? {
     do {
       try FileManager.default.createDirectory(
         at: storeDirectory, withIntermediateDirectories: true)
-      let name = "blob-\(UUID().uuidString).tiff"
+      let name = "\(prefix)\(UUID().uuidString)"
       try data.write(to: storeDirectory.appendingPathComponent(name))
       return name
     } catch {
@@ -203,6 +210,7 @@ final class ClipboardHistoryService {
         kind: item.kind.rawValue,
         text: item.text,
         blob: blobPaths[item.id],
+        previewBlob: previewBlobPaths[item.id],
         fileURL: item.fileURL?.absoluteString,
         capturedAt: item.capturedAt,
         contentHash: item.contentHash
@@ -220,8 +228,9 @@ final class ClipboardHistoryService {
   }
 
   /// Blob file names by item id, tracked so persistence survives the
-  /// runtime-only imageData.
+  /// runtime-only imageData. Full-fidelity and display-preview blobs.
   private var blobPaths: [UUID: String] = [:]
+  private var previewBlobPaths: [UUID: String] = [:]
 
   private func loadPersisted() {
     guard
@@ -235,11 +244,17 @@ final class ClipboardHistoryService {
         imageData = try? Data(contentsOf: storeDirectory.appendingPathComponent(blob))
         blobPaths[entry.id] = blob
       }
+      var previewData: Data?
+      if let previewBlob = entry.previewBlob {
+        previewData = try? Data(contentsOf: storeDirectory.appendingPathComponent(previewBlob))
+        previewBlobPaths[entry.id] = previewBlob
+      }
       return ClipboardItem(
         id: entry.id,
         kind: kind,
         text: entry.text,
         imageData: imageData,
+        previewImageData: previewData,
         fileURL: entry.fileURL.flatMap(URL.init(string:)),
         capturedAt: entry.capturedAt,
         contentHash: entry.contentHash
@@ -248,11 +263,12 @@ final class ClipboardHistoryService {
   }
 
   private func pruneOrphanBlobs() {
-    let keep = Set(blobPaths.values)
+    let keep = Set(blobPaths.values).union(previewBlobPaths.values)
     guard
       let names = try? FileManager.default.contentsOfDirectory(atPath: storeDirectory.path)
     else { return }
-    for name in names where name.hasPrefix("blob-") && !keep.contains(name) {
+    for name in names
+    where (name.hasPrefix("blob-") || name.hasPrefix("prev-")) && !keep.contains(name) {
       try? FileManager.default.removeItem(at: storeDirectory.appendingPathComponent(name))
     }
   }

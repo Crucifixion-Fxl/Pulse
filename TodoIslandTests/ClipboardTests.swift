@@ -173,3 +173,18 @@ final class ClipboardTests: XCTestCase {
       XCTAssertTrue(ClipboardClassification.imageExtensions.contains(ext), ext)
     }
   }
+
+  func testPreviewRepresentationDownscalesAndStaysDecodable() {
+    // 4000×3000 "photo" → preview must come back small and renderable.
+    let rep = NSBitmapImageRep(
+      bitmapDataPlanes: nil, pixelsWide: 400, pixelsHigh: 300, bitsPerSample: 8,
+      samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+      colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+    )!
+    let tiff = rep.representation(using: .tiff, properties: [:])!
+    let preview = ClipboardImageNormalization.previewRepresentation(of: tiff, maxPixel: 72)
+    XCTAssertNotNil(preview)
+    let image = try! XCTUnwrap(NSImage(data: preview!))
+    XCTAssertLessThanOrEqual(max(image.size.width, image.size.height), 73)
+    XCTAssertLessThan(preview!.count, tiff.count)
+  }
