@@ -418,3 +418,17 @@ private final class FakeNowPlayingController: NowPlayingControlling {
     XCTAssertNil(FavoritePlaylistParse.tracks(Data("{}".utf8)))
     XCTAssertNil(FavoritePlaylistParse.tracks(Data("nope".utf8)))
   }
+
+  func testFavoriteTrackIDsAndV3Parsing() {
+    let v6 = """
+      {"playlist":{"trackIds":[{"rid":5},{"rid":6}],"tracks":[
+        {"id":5,"name":"A","duration":1000,"artists":[]}],"name":"x"}}
+      """
+    XCTAssertEqual(FavoritePlaylistParse.trackIDs(Data(v6.utf8)), [5, 6])
+
+    let v3 = """
+      {"songs":[{"id":6,"name":"B","dt":250000,"ar":[{"name":"X"},{"name":"Y"}]}]}
+      """
+    let tracks = try! XCTUnwrap(FavoritePlaylistParse.v3Tracks(Data(v3.utf8)))
+    XCTAssertEqual(tracks, [FavoriteTrack(id: 6, name: "B", artist: "X/Y", duration: 250)])
+  }

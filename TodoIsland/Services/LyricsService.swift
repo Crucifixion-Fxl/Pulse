@@ -204,22 +204,52 @@ struct FavoritePlaylistProvider: Sendable {
   /// the owner's MUSIC_U session cookie (defaults key netease-music-u).
   var musicU: String?
 
+  /// v6 caps embedded track details at ten regardless of n — full lists
+  /// need the two-stage walk: v6 for the trackIds, then batched
+  /// v3/song/detail (its own shape: ar[] artists, dt ms) a hundred ids
+  /// per call.
   func tracks(playlistID: Int) async -> [FavoriteTrack]? {
-    guard let base = URL(string: "https://music.163.com/api/v6/playlist/detail") else {
-      return nil
+    guard
+      let detail = await get(
+        "https://music.163.com/api/v6/playlist/detail",
+        query: ["id": String(playlistID), "n": "1"]
+      ),
+      let embedded = FavoritePlaylistParse.tracks(detail)
+    else { return nil }
+
+    guard
+      let ids = FavoritePlaylistParse.trackIDs(detail), ids.count > embedded.count
+    else { return embedded }
+
+    var detailed = embedded
+    let remaining = ids.dropFirst(embedded.count)
+    for chunk in stride(from: 0, to: remaining.count, by: 100).map({
+      Array(remaining[$0..<min($0 + 100, remaining.count)])
+    }) {
+      let c = "[" + chunk.map { "{\"id\":\($0)}" }.joined(separator: ",") + "]"
+      guard
+        let data = await get(
+          "https://music.163.com/api/v3/song/detail",
+          query: ["c": c]
+        ),
+        let batch = FavoritePlaylistParse.v3Tracks(data)
+      else { continue }
+      detailed.append(contentsOf: batch)
     }
-    let url = base.appending(queryItems: [
-      URLQueryItem(name: "id", value: String(playlistID)),
-      URLQueryItem(name: "n", value: "1000"),
-    ])
+    return detailed.isEmpty ? nil : detailed
+  }
+
+  private func get(_ urlString: String, query: [String: String]) async -> Data? {
+    var components = URLComponents(string: urlString)!
+    components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+    guard let url = components.url else { return nil }
     var request = URLRequest(url: url, timeoutInterval: 8)
     request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
     request.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
     if let musicU, !musicU.isEmpty {
       request.setValue("MUSIC_U=\(musicU); NMTID=0", forHTTPHeaderField: "Cookie")
     }
-    guard let data = try? await session.data(for: request).0 else { return nil }
-    return FavoritePlaylistParse.tracks(data)
+    return try? await session.data(for: request).0
   }
 
   /// Hands the song to the NetEase desktop app; the island's Now Playing

@@ -268,4 +268,50 @@ enum FavoritePlaylistParse {
       )
     }
   }
+
+  /// The v6 playlist's full id list (`trackIds[].rid`) — the embedded
+  /// `tracks` array caps at ten.
+  static func trackIDs(_ data: Data) -> [Int]? {
+    struct Response: Decodable {
+      struct Playlist: Decodable {
+        struct Entry: Decodable {
+          let rid: Int
+        }
+        let trackIds: [Entry]?
+      }
+      let playlist: Playlist?
+    }
+    guard
+      let response = try? JSONDecoder().decode(Response.self, from: data)
+    else { return nil }
+    return response.playlist?.trackIds?.map(\.rid)
+  }
+
+  /// v3/song/detail shape: `{"songs":[{"id","name","dt"(ms),"ar":[{"name"}]}]}`.
+  static func v3Tracks(_ data: Data) -> [FavoriteTrack]? {
+    struct Response: Decodable {
+      struct Song: Decodable {
+        let id: Int
+        let name: String?
+        let dt: Double?
+        let ar: [Artist]?
+      }
+      struct Artist: Decodable {
+        let name: String?
+      }
+      let songs: [Song]?
+    }
+    guard
+      let response = try? JSONDecoder().decode(Response.self, from: data)
+    else { return nil }
+    return (response.songs ?? []).compactMap { song in
+      guard let name = song.name, !name.isEmpty else { return nil }
+      return FavoriteTrack(
+        id: song.id,
+        name: name,
+        artist: song.ar?.compactMap(\.name).joined(separator: "/") ?? "",
+        duration: (song.dt ?? 0) / 1000
+      )
+    }
+  }
 }
