@@ -944,6 +944,11 @@ final class AppModel: ObservableObject {
       || (nowPlaying?.artworkData == nil) != (snapshot.artworkData == nil)
     {
       nowPlaying = snapshot
+      // Route through the same lyrics-fetch path as external tracks;
+      // bypassing it left the previous song's lyrics on screen.
+      guard snapshot.lyricsIdentity != currentLyricsIdentity else { return }
+      currentLyricsIdentity = snapshot.lyricsIdentity
+      fetchLyrics(for: snapshot)
     }
   }
 
