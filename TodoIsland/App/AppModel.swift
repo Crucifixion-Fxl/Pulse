@@ -907,10 +907,13 @@ final class AppModel: ObservableObject {
         if favoriteTracks.isEmpty { favoritesState = .failed }
         return
       }
-      Self.favoritesLog.info("playlist fetched: \(fetched.count) tracks")
-      favoriteTracks = fetched
+      let playable = await provider.filterPlayable(fetched)
+      Self.favoritesLog.info(
+        "playlist fetched: \(fetched.count) tracks, \(playable.count) playable"
+      )
+      favoriteTracks = playable
       favoritesState = .loaded
-      await favoritesStore.store(fetched, playlistID: uid)
+      await favoritesStore.store(playable, playlistID: uid)
     }
   }
 

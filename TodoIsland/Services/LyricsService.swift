@@ -241,6 +241,49 @@ struct FavoritePlaylistProvider: Sendable {
     return detailed.isEmpty ? nil : detailed
   }
 
+  /// Batch-checks which track ids have a playable stream (code 200);
+  /// VIP-only and region-locked tracks (code -110 etc.) are dropped.
+  func filterPlayable(_ tracks: [FavoriteTrack]) async -> [FavoriteTrack] {
+    let ids = tracks.map(\.id)
+    var playable = Set<Int>()
+    for chunk in stride(from: 0, to: ids.count, by: 100).map({
+      Array(ids[$0..<min($0 + 100, ids.count)])
+    }) {
+      // The API expects ids=[1,2,3] (bracketed array), not a bare list.
+      let list = "[" + chunk.map(String.init).joined(separator: ",") + "]"
+      let encoded = list.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+      let body = "ids=\(encoded)&br=128000"
+      guard
+        let url = URL(string: "https://music.163.com/api/song/enhance/player/url"),
+        let data = await post(url, body: body)
+      else { continue }
+      if
+        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let items = json["data"] as? [[String: Any]]
+      {
+        for item in items {
+          if (item["code"] as? Int) == 200, let id = item["id"] as? Int {
+            playable.insert(id)
+          }
+        }
+      }
+    }
+    return tracks.filter { playable.contains($0.id) }
+  }
+
+  private func post(_ url: URL, body: String) async -> Data? {
+    var request = URLRequest(url: url, timeoutInterval: 10)
+    request.httpMethod = "POST"
+    request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+    request.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
+    request.setValue("NMTID=0", forHTTPHeaderField: "Cookie")
+    request.setValue(
+      "application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type"
+    )
+    request.httpBody = body.data(using: .utf8)
+    return try? await session.data(for: request).0
+  }
+
   private func get(_ urlString: String, query: [String: String]) async -> Data? {
     var components = URLComponents(string: urlString)!
     components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
