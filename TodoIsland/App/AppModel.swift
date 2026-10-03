@@ -771,10 +771,15 @@ final class AppModel: ObservableObject {
 
   /// Entry point for NowPlayingController updates (wired in AppDelegate).
   func nowPlayingDidChange(_ track: NowPlayingTrack?) {
-    // The internal player owns the panel while it has a track loaded;
-    // mediaremoted updates are suppressed so external players don't
-    // fight for the surface.
-    if InternalPlayerService.shared.isActive { return }
+    // If an external player (NetEase desktop, Chrome, …) starts playing
+    // while our internal player owns the surface, yield: stop ours and
+    // follow the external. AVPlayer doesn't publish to mediaremoted, so
+    // any playing track from there means the user chose another source.
+    if InternalPlayerService.shared.isActive,
+      let track, track.isPlaying
+    {
+      InternalPlayerService.shared.stop()
+    }
     nowPlaying = track
     guard let track else {
       lyricsTask?.cancel()
