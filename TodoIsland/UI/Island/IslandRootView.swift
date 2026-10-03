@@ -1210,6 +1210,14 @@ struct IslandRootView: View {
             Text(overdue)
               .font(.system(size: metrics.rowDetailSize))
               .foregroundStyle(.red)
+              .padding(.horizontal, 4)
+              .padding(.vertical, 1)
+              .background(
+                Capsule(style: .continuous).fill(Color.red.opacity(0.12))
+              )
+              .overlay(
+                Capsule(style: .continuous).stroke(Color.red.opacity(0.28), lineWidth: 0.5)
+              )
               .offset(y: 1)
           }
         }
