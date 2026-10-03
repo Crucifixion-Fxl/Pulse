@@ -238,8 +238,9 @@ struct AIUsagePanelView: View {
       .fixedSize()
       .onAppear {
         guard spinUp, displayed == nil else { return }
-        displayed = Int((Double(value) * 0.83 / 1_000).rounded()) * 1_000
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+        // Quick 10k roll-up: only the low digits turn, and briefly.
+        displayed = max(0, value - 10_000)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
           displayed = value
         }
       }
@@ -248,7 +249,7 @@ struct AIUsagePanelView: View {
     @ViewBuilder
     private func digitSlot(_ character: Character, position: Int, total: Int) -> some View {
       let isDigit = character.isNumber
-      let carryDelay = Double(total - 1 - position) * 0.06
+      let carryDelay = Double(total - 1 - position) * 0.035
 
       if isDigit {
         Text(String(character))
@@ -261,7 +262,7 @@ struct AIUsagePanelView: View {
             )
           )
           .animation(
-            .spring(response: 0.45, dampingFraction: 0.82).delay(carryDelay),
+            .spring(response: 0.32, dampingFraction: 0.85).delay(carryDelay),
             value: character
           )
           .frame(minWidth: 16)
