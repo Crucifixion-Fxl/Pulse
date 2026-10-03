@@ -766,13 +766,13 @@ final class AppModel: ObservableObject {
 
   /// Entry point for NowPlayingController updates (wired in AppDelegate).
   func nowPlayingDidChange(_ track: NowPlayingTrack?) {
-    // If an external player (NetEase desktop, Chrome, …) starts playing
-    // while our internal player owns the surface, yield: stop ours and
-    // follow the external. AVPlayer doesn't publish to mediaremoted, so
-    // any playing track from there means the user chose another source.
-    if InternalPlayerService.shared.isActive,
-      let track, track.isPlaying
-    {
+    // The internal player owns the surface while active. External
+    // mediaremoted updates only pass through when the external source is
+    // actually playing (which yields the internal player); a paused
+    // external track must NOT steal the panel back — that caused the
+    // artwork to strobe between the two.
+    if InternalPlayerService.shared.isActive {
+      guard let track, track.isPlaying else { return }
       InternalPlayerService.shared.stop()
     }
     nowPlaying = track
