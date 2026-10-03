@@ -20,16 +20,21 @@ struct ClipboardPanelView: View {
     static let contentHeight: CGFloat = 324
   }
 
-  @State private var scrollOffset: CGFloat = 0
-  @State private var pendingScroll: CGFloat = 0
+  /// Card-granular position: the index at the rail's left edge. The
+  /// pixel offset derives from it (index × pitch), so the rail can only
+  /// ever rest card-aligned — no fractional positions exist.
+  @State private var pageIndex: Int = 0
+  /// Precise-delta accumulation toward the next page step.
+  @State private var pendingPrecise: CGFloat = 0
   @State private var pendingDecay: Task<Void, Never>?
   @State private var wheelMonitor: Any?
   @State private var copiedFlashID: UUID?
 
   private var cardPitch: CGFloat { Layout.cardWidth + Layout.cardSpacing }
-  private var maxOffset: CGFloat {
-    max(0, CGFloat(model.clipboardItems.count) * cardPitch - Layout.viewport)
+  private var pageCount: Int {
+    max(1, model.clipboardItems.count - 2)
   }
+  private var clampedIndex: Int { min(max(pageIndex, 0), pageCount - 1) }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -69,19 +74,19 @@ struct ClipboardPanelView: View {
         .frame(width: Layout.cardWidth, height: Layout.cardHeight)
       }
     }
-    .offset(x: -scrollOffset)
+    .offset(x: -CGFloat(clampedIndex) * cardPitch)
     .animation(
       reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.86),
-      value: scrollOffset
+      value: clampedIndex
     )
     .frame(width: Layout.viewport, height: Layout.cardHeight, alignment: .leading)
     .clipped()
   }
 
-  /// Wheel paging with a threshold: tiny movements accumulate silently
-  /// and only a crossing (≈ one firm notch) commits a one-card step, so
-  /// high-resolution wheels and trackpad jitter don't crawl the rail.
-  private static let scrollThreshold: CGFloat = 42
+  /// Notched mice step one card per event; precise devices (trackpads,
+  /// smooth wheels) accumulate against a threshold that commits exactly
+  /// one card per crossing, with a decay so stale momentum never fires.
+  private static let preciseThreshold: CGFloat = 36
 
   private func installWheelMonitor() {
     guard wheelMonitor == nil else { return }
@@ -90,31 +95,33 @@ struct ClipboardPanelView: View {
       let deltaX = event.scrollingDeltaX
       guard deltaY != 0 || deltaX != 0 else { return event }
       let primary = deltaY != 0 ? deltaY : -deltaX
-      onWheel(primary)
+      if event.hasPreciseScrollingDeltas {
+        onPreciseScroll(primary)
+      } else {
+        stepPage(primary > 0 ? 1 : -1)
+      }
       return event
     }
   }
 
-  private func onWheel(_ delta: CGFloat) {
-    pendingScroll += delta
+  private func onPreciseScroll(_ delta: CGFloat) {
+    pendingPrecise += delta
     pendingDecay?.cancel()
     pendingDecay = Task { @MainActor in
-      try? await Task.sleep(for: .milliseconds(180))
+      try? await Task.sleep(for: .milliseconds(220))
       guard !Task.isCancelled else { return }
-      pendingScroll = 0
+      pendingPrecise = 0
     }
-    while abs(pendingScroll) >= Self.scrollThreshold {
-      let direction: CGFloat = pendingScroll > 0 ? 1 : -1
-      pendingScroll -= direction * Self.scrollThreshold
-      let target = min(max(scrollOffset + direction * cardPitch, 0), maxOffset)
-      guard target != scrollOffset else {
-        pendingScroll = 0
-        break
-      }
-      withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.86)) {
-        scrollOffset = target
-      }
+    if abs(pendingPrecise) >= Self.preciseThreshold {
+      stepPage(pendingPrecise > 0 ? 1 : -1)
+      pendingPrecise = 0
     }
+  }
+
+  private func stepPage(_ direction: Int) {
+    let target = min(max(clampedIndex + direction, 0), pageCount - 1)
+    guard target != clampedIndex else { return }
+    pageIndex = target
   }
 
   private func removeWheelMonitor() {
@@ -125,17 +132,15 @@ struct ClipboardPanelView: View {
   }
 
   private var pageDots: some View {
-    let pageCount = max(1, Int((maxOffset / cardPitch).rounded(.up)) + 1)
-    let current = max(0, min(Int(scrollOffset / cardPitch), pageCount - 1))
-    return HStack(spacing: 5) {
+    HStack(spacing: 5) {
       ForEach(0..<pageCount, id: \.self) { page in
         Circle()
-          .fill(page == current ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
+          .fill(page == clampedIndex ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
           .frame(width: 4, height: 4)
       }
     }
     .frame(maxWidth: .infinity)
-    .animation(.easeOut(duration: 0.2), value: current)
+    .animation(.easeOut(duration: 0.2), value: clampedIndex)
   }
 
   private func flashCopied(_ item: ClipboardItem) {
