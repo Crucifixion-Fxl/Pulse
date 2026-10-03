@@ -416,14 +416,32 @@ struct MusicPanelView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
+  /// Soft waveform bars pulsing with playback — fills the space when no
+  /// lyrics exist. Paused bars settle to a calm low profile.
   private var lyricsNotFound: some View {
-    VStack(spacing: 6) {
-      Image(systemName: "music.note")
-        .font(.system(size: 20, weight: .medium))
-        .foregroundStyle(ReUITheme.muted)
-      Text("music.lyrics.not-found")
-        .font(.system(size: 11, weight: .medium))
-        .foregroundStyle(ReUITheme.muted)
+    VStack(spacing: 14) {
+      AudioVisualizer(isPlaying: model.nowPlaying?.isPlaying == true)
+        .frame(maxHeight: .infinity)
+
+      if let track = model.nowPlaying {
+        VStack(spacing: 3) {
+          Text(track.title)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+          Text(track.artist)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(ReUITheme.muted)
+            .lineLimit(1)
+        }
+        .padding(.bottom, 20)
+      } else {
+        Text("music.lyrics.not-found")
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(ReUITheme.muted)
+          .padding(.bottom, 20)
+      }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
@@ -508,6 +526,57 @@ private struct FavoriteRow: View {
     }
     .accessibilityLabel(Text("\(track.name), \(track.artist)"))
     .accessibilityHint(Text("music.favorites.play.accessibility"))
+  }
+}
+
+// MARK: - Audio visualizer
+
+/// A row of soft bars whose heights animate independently — pulsing when
+/// playing, settling low when paused. The animation is deterministic so
+/// bars never glitch on layout.
+private struct AudioVisualizer: View {
+  let isPlaying: Bool
+
+  private let barCount = 24
+  private let barSpacing: CGFloat = 5
+  private let maxBarHeight: CGFloat = 90
+
+  var body: some View {
+    TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
+      GeometryReader { geo in
+        let barWidth = max(
+          3, (geo.size.width - CGFloat(barCount - 1) * barSpacing) / CGFloat(barCount)
+        )
+        let phase = isPlaying ? timeline.date.timeIntervalSinceReferenceDate : 0
+        HStack(spacing: barSpacing) {
+          ForEach(0..<barCount, id: \.self) { index in
+            Capsule(style: .continuous)
+              .fill(barColor(index))
+              .frame(width: barWidth, height: barHeight(index, phase: phase))
+          }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+      }
+    }
+  }
+
+  private func barHeight(_ index: Int, phase: Double) -> CGFloat {
+    guard isPlaying else {
+      // Paused: low static profile, gentle variation by position.
+      return 6 + CGFloat(index % 5) * 2
+    }
+    // Layered sine waves give organic bar movement.
+    let base = sin(phase * 2.2 + Double(index) * 0.55) * 0.5 + 0.5
+    let detail = sin(phase * 5.1 + Double(index) * 1.3) * 0.5 + 0.5
+    let envelope = sin(Double(index) / Double(barCount) * .pi)  // higher in centre
+    let mix = base * 0.55 + detail * 0.3 + envelope * 0.15
+    return max(5, CGFloat(mix) * maxBarHeight)
+  }
+
+  private func barColor(_ index: Int) -> Color {
+    let progress = Double(index) / Double(barCount - 1)
+    let hue = 0.68 - progress * 0.62  // cold-to-warm, like the AI trend
+    return Color(hue: hue, saturation: 0.55, brightness: 0.9).opacity(0.6)
   }
 }
 
