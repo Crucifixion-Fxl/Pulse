@@ -13,7 +13,7 @@ enum CollapsedBotFace {
   }
 
   struct Expression: Equatable, Sendable {
-    /// 1 open, 0.16 dozing slit, 1.25 hover-widened.
+    /// 1 open, 0.3 dozing squint, 1.25 hover-widened.
     var eyeOpen: CGFloat
     /// -1...1, unit of the max glance shift.
     var glanceX: CGFloat
@@ -23,8 +23,6 @@ enum CollapsedBotFace {
     var faceScale: CGFloat
     /// Vertical bob as a fraction of the face size.
     var faceOffsetYFraction: CGFloat
-    /// 0...1 → blush opacity 0.35...0.75.
-    var blushLevel: CGFloat
   }
 
   // Timing, in seconds.
@@ -37,16 +35,17 @@ enum CollapsedBotFace {
     if inputs.isHovered {
       return Expression(
         eyeOpen: 1.25, glanceX: 0, lookY: -0.8, faceScale: 1,
-        faceOffsetYFraction: 0, blushLevel: 0.62)
+        faceOffsetYFraction: 0)
     }
     guard inputs.isPlaying else {
-      // Dozing: thin slits, slow deep breathing, no blink or glance.
+      // Dozing: flat ovals (a round eye squashed to 0.3 keeps a clearly
+      // readable closed-eye line at 24 pt — 0.16 all but vanished under
+      // anti-aliasing), slow deep breathing, no blink or glance.
       let breathe = CGFloat(sin(2 * .pi * t / 4.8))
       return Expression(
-        eyeOpen: 0.16, glanceX: 0, lookY: 0,
+        eyeOpen: 0.3, glanceX: 0, lookY: 0,
         faceScale: 1 + 0.015 * breathe,
-        faceOffsetYFraction: 0.03 * breathe,
-        blushLevel: 0.34)
+        faceOffsetYFraction: 0.03 * breathe)
     }
     let beat = beatPulse(at: t)
     return Expression(
@@ -54,15 +53,14 @@ enum CollapsedBotFace {
       glanceX: glanceUnit(at: t),
       lookY: 0,
       faceScale: 1 + 0.03 * beat,
-      faceOffsetYFraction: 0.012 * CGFloat(sin(2 * .pi * t / 3.9)),
-      blushLevel: 0.5 + 0.12 * beat)
+      faceOffsetYFraction: 0.012 * CGFloat(sin(2 * .pi * t / 3.9)))
   }
 
   /// The single frame rendered under Reduce Motion or on a hidden surface.
   static func staticExpression(isPlaying: Bool) -> Expression {
     Expression(
       eyeOpen: 1, glanceX: 0, lookY: 0, faceScale: 1,
-      faceOffsetYFraction: 0, blushLevel: isPlaying ? 0.5 : 0.34)
+      faceOffsetYFraction: 0)
   }
 
   /// Deterministic 0..<1 noise: the same index always maps to the same
@@ -132,10 +130,10 @@ enum CollapsedBotFace {
 // MARK: - View
 
 /// The animated bot character shown in the collapsed island bar: a cream
-/// face, two solid-black vertical capsule eyes (3:1) and oval blush — no
-/// mouth, no brows, pastel flat coloring. Blink/squint is drawn as eye
-/// height, so a capsule below ~0.33 openness collapses into a horizontal
-/// slit, which doubles as the dozing pose.
+/// face and two solid-black round eyes that glance, blink, and follow the
+/// beat — no mouth, no brows, no blush, flat pastel coloring. Blink/squint
+/// is drawn as eye height, so a circle below ~0.33 openness flattens into a
+/// horizontal slit, which doubles as the dozing pose.
 struct CollapsedBotFaceView: View {
   /// Face diameter in points; the caller derives it from the bar height.
   let size: CGFloat
@@ -147,7 +145,6 @@ struct CollapsedBotFaceView: View {
 
   static let faceColor = Color(red: 0.965, green: 0.925, blue: 0.850)
   static let eyeColor = Color(red: 0.090, green: 0.090, blue: 0.100)
-  static let blushColor = Color(red: 0.970, green: 0.580, blue: 0.580)
 
   var body: some View {
     Group {
@@ -169,9 +166,6 @@ struct CollapsedBotFaceView: View {
     let m = Metrics(size: size)
     return ZStack {
       Circle().fill(Self.faceColor)
-      blush(e, side: -1, m: m)
-      blush(e, side: 1, m: m)
-      // Eyes last: solid black sits above the blush on the rare overlap.
       eye(e, side: -1, m: m)
       eye(e, side: 1, m: m)
     }
@@ -180,35 +174,24 @@ struct CollapsedBotFaceView: View {
   }
 
   private func eye(_ e: CollapsedBotFace.Expression, side: CGFloat, m: Metrics) -> some View {
-    Capsule(style: .continuous)
+    Circle()
       .fill(Self.eyeColor)
-      .frame(width: m.eyeWidth, height: max(1, m.eyeHeight * e.eyeOpen))
+      .frame(width: m.eyeDiameter, height: max(1, m.eyeDiameter * e.eyeOpen))
       .position(
         x: size / 2 + side * m.eyeCenterX + e.glanceX * m.glanceShift,
         y: m.eyeCenterY + e.lookY * m.lookLift)
-  }
-
-  private func blush(_ e: CollapsedBotFace.Expression, side: CGFloat, m: Metrics) -> some View {
-    Ellipse()
-      .fill(Self.blushColor.opacity(0.35 + 0.4 * e.blushLevel))
-      .frame(width: m.blushWidth, height: m.blushHeight)
-      .position(x: size / 2 + side * m.blushCenterX, y: m.blushCenterY)
   }
 
   /// All geometry as fractions of the face size, so one constant set works
   /// for the 26 pt notch face and the 24 pt pill face alike.
   private struct Metrics {
     let size: CGFloat
-    var eyeWidth: CGFloat { size * 0.115 }
-    /// Exact 3:1 with the width — the character's defining proportion.
-    var eyeHeight: CGFloat { size * 0.346 }
+    var eyeDiameter: CGFloat { size * 0.16 }
     var eyeCenterX: CGFloat { size * 0.165 }
     var eyeCenterY: CGFloat { size * 0.48 }
-    var blushWidth: CGFloat { size * 0.19 }
-    var blushHeight: CGFloat { size * 0.115 }
-    var blushCenterX: CGFloat { size * 0.265 }
-    var blushCenterY: CGFloat { size * 0.655 }
-    var glanceShift: CGFloat { size * 0.05 }
-    var lookLift: CGFloat { size * 0.06 }
+    /// Round eyes read glances clearly, so they travel a bit further than
+    /// the old capsules did (still well inside the face circle).
+    var glanceShift: CGFloat { size * 0.07 }
+    var lookLift: CGFloat { size * 0.08 }
   }
 }
