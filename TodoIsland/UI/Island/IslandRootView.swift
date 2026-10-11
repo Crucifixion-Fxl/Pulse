@@ -384,12 +384,12 @@ struct IslandRootView: View {
         Color.clear.frame(width: hostPhysicalNotchWidth)
 
         if model.canUseActiveList {
-          // The bot character hugs the camera housing — the Dynamic Island
-          // idiom for live glyphs — leaving the outer end (and its corner
-          // radius) clear and the empty left region as a visual balance.
+          // The bot character sits at the island's right end. The 12pt
+          // trailing inset keeps it clear of the rounded corner cap so it
+          // never crosses the surface outline.
           collapsedBotFace
-            .padding(.leading, 5)
-            .frame(width: collapsedSideWidth, alignment: .leading)
+            .padding(.trailing, 12)
+            .frame(width: collapsedSideWidth, alignment: .trailing)
         } else {
           Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")
             .font(.system(size: 11, weight: .semibold))
@@ -415,7 +415,8 @@ struct IslandRootView: View {
         Text(model.authorization == .fullAccess ? "list.none" : "island.locked.accessibility"))
     } else {
       collapsedBotFace
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.trailing, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(collapsedAccessibilityLabel)
     }
