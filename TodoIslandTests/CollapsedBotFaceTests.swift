@@ -27,8 +27,23 @@ final class CollapsedBotFaceTests: XCTestCase {
         XCTAssertTrue((0.98...1.045).contains(e.faceScale), "faceScale \(e.faceScale)")
         XCTAssertTrue(abs(e.faceOffsetYFraction) <= 0.035, "offset \(e.faceOffsetYFraction)")
         XCTAssertTrue((-1.0...1.0).contains(e.glanceX), "glanceX \(e.glanceX)")
+        XCTAssertTrue(abs(e.eyeTilt) <= 0.16, "eyeTilt \(e.eyeTilt)")
       }
     }
+  }
+
+  func testEyesSwayRatherThanSitUpright() {
+    // The Grok Bot tilt: over time the tilt takes both signs and covers a
+    // meaningful swing — a permanently near-zero tilt is the "vacant"
+    // look this replaces.
+    var minTilt: CGFloat = .infinity
+    var maxTilt: CGFloat = -.infinity
+    sweep(from: 0, to: 12, step: 0.05, inputs: CollapsedBotFace.Inputs(isPlaying: false, isHovered: false)) { _, e in
+      minTilt = Swift.min(minTilt, e.eyeTilt)
+      maxTilt = Swift.max(maxTilt, e.eyeTilt)
+    }
+    XCTAssertLessThan(minTilt, -0.08)
+    XCTAssertGreaterThan(maxTilt, 0.08)
   }
 
   func testBlinkHappensButIsRare() {
@@ -92,6 +107,7 @@ final class CollapsedBotFaceTests: XCTestCase {
       sweep(inputs: CollapsedBotFace.Inputs(isPlaying: isPlaying, isHovered: true)) { _, e in
         XCTAssertEqual(e.eyeOpen, 1.25)
         XCTAssertEqual(e.lookY, -0.8)
+        XCTAssertEqual(e.eyeTilt, 0)
         XCTAssertEqual(e.faceScale, 1)
         XCTAssertEqual(e.faceOffsetYFraction, 0)
         XCTAssertEqual(e.glanceX, 0)
@@ -133,6 +149,8 @@ final class CollapsedBotFaceTests: XCTestCase {
       XCTAssertEqual(e.faceOffsetYFraction, 0)
       XCTAssertEqual(e.glanceX, 0)
       XCTAssertEqual(e.lookY, 0)
+      // A touch of resting tilt keeps even the static frame from staring.
+      XCTAssertEqual(e.eyeTilt, 0.06)
     }
   }
 }

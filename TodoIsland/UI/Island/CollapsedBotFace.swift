@@ -17,6 +17,10 @@ enum CollapsedBotFace {
     var eyeOpen: CGFloat
     /// -1...1, unit of the max glance shift.
     var glanceX: CGFloat
+    /// Eye rotation in radians — the Grok Bot trick: slanted capsules that
+    /// sway slowly and lean into glances are what read as "alive"; perfectly
+    /// upright circles read as vacant.
+    var eyeTilt: CGFloat
     /// -1...1, negative = up (hover lift).
     var lookY: CGFloat
     /// Beat/breath squash applied to the whole face.
@@ -32,9 +36,10 @@ enum CollapsedBotFace {
   static let beatBPM = 118.0
 
   static func expression(at t: TimeInterval, inputs: Inputs) -> Expression {
+    let glance = glanceUnit(at: t)
     if inputs.isHovered {
       return Expression(
-        eyeOpen: 1.25, glanceX: 0, lookY: -0.8, faceScale: 1,
+        eyeOpen: 1.25, glanceX: 0, eyeTilt: 0, lookY: -0.8, faceScale: 1,
         faceOffsetYFraction: 0)
     }
     // No sleep mode: the face stays awake whether or not music plays —
@@ -42,9 +47,13 @@ enum CollapsedBotFace {
     // except for the momentary blink envelope.
     let beat = inputs.isPlaying ? beatPulse(at: t) : 0
     let breath = CGFloat(sin(2 * .pi * t / 3.9))
+    // Grok Bot motion language: a slow tilt sway plus a lean into the
+    // current glance is what reads as "curious and alive".
+    let tilt = 0.10 * CGFloat(sin(2 * .pi * t / 5.7)) + 0.05 * glance
     return Expression(
       eyeOpen: blinkOpenFraction(at: t),
-      glanceX: glanceUnit(at: t),
+      glanceX: glance,
+      eyeTilt: tilt,
       lookY: 0,
       faceScale: 1 + 0.03 * beat + 0.012 * breath,
       faceOffsetYFraction: 0.012 * breath)
@@ -53,7 +62,7 @@ enum CollapsedBotFace {
   /// The single frame rendered under Reduce Motion or on a hidden surface.
   static func staticExpression(isPlaying: Bool) -> Expression {
     Expression(
-      eyeOpen: 1, glanceX: 0, lookY: 0, faceScale: 1,
+      eyeOpen: 1, glanceX: 0, eyeTilt: 0.06, lookY: 0, faceScale: 1,
       faceOffsetYFraction: 0)
   }
 
@@ -124,10 +133,10 @@ enum CollapsedBotFace {
 // MARK: - View
 
 /// The animated bot character shown in the collapsed island bar: a white
-/// face and two solid-black round eyes that glance, blink, and follow the
-/// beat — no mouth, no brows, no blush, no sleep mode, flat coloring. A
-/// blink momentarily flattens the circle into a slit; that is the only
-/// time the eyes change size.
+/// face and two solid-black slanted capsule eyes (Grok Bot style — roughly
+/// 3:1 pills) that sway, lean into glances, blink, and ride the beat — no
+/// mouth, no brows, no sleep mode, flat coloring. The tilt is the life of
+/// it: perfectly upright eyes read as vacant, swaying ones read as curious.
 struct CollapsedBotFaceView: View {
   /// Face diameter in points; the caller derives it from the bar height.
   let size: CGFloat
@@ -168,9 +177,10 @@ struct CollapsedBotFaceView: View {
   }
 
   private func eye(_ e: CollapsedBotFace.Expression, side: CGFloat, m: Metrics) -> some View {
-    Circle()
+    Capsule(style: .continuous)
       .fill(Self.eyeColor)
-      .frame(width: m.eyeDiameter, height: max(1, m.eyeDiameter * e.eyeOpen))
+      .frame(width: m.eyeWidth, height: max(1, m.eyeHeight * e.eyeOpen))
+      .rotationEffect(.radians(e.eyeTilt))
       .position(
         x: size / 2 + side * m.eyeCenterX + e.glanceX * m.glanceShift,
         y: m.eyeCenterY + e.lookY * m.lookLift)
@@ -180,13 +190,12 @@ struct CollapsedBotFaceView: View {
   /// for the 26 pt notch face and the 24 pt pill face alike.
   private struct Metrics {
     let size: CGFloat
-    var eyeDiameter: CGFloat { size * 0.24 }
-    /// Spread a touch wider than the small eyes sat, so the 1.5x circles
-    /// keep breathing room between them (gap 0.11D vs 0.09D).
+    /// Grok Bot proportions: a 3:1 vertical pill (their render script uses
+    /// length 18 / width 5.2 ≈ 3.5:1; 3:1 holds up better at 24 pt).
+    var eyeWidth: CGFloat { size * 0.115 }
+    var eyeHeight: CGFloat { size * 0.346 }
     var eyeCenterX: CGFloat { size * 0.175 }
     var eyeCenterY: CGFloat { size * 0.48 }
-    /// Round eyes read glances clearly, so they travel a bit further than
-    /// the old capsules did (still well inside the face circle).
     var glanceShift: CGFloat { size * 0.07 }
     var lookLift: CGFloat { size * 0.08 }
   }
