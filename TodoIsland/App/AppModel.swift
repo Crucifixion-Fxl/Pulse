@@ -111,7 +111,9 @@ final class AppModel: ObservableObject {
   /// The month whose data is currently in memory; a same-month day switch
   /// reuses it instead of re-running the EventKit queries.
   private var loadedMonthInterval: DateInterval?
-  private var isPointerInsideIsland = false
+  /// Published so the collapsed content can react (bot-face eyes widen)
+  /// while the pointer dwells on the island before it expands.
+  @Published private(set) var isPointerInsideIsland = false
   private var suspendedEditingFocus: SuspendedEditingFocus?
 
   private enum SuspendedEditingFocus {
