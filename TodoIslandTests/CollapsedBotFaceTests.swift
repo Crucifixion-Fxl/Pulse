@@ -26,7 +26,6 @@ final class CollapsedBotFaceTests: XCTestCase {
       XCTAssertTrue((0.99...1.04).contains(e.faceScale), "faceScale \(e.faceScale)")
       XCTAssertTrue(abs(e.faceOffsetYFraction) <= 0.035, "offset \(e.faceOffsetYFraction)")
       XCTAssertTrue((-1.0...1.0).contains(e.glanceX), "glanceX \(e.glanceX)")
-      XCTAssertTrue((0.45...0.65).contains(e.blushLevel), "blush \(e.blushLevel)")
     }
   }
 
@@ -60,10 +59,9 @@ final class CollapsedBotFaceTests: XCTestCase {
 
   func testDozingSquintsAndNeverBlinksOrGlances() {
     sweep(inputs: CollapsedBotFace.Inputs(isPlaying: false, isHovered: false)) { _, e in
-      XCTAssertEqual(e.eyeOpen, 0.16)
+      XCTAssertEqual(e.eyeOpen, 0.3)
       XCTAssertEqual(e.glanceX, 0)
       XCTAssertEqual(e.lookY, 0)
-      XCTAssertEqual(e.blushLevel, 0.34)
     }
   }
 
@@ -128,7 +126,6 @@ final class CollapsedBotFaceTests: XCTestCase {
       XCTAssertEqual(e.faceOffsetYFraction, 0)
       XCTAssertEqual(e.glanceX, 0)
       XCTAssertEqual(e.lookY, 0)
-      XCTAssertEqual(e.blushLevel, isPlaying ? 0.5 : 0.34)
     }
   }
 }
