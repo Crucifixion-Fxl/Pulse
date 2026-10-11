@@ -129,7 +129,7 @@ enum CollapsedBotFace {
 
 // MARK: - View
 
-/// The animated bot character shown in the collapsed island bar: a cream
+/// The animated bot character shown in the collapsed island bar: a white
 /// face and two solid-black round eyes that glance, blink, and follow the
 /// beat — no mouth, no brows, no blush, flat pastel coloring. Blink/squint
 /// is drawn as eye height, so a circle below ~0.33 openness flattens into a
@@ -143,7 +143,7 @@ struct CollapsedBotFaceView: View {
   /// static frame instead of subscribing to the 30 Hz timeline.
   let isAnimated: Bool
 
-  static let faceColor = Color(red: 0.965, green: 0.925, blue: 0.850)
+  static let faceColor = Color.white
   static let eyeColor = Color(red: 0.090, green: 0.090, blue: 0.100)
 
   var body: some View {
