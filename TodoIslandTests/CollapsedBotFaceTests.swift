@@ -20,12 +20,14 @@ final class CollapsedBotFaceTests: XCTestCase {
     }
   }
 
-  func testAwakeExpressionStaysWithinDesignBounds() {
-    sweep(inputs: CollapsedBotFace.Inputs(isPlaying: true, isHovered: false)) { _, e in
-      XCTAssertTrue((0.03...1.0).contains(e.eyeOpen), "eyeOpen \(e.eyeOpen)")
-      XCTAssertTrue((0.99...1.04).contains(e.faceScale), "faceScale \(e.faceScale)")
-      XCTAssertTrue(abs(e.faceOffsetYFraction) <= 0.035, "offset \(e.faceOffsetYFraction)")
-      XCTAssertTrue((-1.0...1.0).contains(e.glanceX), "glanceX \(e.glanceX)")
+  func testExpressionStaysWithinDesignBounds() {
+    for isPlaying in [false, true] {
+      sweep(inputs: CollapsedBotFace.Inputs(isPlaying: isPlaying, isHovered: false)) { _, e in
+        XCTAssertTrue((0.03...1.0).contains(e.eyeOpen), "eyeOpen \(e.eyeOpen)")
+        XCTAssertTrue((0.98...1.045).contains(e.faceScale), "faceScale \(e.faceScale)")
+        XCTAssertTrue(abs(e.faceOffsetYFraction) <= 0.035, "offset \(e.faceOffsetYFraction)")
+        XCTAssertTrue((-1.0...1.0).contains(e.glanceX), "glanceX \(e.glanceX)")
+      }
     }
   }
 
@@ -57,27 +59,32 @@ final class CollapsedBotFaceTests: XCTestCase {
     XCTAssertEqual(open, CollapsedBotFace.blinkOpenFraction(at: tMid), accuracy: 1e-12)
   }
 
-  func testDozingSquintsAndNeverBlinksOrGlances() {
+  func testPausedStaysAwakeAndAnimated() {
+    // No sleep mode: with music off the eyes hold full size apart from
+    // blinks, and glances still happen.
+    var sawBlink = false
+    var sawGlance = false
     sweep(inputs: CollapsedBotFace.Inputs(isPlaying: false, isHovered: false)) { _, e in
-      XCTAssertEqual(e.eyeOpen, 0.3)
-      XCTAssertEqual(e.glanceX, 0)
-      XCTAssertEqual(e.lookY, 0)
+      if e.eyeOpen < 0.5 { sawBlink = true }
+      if e.glanceX != 0 { sawGlance = true }
     }
+    XCTAssertTrue(sawBlink, "paused face never blinked")
+    XCTAssertTrue(sawGlance, "paused face never glanced")
   }
 
-  func testDozingBreathesDeeperThanAwake() {
+  func testPlaybackAddsBeatBounce() {
     func peakToPeak(_ inputs: CollapsedBotFace.Inputs) -> CGFloat {
       var min: CGFloat = .infinity
       var max: CGFloat = -.infinity
       sweep(from: 0, to: 10, step: 0.05, inputs: inputs) { _, e in
-        min = Swift.min(min, e.faceOffsetYFraction)
-        max = Swift.max(max, e.faceOffsetYFraction)
+        min = Swift.min(min, e.faceScale)
+        max = Swift.max(max, e.faceScale)
       }
       return max - min
     }
-    let dozing = peakToPeak(CollapsedBotFace.Inputs(isPlaying: false, isHovered: false))
-    let awake = peakToPeak(CollapsedBotFace.Inputs(isPlaying: true, isHovered: false))
-    XCTAssertGreaterThan(dozing, awake * 2)
+    let playing = peakToPeak(CollapsedBotFace.Inputs(isPlaying: true, isHovered: false))
+    let paused = peakToPeak(CollapsedBotFace.Inputs(isPlaying: false, isHovered: false))
+    XCTAssertGreaterThan(playing, paused * 2)
   }
 
   func testHoverOverridesIdleMotion() {
