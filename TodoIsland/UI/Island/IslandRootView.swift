@@ -384,7 +384,12 @@ struct IslandRootView: View {
         Color.clear.frame(width: hostPhysicalNotchWidth)
 
         if model.canUseActiveList {
-          Color.clear.frame(width: collapsedSideWidth)
+          // The bot character hugs the camera housing — the Dynamic Island
+          // idiom for live glyphs — leaving the outer end (and its corner
+          // radius) clear and the empty left region as a visual balance.
+          collapsedBotFace
+            .padding(.leading, 5)
+            .frame(width: collapsedSideWidth, alignment: .leading)
         } else {
           Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")
             .font(.system(size: 11, weight: .semibold))
@@ -409,7 +414,7 @@ struct IslandRootView: View {
       .accessibilityLabel(
         Text(model.authorization == .fullAccess ? "list.none" : "island.locked.accessibility"))
     } else {
-      Color.clear
+      collapsedBotFace
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(collapsedAccessibilityLabel)
@@ -1679,6 +1684,28 @@ struct IslandRootView: View {
 
   private var collapsedSideWidth: CGFloat {
     max(0, (islandSurfaceSize.width - hostPhysicalNotchWidth) / 2)
+  }
+
+  private var collapsedBotFace: some View {
+    CollapsedBotFaceView(
+      size: collapsedFaceSize,
+      isPlaying: model.nowPlaying?.isPlaying == true,
+      isHovered: model.isPointerInsideIsland,
+      isAnimated: collapsedFaceIsAnimated)
+  }
+
+  /// Face diameter for the collapsed bar: as large as the 3:1 eyes allow,
+  /// clamped so bounce + bob never exceed the bar height on any Mac
+  /// (notch safeAreaTop 38–48; non-notch bar 30).
+  private var collapsedFaceSize: CGFloat {
+    min(26, max(18, islandSurfaceSize.height - 6)).rounded()
+  }
+
+  /// The timeline only runs on a visible surface without Reduce Motion;
+  /// SwiftUI cannot see the auto-hidden panel's window alpha, so the gate
+  /// has to be explicit to keep the 30 Hz redraws from ticking invisibly.
+  private var collapsedFaceIsAnimated: Bool {
+    model.isCollapsedIslandVisible && !reduceMotion
   }
 
   private var expandedContentTopInset: CGFloat {
