@@ -13,7 +13,7 @@ enum CollapsedBotFace {
   }
 
   struct Expression: Equatable, Sendable {
-    /// 1 open, 0.3 dozing squint, 1.25 hover-widened.
+    /// 1 open, 1.25 hover-widened; dips only inside the blink envelope.
     var eyeOpen: CGFloat
     /// -1...1, unit of the max glance shift.
     var glanceX: CGFloat
@@ -37,23 +37,17 @@ enum CollapsedBotFace {
         eyeOpen: 1.25, glanceX: 0, lookY: -0.8, faceScale: 1,
         faceOffsetYFraction: 0)
     }
-    guard inputs.isPlaying else {
-      // Dozing: flat ovals (a round eye squashed to 0.3 keeps a clearly
-      // readable closed-eye line at 24 pt — 0.16 all but vanished under
-      // anti-aliasing), slow deep breathing, no blink or glance.
-      let breathe = CGFloat(sin(2 * .pi * t / 4.8))
-      return Expression(
-        eyeOpen: 0.3, glanceX: 0, lookY: 0,
-        faceScale: 1 + 0.015 * breathe,
-        faceOffsetYFraction: 0.03 * breathe)
-    }
-    let beat = beatPulse(at: t)
+    // No sleep mode: the face stays awake whether or not music plays —
+    // playback only adds the beat bounce. The eyes never change size
+    // except for the momentary blink envelope.
+    let beat = inputs.isPlaying ? beatPulse(at: t) : 0
+    let breath = CGFloat(sin(2 * .pi * t / 3.9))
     return Expression(
-      eyeOpen: blinkOpenFraction(at: t) * (1 - 0.06 * beat),
+      eyeOpen: blinkOpenFraction(at: t),
       glanceX: glanceUnit(at: t),
       lookY: 0,
-      faceScale: 1 + 0.03 * beat,
-      faceOffsetYFraction: 0.012 * CGFloat(sin(2 * .pi * t / 3.9)))
+      faceScale: 1 + 0.03 * beat + 0.012 * breath,
+      faceOffsetYFraction: 0.012 * breath)
   }
 
   /// The single frame rendered under Reduce Motion or on a hidden surface.
@@ -131,9 +125,9 @@ enum CollapsedBotFace {
 
 /// The animated bot character shown in the collapsed island bar: a white
 /// face and two solid-black round eyes that glance, blink, and follow the
-/// beat — no mouth, no brows, no blush, flat pastel coloring. Blink/squint
-/// is drawn as eye height, so a circle below ~0.33 openness flattens into a
-/// horizontal slit, which doubles as the dozing pose.
+/// beat — no mouth, no brows, no blush, no sleep mode, flat coloring. A
+/// blink momentarily flattens the circle into a slit; that is the only
+/// time the eyes change size.
 struct CollapsedBotFaceView: View {
   /// Face diameter in points; the caller derives it from the bar height.
   let size: CGFloat
@@ -186,8 +180,10 @@ struct CollapsedBotFaceView: View {
   /// for the 26 pt notch face and the 24 pt pill face alike.
   private struct Metrics {
     let size: CGFloat
-    var eyeDiameter: CGFloat { size * 0.16 }
-    var eyeCenterX: CGFloat { size * 0.165 }
+    var eyeDiameter: CGFloat { size * 0.24 }
+    /// Spread a touch wider than the small eyes sat, so the 1.5x circles
+    /// keep breathing room between them (gap 0.11D vs 0.09D).
+    var eyeCenterX: CGFloat { size * 0.175 }
     var eyeCenterY: CGFloat { size * 0.48 }
     /// Round eyes read glances clearly, so they travel a bit further than
     /// the old capsules did (still well inside the face circle).
