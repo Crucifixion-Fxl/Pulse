@@ -389,33 +389,40 @@ struct MusicPanelView: View {
     // Whole-point radii only: fractional blur re-rasterizes every frame.
     let glowRadius = CGFloat((3 + 5 * envelope).rounded())
 
-    // Every line renders the SAME two-layer structure — ghost underlay +
-    // printed overlay — so line changes are pure parameter animations
-    // (font size, opacity, mask fraction, scale, blur) and never a
-    // structural swap that would break the transition mid-flight.
+    // Fixed-size identities crossfading: fonts never interpolate (fractional
+    // point sizes re-wrap and jitter every frame), and the uniform row
+    // height keeps layout completely static — the handover is pure
+    // opacity/scale transforms, so it is smooth by construction.
     return VStack(spacing: 4) {
       ZStack {
+        // Small identity: every non-current line at a constant 16pt.
         Text(line.text)
-          .modifier(
-            AnimatableFontSize(
-              size: isCurrent ? 28 : 16, weight: isCurrent ? .semibold : .regular))
-          .foregroundStyle(.white.opacity(printing ? 0.28 : 0))
+          .font(.system(size: 16, weight: .regular))
+          .foregroundStyle(.white.opacity(depth.alpha))
           .multilineTextAlignment(.center)
-        Text(line.text)
-          .modifier(
-            AnimatableFontSize(
-              size: isCurrent ? 28 : 16, weight: isCurrent ? .semibold : .regular))
-          .foregroundStyle(.white.opacity(isCurrent ? 1 : depth.alpha))
-          .multilineTextAlignment(.center)
-          .shadow(
-            color: printing ? .white.opacity(0.35 + 0.3 * envelope) : .clear,
-            radius: printing ? glowRadius : 0)
-          .mask(printFillMask(fraction: printing ? fill : 1))
+          .scaleEffect(reduceMotion ? 1 : depth.scale)
+          .blur(radius: isCurrent || reduceMotion ? 0 : depth.blur)
+          .opacity(isCurrent ? 0 : 1)
+
+        // Big identity: the printing current line at a constant 28pt.
+        ZStack {
+          Text(line.text)
+            .font(.system(size: 28, weight: .semibold))
+            .foregroundStyle(.white.opacity(printing ? 0.28 : 0))
+            .multilineTextAlignment(.center)
+          Text(line.text)
+            .font(.system(size: 28, weight: .semibold))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .shadow(
+              color: printing ? .white.opacity(0.35 + 0.3 * envelope) : .clear,
+              radius: printing ? glowRadius : 0)
+            .mask(printFillMask(fraction: printing ? fill : 1))
+        }
+        .opacity(isCurrent ? 1 : 0)
+        .scaleEffect(isCurrent ? 1 : 0.86)
       }
-      // Depth recedes non-current lines only; the current line never
-      // scales or blurs.
-      .scaleEffect(isCurrent || reduceMotion ? 1 : depth.scale)
-      .blur(radius: isCurrent || reduceMotion ? 0 : depth.blur)
+      .frame(minHeight: 42, alignment: .center)
 
       if isCurrent, let translation = line.translation {
         Text(translation)
@@ -600,25 +607,6 @@ private struct FavoriteRow: View {
 }
 
 // MARK: - Lyric depth
-
-/// Interpolating font-size modifier: SwiftUI's `.font` is not animatable,
-/// so the 16 <-> 28pt current-line handover used to snap its row height in
-/// a single frame — the "flash" in line transitions. Animating the size
-/// through this modifier keeps the whole column's layout on the spring.
-private struct AnimatableFontSize: ViewModifier, @MainActor Animatable {
-  var size: CGFloat
-  var weight: Font.Weight
-
-  var animatableData: CGFloat {
-    get { size }
-    set { size = newValue }
-  }
-
-  func body(content: Content) -> some View {
-    content.font(.system(size: size, weight: weight))
-  }
-}
-
 
 /// Distance-based receding slots around the active line — folia-major's
 /// neighbour falloff retuned for the panel: near lines stay legible, far
