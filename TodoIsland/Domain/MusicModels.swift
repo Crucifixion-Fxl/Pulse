@@ -113,6 +113,66 @@ struct Lyrics: Equatable, Sendable {
   init(lines: [LyricLine]) {
     self.lines = lines
   }
+
+  /// Print window for a line: its own timestamp to the next line's, with a
+  /// fallback span for the final line (no next line exists to bound it).
+  func printWindow(for index: Int, fallbackSpan: TimeInterval = 4) -> (
+    start: TimeInterval, end: TimeInterval
+  ) {
+    guard lines.indices.contains(index) else { return (0, fallbackSpan) }
+    let start = lines[index].time
+    let next = index + 1 < lines.count ? lines[index + 1].time : start + fallbackSpan
+    return (start, max(start + 0.2, next))
+  }
+}
+
+/// Fume-style per-character print timing derived from line-level LRC
+/// timestamps — the same fallback folia-major uses when no word-level data
+/// exists: characters spread evenly across the line window, the printed
+/// count quantized like the canvas theme's typewriter stamps.
+struct LyricPrintTiming: Equatable, Sendable {
+  let charCount: Int
+  let start: TimeInterval
+  let end: TimeInterval
+
+  init(charCount: Int, start: TimeInterval, end: TimeInterval) {
+    self.charCount = max(0, charCount)
+    self.start = start
+    self.end = max(start + 0.2, end)
+  }
+
+  /// Continuous line progress, 0 before the window and 1 after.
+  func lineProgress(at t: TimeInterval) -> Double {
+    guard t > start else { return 0 }
+    guard t < end else { return 1 }
+    return (t - start) / (end - start)
+  }
+
+  /// Quantized stamps (Folia prints floor(p*n + 0.2) glyphs).
+  func printedCount(at t: TimeInterval) -> Int {
+    min(charCount, Int((lineProgress(at: t) * Double(charCount) + 0.2).rounded(.down)))
+  }
+
+  /// Smooth mask fraction so the frontier (and its glow) glides between
+  /// stamps instead of jumping one character at a time.
+  func fillFraction(at t: TimeInterval) -> Double {
+    guard charCount > 0 else { return lineProgress(at: t) >= 1 ? 1 : 0 }
+    let p = lineProgress(at: t)
+    guard p > 0, p < 1 else { return p }
+    let exact = p * Double(charCount)
+    return min(max(exact / Double(charCount), 0), 1)
+  }
+
+  /// Whole-line glow envelope: rises through the line, peaks at 80%
+  /// progress (Folia's delayed glow), decays to zero by the line's end.
+  func glowEnvelope(at t: TimeInterval) -> Double {
+    let p = lineProgress(at: t)
+    if p <= 0 || p >= 1 { return 0 }
+    if p <= 0.8 {
+      return sin(.pi * p / 1.6)
+    }
+    return max(0, 1 - (p - 0.8) / 0.2) * 0.6
+  }
 }
 
 /// Pure LRC parsing and lookup. No I/O — fully unit-testable.

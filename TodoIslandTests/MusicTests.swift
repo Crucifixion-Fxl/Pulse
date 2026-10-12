@@ -443,6 +443,62 @@ final class MusicTests: XCTestCase {
       paused.reanchored(to: t0.addingTimeInterval(10)).elapsed, 30, accuracy: 0.001)
   }
 
+  // MARK: Fume-style print timing
+
+  func testPrintTimingEvenDistributionAndQuantization() {
+    // 10 chars over [10, 20): one char per second, +0.2 phase lead.
+    let timing = LyricPrintTiming(charCount: 10, start: 10, end: 20)
+    XCTAssertEqual(timing.lineProgress(at: 5), 0)
+    XCTAssertEqual(timing.lineProgress(at: 25), 1)
+    XCTAssertEqual(timing.printedCount(at: 10), 0, "0.0*10+0.2 floors to 0")
+    XCTAssertEqual(timing.printedCount(at: 10.81), 1, "0.081*10+0.2 -> 1")
+    XCTAssertEqual(timing.printedCount(at: 15), 5)
+    XCTAssertEqual(timing.printedCount(at: 20), 10)
+    XCTAssertEqual(timing.printedCount(at: 100), 10, "clamped to charCount")
+  }
+
+  func testPrintTimingFillFractionIsMonotonicAndBounded() {
+    let timing = LyricPrintTiming(charCount: 7, start: 0, end: 7)
+    var last = -1.0
+    for step in 0...70 {
+      let f = timing.fillFraction(at: Double(step) / 10)
+      XCTAssertGreaterThanOrEqual(f, last)
+      XCTAssertTrue((0...1).contains(f))
+      last = f
+    }
+    XCTAssertEqual(timing.fillFraction(at: 7), 1)
+    // Empty line fills instantly with the window.
+    let empty = LyricPrintTiming(charCount: 0, start: 0, end: 3)
+    XCTAssertEqual(empty.fillFraction(at: 0.5), 0)
+    XCTAssertEqual(empty.fillFraction(at: 3), 1)
+  }
+
+  func testPrintTimingGlowEnvelopePeaksNear80Percent() {
+    let timing = LyricPrintTiming(charCount: 10, start: 0, end: 10)
+    XCTAssertEqual(timing.glowEnvelope(at: 0), 0)
+    XCTAssertEqual(timing.glowEnvelope(at: 10), 0)
+    let peak = timing.glowEnvelope(at: 8)
+    XCTAssertEqual(peak, 1, accuracy: 1e-9, "sin peaks at p=0.8")
+    XCTAssertGreaterThan(timing.glowEnvelope(at: 4), timing.glowEnvelope(at: 1))
+    XCTAssertGreaterThan(timing.glowEnvelope(at: 9), 0)
+    XCTAssertLessThan(timing.glowEnvelope(at: 9.5), timing.glowEnvelope(at: 9))
+  }
+
+  func testLyricsPrintWindowUsesNextLineAndFallsBackAtTheEnd() {
+    let lyrics = Lyrics(timedLines: [(0, "a"), (10, "b"), (30, "c")])
+    XCTAssertEqual(lyrics.printWindow(for: 0).end, 10)
+    XCTAssertEqual(lyrics.printWindow(for: 1).end, 30)
+    // Final line: no successor -> fallback span, never shorter than 0.2s.
+    let last = lyrics.printWindow(for: 2, fallbackSpan: 4)
+    XCTAssertEqual(last.start, 30)
+    XCTAssertEqual(last.end, 34)
+    // A degenerate next-line timestamp still yields a printable window.
+    let tight = Lyrics(timedLines: [(0, "a"), (0.05, "b")])
+    XCTAssertLessThan(tight.printWindow(for: 0).end - tight.printWindow(for: 0).start, 0.21)
+    XCTAssertGreaterThanOrEqual(
+      tight.printWindow(for: 0).end - tight.printWindow(for: 0).start, 0.2)
+  }
+
   private var base: NowPlayingTrack {
     NowPlayingTrack(
       title: "T", artist: "A", album: "L", artworkData: nil,
