@@ -165,8 +165,12 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       isChangingHostDisplay = false
     }
 
-    let pointerDisplayID = DisplaySupport.screenContainingPointer()?.todoIslandDisplayID
-    let fallbackDisplayID = DisplaySupport.fallbackScreen()?.todoIslandDisplayID
+    // One screens scan serves both: fallback is pointer ?? main ?? first,
+    // exactly fallbackScreen()'s chain without re-finding the pointer.
+    let pointerScreen = DisplaySupport.screenContainingPointer()
+    let pointerDisplayID = pointerScreen?.todoIslandDisplayID
+    let fallbackDisplayID = (pointerScreen ?? NSScreen.main ?? NSScreen.screens.first)?
+      .todoIslandDisplayID
     guard
       let change = hostDisplayTracker.observe(
         pointerDisplayID: pointerDisplayID,
