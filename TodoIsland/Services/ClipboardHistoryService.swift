@@ -40,6 +40,10 @@ final class ClipboardHistoryService {
     timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.poll() }
     }
+    // Push the persisted history right away: the callback is wired by now,
+    // and without this delivery the panel stays empty until the first NEW
+    // copy fires poll() — the "only shows history after I copy" bug.
+    onItemsChanged(items)
   }
 
   // MARK: - Capture
