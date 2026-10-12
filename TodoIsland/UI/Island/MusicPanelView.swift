@@ -405,12 +405,16 @@ struct MusicPanelView: View {
       }
       .frame(minHeight: 42, alignment: .center)
 
-      if isCurrent, let translation = line.translation {
+      // Translation slots are reserved permanently: inserting/removing the
+      // subline on handover changed the row height for one frame, which
+      // shifted the whole column mid-spring. Pure opacity now.
+      if let translation = line.translation {
         Text(translation)
           .font(.system(size: 13, weight: .medium))
           .foregroundStyle(ReUITheme.muted)
           .multilineTextAlignment(.center)
-          .transition(.opacity)
+          .opacity(isCurrent ? 1 : 0)
+          .accessibilityHidden(!isCurrent)
       }
     }
     .frame(maxWidth: .infinity)
