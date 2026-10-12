@@ -226,6 +226,11 @@ struct AIUsagePanelView: View {
     let spinUp: Bool
 
     @State private var startedAt: Date?
+    /// The .animation schedule ticks at display refresh forever once
+    /// mounted; after the spin clamps it renders the identical final value
+    /// on every tick for nothing. Flipping to the static branch (the same
+    /// digits the ticking branch clamps to) parks the timeline.
+    @State private var spinFinished = false
 
     private static let span = 10_000
     private static let duration: TimeInterval = 1.4
@@ -242,7 +247,7 @@ struct AIUsagePanelView: View {
 
     var body: some View {
       Group {
-        if spinUp, let started = startedAt, value > Self.span {
+        if spinUp, let started = startedAt, value > Self.span, !spinFinished {
           TimelineView(.animation) { timeline in
             let raw = timeline.date.timeIntervalSince(started) / Self.duration
             Self.digits(
@@ -255,6 +260,11 @@ struct AIUsagePanelView: View {
       }
       .onAppear {
         if startedAt == nil { startedAt = Date() }
+        guard spinUp, value > Self.span, !spinFinished else { return }
+        Task {
+          try? await Task.sleep(for: .seconds(Self.duration + 0.05))
+          spinFinished = true
+        }
       }
     }
 
