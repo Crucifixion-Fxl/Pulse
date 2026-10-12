@@ -51,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     Task {
       await model.start()
+      // The collapsed bar's Codex quota chip needs data before the first
+      // expansion; the throttle keeps this to one fetch per five minutes.
+      model.refreshAIUsage()
       islandController?.show()
     }
   }

@@ -25,6 +25,16 @@ enum AIUsageVendor: String, CaseIterable, Hashable, Sendable {
     case .openAI: "ai.vendor.openai"
     }
   }
+
+  /// Official brand mark bundled as a template vector in the asset
+  /// catalog; rendered small on tiles and chips, tinted with `accent`.
+  var iconName: String {
+    switch self {
+    case .zhipuGLM: "VendorZAI"
+    case .anthropic: "VendorClaude"
+    case .openAI: "VendorOpenAI"
+    }
+  }
 }
 
 enum AIQuotaStatus: Hashable, Sendable {
