@@ -134,6 +134,12 @@ enum DisplaySupport {
 
   static func shouldHideFallbackInFullScreen(_ screen: NSScreen) -> Bool {
     guard screen.safeAreaInsets.top <= 0 else { return false }
+    return FullScreenVerdictCache.verdict(for: screen) {
+      scanForFullScreenCover(screen)
+    }
+  }
+
+  private static func scanForFullScreenCover(_ screen: NSScreen) -> Bool {
     let screenNumberKey = NSDeviceDescriptionKey("NSScreenNumber")
     guard let screenNumber = screen.deviceDescription[screenNumberKey] as? NSNumber else {
       return false
@@ -191,6 +197,71 @@ extension NSScreen {
 /// The 50 ms pointer poll resolves every screen's UUID each tick, which
 /// made CGDisplayCreateUUIDFromDisplayID + CFUUIDCreateString the hottest
 /// calls in the idle profile. NSScreen is MainActor-isolated, so is this.
+/// Fullscreen-hide verdicts keyed by everything the scan can report on:
+/// the frontmost app, the active space (generation), and the display. The
+/// 1s watchdog and the 20Hz auto-hide activation-zone path both called
+/// shouldHideFallbackInFullScreen, each running NSWorkspace enumeration +
+/// a full CGWindowListCopyWindowInfo scan. Entering or leaving fullscreen
+/// always switches the active space, and the heuristic itself targets the
+/// frontmost app — so key changes cover every verdict the scan can flip,
+/// and the steady state is a dictionary hit.
+@MainActor
+enum FullScreenVerdictCache {
+  private struct Key: Hashable {
+    let frontmost: String?
+    let displayID: CGDirectDisplayID
+    let generation: Int
+  }
+
+  private static var generation = 0
+  private static var cached: [Key: Bool] = [:]
+  private static var observes = false
+
+  static func verdict(for screen: NSScreen, compute: () -> Bool) -> Bool {
+    installObserversIfNeeded()
+    let key = Key(
+      frontmost: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+      displayID: displayNumberOf(screen),
+      generation: generation)
+    if let cached = cached[key] { return cached }
+    let value = compute()
+    cached[key] = value
+    return value
+  }
+
+  static func invalidate() {
+    generation += 1
+    cached.removeAll()
+  }
+
+  private static func displayNumberOf(_ screen: NSScreen) -> CGDirectDisplayID {
+    let key = NSDeviceDescriptionKey("NSScreenNumber")
+    guard let number = screen.deviceDescription[key] as? NSNumber else { return 0 }
+    return CGDirectDisplayID(number.uint32Value)
+  }
+
+  private static func installObserversIfNeeded() {
+    guard !observes else { return }
+    observes = true
+    NotificationCenter.default.addObserver(
+      forName: NSApplication.didChangeScreenParametersNotification,
+      object: nil, queue: .main
+    ) { _ in
+      MainActor.assumeIsolated { invalidate() }
+    }
+    for name in [
+      NSWorkspace.activeSpaceDidChangeNotification,
+      NSWorkspace.didActivateApplicationNotification,
+    ] {
+      NSWorkspace.shared.notificationCenter.addObserver(
+        forName: name, object: nil, queue: .main
+      ) { _ in
+        MainActor.assumeIsolated { invalidate() }
+      }
+    }
+  }
+}
+
 @MainActor
 enum DisplayIDCache {
   private static var map: [CGDirectDisplayID: String] = [:]
