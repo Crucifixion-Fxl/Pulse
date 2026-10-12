@@ -1681,13 +1681,11 @@ struct IslandRootView: View {
   }
 
   private var hostDisplayHasNotch: Bool {
-    guard let screen = DisplaySupport.screen(id: model.hostDisplayID) else { return false }
-    return DisplaySupport.metrics(for: screen).hasPhysicalNotch
+    DisplaySupport.cachedMetrics(for: model.hostDisplayID)?.hasPhysicalNotch ?? false
   }
 
   private var hostPhysicalNotchWidth: CGFloat {
-    guard let screen = DisplaySupport.screen(id: model.hostDisplayID) else { return 0 }
-    return DisplaySupport.metrics(for: screen).physicalNotchWidth
+    DisplaySupport.cachedMetrics(for: model.hostDisplayID)?.physicalNotchWidth ?? 0
   }
 
   private var expandedTopShoulderDepth: CGFloat { 8 }
@@ -1730,14 +1728,16 @@ struct IslandRootView: View {
   }
 
   private var expandedContentTopInset: CGFloat {
-    guard let screen = DisplaySupport.screen(id: model.hostDisplayID) else { return 16 }
-    return max(16, DisplaySupport.metrics(for: screen).safeAreaTop + 6)
+    guard let metrics = DisplaySupport.cachedMetrics(for: model.hostDisplayID) else { return 16 }
+    return max(16, metrics.safeAreaTop + 6)
   }
 
   private var islandSurfaceSize: CGSize {
-    guard let screen = DisplaySupport.screen(id: model.hostDisplayID) else { return .zero }
+    guard let metrics = DisplaySupport.cachedMetrics(for: model.hostDisplayID) else {
+      return .zero
+    }
     return DisplayGeometryCalculator.geometry(
-      for: DisplaySupport.metrics(for: screen),
+      for: metrics,
       expandedContentHeight: model.expandedContentHeight
     )
       .size(for: model.islandState)
