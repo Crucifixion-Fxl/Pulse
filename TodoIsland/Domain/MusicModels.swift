@@ -22,6 +22,40 @@ struct NowPlayingTrack: Equatable, Sendable {
     return min(max(elapsed / duration, 0), 1)
   }
 
+  /// True when publishing `self` over `previous` would change nothing any
+  /// consumer renders: every rendered field equal, and elapsed within
+  /// `tolerance` of the linear projection of `previous`'s anchor — so an
+  /// on-schedule mediaremoted tick is suppressible, while a seek or pause
+  /// (isPlaying/playbackRate flip, or an elapsed jump) still publishes.
+  func isEquivalentUpdate(to previous: NowPlayingTrack?, tolerance: TimeInterval = 0.5) -> Bool {
+    guard let previous else { return false }
+    guard
+      title == previous.title,
+      artist == previous.artist,
+      album == previous.album,
+      artworkData == previous.artworkData,
+      isPlaying == previous.isPlaying,
+      playerBundleID == previous.playerBundleID,
+      abs(playbackRate - previous.playbackRate) <= 0.01,
+      abs(duration - previous.duration) <= 0.5
+    else { return false }
+    let projected = previous.isPlaying
+      ? previous.elapsed
+        + max(receivedAt.timeIntervalSince(previous.receivedAt), 0) * previous.playbackRate
+      : previous.elapsed
+    return abs(elapsed - projected) <= tolerance
+  }
+
+  /// Copy with the anchor advanced to `date` along the playback rate —
+  /// used when re-anchoring the UI after suppressed publishes.
+  func reanchored(to date: Date) -> NowPlayingTrack {
+    var copy = self
+    let dt = max(date.timeIntervalSince(receivedAt), 0)
+    copy.elapsed = isPlaying ? elapsed + dt * playbackRate : elapsed
+    copy.receivedAt = date
+    return copy
+  }
+
   /// Identity that should (re)trigger a lyrics fetch. Elapsed and rate
   /// jitter must never change it.
   var lyricsIdentity: LyricsIdentity {

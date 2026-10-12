@@ -107,8 +107,16 @@ final class NowPlayingController: NowPlayingControlling {
   func setPanelActive(_ active: Bool) {
     // The helper polls whenever something plays — panel visibility no
     // longer gates it (a missed "active" command froze the elapsed updates
-    // before). Kept for protocol compatibility.
+    // before). It now gates the publish side instead: see shouldPublish.
     desiredActive = active
+    // Re-anchor on open: while the panel was hidden, equivalent snapshots
+    // were suppressed, so push one extrapolated to now — exactly as fresh
+    // as the next helper line would have made it.
+    if active, let track = lastTrack {
+      let reanchored = track.reanchored(to: Date())
+      lastTrack = reanchored
+      onUpdate?(reanchored)
+    }
   }
 
   /// Commands travel as signals — kill from the sandboxed parent to its
@@ -261,8 +269,31 @@ final class NowPlayingController: NowPlayingControlling {
       // Unchanged artwork was omitted from the line; restore the copy.
       track?.artworkData = lastArtworkData
     }
+    let previous = lastTrack
+    // The anchor advances even when the publish is suppressed, so the
+    // projection always works from the freshest snapshot.
     lastTrack = track
+    guard Self.shouldPublish(previous: previous, next: track, panelVisible: desiredActive) else {
+      return
+    }
     onUpdate?(track)
+  }
+
+  /// Publish gate: while the music panel is visible every snapshot flows
+  /// (the progress bar has no TimelineView — it advances purely on these
+  /// publishes). While hidden, only snapshots that change something any
+  /// consumer renders get through: idle→idle `{}` ticks and on-schedule
+  /// re-anchors are dropped; track changes, play/pause, and seeks publish
+  /// with the same <=0.5s latency as before.
+  static func shouldPublish(
+    previous: NowPlayingTrack?, next: NowPlayingTrack?, panelVisible: Bool
+  ) -> Bool {
+    if panelVisible { return true }
+    switch (previous, next) {
+    case (nil, nil): return false
+    case (nil, _?), (_, nil): return true
+    case let (previous?, next?): return !next.isEquivalentUpdate(to: previous)
+    }
   }
 
   // MARK: Sandboxed transport diagnostic
