@@ -309,7 +309,9 @@ struct MusicPanelView: View {
   ) -> some View {
     Group {
       if track.isPlaying {
-        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
+        // 0.1s drives only line progression and the scroll trigger; the
+        // 30Hz print sweep lives inside the single current-line row.
+        TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
           lyricColumn(
             lyrics: lyrics, track: track,
             elapsed: Self.liveElapsed(track: track, at: timeline.date))
@@ -338,11 +340,11 @@ struct MusicPanelView: View {
 
     return ScrollViewReader { proxy in
       ScrollView(showsIndicators: false) {
-        LazyVStack(spacing: 12) {
+        VStack(spacing: 12) {
           ForEach(Array(lyrics.lines.enumerated()), id: \.element.id) { index, line in
             lyricLine(
               line, index: index, currentIndex: currentIndex,
-              lyrics: lyrics, track: track, elapsed: elapsed)
+              lyrics: lyrics, track: track)
           }
         }
         .padding(.vertical, 110)
@@ -371,11 +373,9 @@ struct MusicPanelView: View {
     index: Int,
     currentIndex: Int?,
     lyrics: Lyrics,
-    track: NowPlayingTrack,
-    elapsed: TimeInterval
+    track: NowPlayingTrack
   ) -> some View {
     let isCurrent = index == currentIndex
-    let printing = isCurrent && !reduceMotion
     let distance = currentIndex.map { abs($0 - index) } ?? Int.max
     let depth = LyricDepth(distance: distance)
 
@@ -384,10 +384,6 @@ struct MusicPanelView: View {
       fallbackSpan: max(4, min(8, track.duration - line.time)))
     let timing = LyricPrintTiming(
       charCount: line.text.count, start: window.start, end: window.end)
-    let fill = timing.fillFraction(at: elapsed - model.lyricOffset)
-    let envelope = timing.glowEnvelope(at: elapsed - model.lyricOffset)
-    // Whole-point radii only: fractional blur re-rasterizes every frame.
-    let glowRadius = CGFloat((3 + 5 * envelope).rounded())
 
     // Fixed-size identities crossfading: fonts never interpolate (fractional
     // point sizes re-wrap and jitter every frame), and the uniform row
@@ -405,22 +401,7 @@ struct MusicPanelView: View {
           .opacity(isCurrent ? 0 : 1)
 
         // Big identity: the printing current line at a constant 28pt.
-        ZStack {
-          Text(line.text)
-            .font(.system(size: 28, weight: .semibold))
-            .foregroundStyle(.white.opacity(printing ? 0.28 : 0))
-            .multilineTextAlignment(.center)
-          Text(line.text)
-            .font(.system(size: 28, weight: .semibold))
-            .foregroundStyle(.white)
-            .multilineTextAlignment(.center)
-            .shadow(
-              color: printing ? .white.opacity(0.35 + 0.3 * envelope) : .clear,
-              radius: printing ? glowRadius : 0)
-            .mask(printFillMask(fraction: printing ? fill : 1))
-        }
-        .opacity(isCurrent ? 1 : 0)
-        .scaleEffect(isCurrent ? 1 : 0.86)
+        printingLine(line, isCurrent: isCurrent, timing: timing, track: track)
       }
       .frame(minHeight: 42, alignment: .center)
 
@@ -445,6 +426,52 @@ struct MusicPanelView: View {
     .animation(reduceMotion ? nil : .smooth(duration: 0.6), value: isCurrent)
     .animation(reduceMotion ? nil : .smooth(duration: 0.6), value: distance)
     .accessibilityAddTraits(isCurrent ? .isSelected : [])
+  }
+
+  /// The current line's printing pair. Its 30Hz timeline is scoped here so
+  /// the print sweep re-evaluates one row, not the whole column — the
+  /// whole-column re-render during scroll springs read as a flash.
+  @ViewBuilder
+  private func printingLine(
+    _ line: LyricLine, isCurrent: Bool, timing: LyricPrintTiming, track: NowPlayingTrack
+  ) -> some View {
+    if track.isPlaying {
+      TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
+        let t = Self.liveElapsed(track: track, at: timeline.date) - model.lyricOffset
+        printingLineContent(
+          line, isCurrent: isCurrent,
+          fill: timing.fillFraction(at: t), envelope: timing.glowEnvelope(at: t))
+      }
+    } else {
+      let t = Self.liveElapsed(track: track, at: Date()) - model.lyricOffset
+      printingLineContent(
+        line, isCurrent: isCurrent,
+        fill: timing.fillFraction(at: t), envelope: timing.glowEnvelope(at: t))
+    }
+  }
+
+  private func printingLineContent(
+    _ line: LyricLine, isCurrent: Bool, fill: Double, envelope: Double
+  ) -> some View {
+    let printing = isCurrent && !reduceMotion
+    // Whole-point radii only: fractional blur re-rasterizes every frame.
+    let glowRadius = CGFloat((3 + 5 * envelope).rounded())
+    return ZStack {
+      Text(line.text)
+        .font(.system(size: 28, weight: .semibold))
+        .foregroundStyle(.white.opacity(printing ? 0.28 : 0))
+        .multilineTextAlignment(.center)
+      Text(line.text)
+        .font(.system(size: 28, weight: .semibold))
+        .foregroundStyle(.white)
+        .multilineTextAlignment(.center)
+        .shadow(
+          color: printing ? .white.opacity(0.35 + 0.3 * envelope) : .clear,
+          radius: printing ? glowRadius : 0)
+        .mask(printFillMask(fraction: printing ? fill : 1))
+    }
+    .opacity(isCurrent ? 1 : 0)
+    .scaleEffect(isCurrent ? 1 : 0.86)
   }
 
   /// Hard-edged left-to-right reveal for the printed overlay, with a soft
