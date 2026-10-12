@@ -19,7 +19,9 @@
 "island.locked.accessibility" = "Authorize iCloud Reminders to see your lists.";
 "island.all-done" = "All Done";
 "island.collapsed.accessibility" = "List: %@. %d reminders remaining.";
-"island.codex.accessibility" = "Codex quota, %d%% used.";
+"island.quota.accessibility" = "%1$@ quota, %2$d%% used.";
+"ai.quota.island-picker" = "Collapsed island · %@";
+"ai.quota.island-picker.accessibility" = "Choose which quota the collapsed island shows";
 
 "setup.visibility.title" = "Choose Collapsed Island Visibility";
 "setup.visibility.detail" = "You can change this later in Settings.";
