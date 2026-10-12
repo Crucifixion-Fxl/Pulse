@@ -10,9 +10,9 @@ struct CollapsedCodexQuotaView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var appeared = false
 
-  private static let ringSize: CGFloat = 16
-  private static let ringLineWidth: CGFloat = 2.2
-  private static let logoSize: CGFloat = 8
+  private static let ringSize: CGFloat = 20
+  private static let ringLineWidth: CGFloat = 2.5
+  private static let logoSize: CGFloat = 10
 
   /// Same semantic palette as the AI usage panel's quota bars: neutral
   /// white until 80%, amber past it, red past 95%.
