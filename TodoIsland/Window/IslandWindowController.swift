@@ -243,12 +243,11 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     appliedState = state
     // Published values arrive before the model's stored property changes.
     appliedExpandedContentHeight = expandedContentHeight ?? model.expandedContentHeight
-    guard let screen = DisplaySupport.screen(id: displayID) else {
+    guard let metrics = DisplaySupport.cachedMetrics(for: displayID) else {
       panel.orderOut(nil)
       return
     }
 
-    let metrics = DisplaySupport.metrics(for: screen)
     let geometry = DisplayGeometryCalculator.geometry(
       for: metrics, expandedContentHeight: appliedExpandedContentHeight)
     let frame = NSRect(

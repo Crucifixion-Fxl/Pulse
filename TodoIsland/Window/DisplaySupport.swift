@@ -108,6 +108,20 @@ enum DisplaySupport {
     return id == nil ? fallbackScreen() : nil
   }
 
+  /// Screen metrics for a display id, cached until screen parameters
+  /// change (same invalidation as the UUID cache). Body evals and the
+  /// window-controller tick queried the host screen several times each;
+  /// these are now dictionary hits. A nil id stays live — the fallback
+  /// screen depends on pointer and focus, which must not be cached.
+  static func cachedMetrics(for id: String?) -> DisplayMetrics? {
+    guard let id else { return screen(id: nil).map(metrics) }
+    if let cached = DisplayIDCache.metricsByID[id] { return cached }
+    guard let screen = screen(id: id) else { return nil }
+    let value = metrics(for: screen)
+    DisplayIDCache.metricsByID[id] = value
+    return value
+  }
+
   static func metrics(for screen: NSScreen) -> DisplayMetrics {
     DisplayMetrics(
       frame: screen.frame,
@@ -180,6 +194,9 @@ extension NSScreen {
 @MainActor
 enum DisplayIDCache {
   private static var map: [CGDirectDisplayID: String] = [:]
+  /// DisplayMetrics keyed by display UUID, invalidated together with the
+  /// UUID map (any parameter change can move frames or the notch).
+  static var metricsByID: [String: DisplayMetrics] = [:]
   private static var observesScreenChanges = false
 
   static func uuidString(for id: CGDirectDisplayID) -> String? {
@@ -193,6 +210,7 @@ enum DisplayIDCache {
 
   static func invalidate() {
     map.removeAll()
+    metricsByID.removeAll()
   }
 
   private static func installInvalidationObserver() {
