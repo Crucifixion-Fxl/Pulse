@@ -107,7 +107,10 @@ final class AppModel: ObservableObject {
   /// jitter must never re-trigger a fetch.
   private var currentLyricsIdentity: LyricsIdentity?
   private var lyricsTask: Task<Void, Never>?
-  private var internalPlayerCancellable: Set<AnyCancellable> = []
+  /// The single internal-player bridge is subscribed in start() and lives
+  /// for the process lifetime; exposed read-only so tests can assert that
+  /// collapse/suspend cycles never add duplicates.
+  private(set) var internalPlayerCancellable: Set<AnyCancellable> = []
   private var refreshTask: Task<Void, Never>?
   private var scheduleTask: Task<Void, Never>?
   private var hoverTask: Task<Void, Never>?
@@ -724,13 +727,6 @@ final class AppModel: ObservableObject {
     }
     islandState = .collapsed
     reconcileCollapsedIslandVisibility(hideImmediately: true)
-    // Bridge internal player's state into the panel continuously.
-    InternalPlayerService.shared.objectWillChange.sink { [weak self] _ in
-      self?.syncInternalPlayer()
-    }.store(in: &internalPlayerCancellable)
-    InternalPlayerService.shared.onTrackEnded = { [weak self] in
-      self?.skipInternal(delta: 1)
-    }
   }
 
   func setCollapsedIslandVisibility(_ visibility: CollapsedIslandVisibility) {
@@ -1038,13 +1034,6 @@ final class AppModel: ObservableObject {
 
     islandState = .collapsed
     reconcileCollapsedIslandVisibility(hideImmediately: true)
-    // Bridge internal player's state into the panel continuously.
-    InternalPlayerService.shared.objectWillChange.sink { [weak self] _ in
-      self?.syncInternalPlayer()
-    }.store(in: &internalPlayerCancellable)
-    InternalPlayerService.shared.onTrackEnded = { [weak self] in
-      self?.skipInternal(delta: 1)
-    }
   }
 
   private var canAutoHideCollapsedIsland: Bool {

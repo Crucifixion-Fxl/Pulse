@@ -21,6 +21,25 @@ final class CollapsedIslandVisibilityTests: XCTestCase {
     XCTAssertEqual(model.activeListID, VisibilityTestReminderStore.listID)
   }
 
+  /// The internal-player bridge is subscribed exactly once; collapse and
+  /// suspend cycles must not accumulate duplicate objectWillChange sinks
+  /// (each duplicate re-ran syncInternalPlayer on every 0.25s tick).
+  @MainActor
+  func testCollapseCyclesDoNotAccumulateInternalPlayerBridges() async {
+    let defaults = makeDefaults()
+    defer { clear(defaults) }
+
+    let model = AppModel(store: VisibilityTestReminderStore(), defaults: defaults)
+    await model.start()
+    XCTAssertEqual(model.internalPlayerCancellable.count, 1)
+
+    for _ in 0..<3 {
+      model.pinIsland()
+      model.collapseIsland()
+    }
+    XCTAssertEqual(model.internalPlayerCancellable.count, 1)
+  }
+
   @MainActor
   func testVisibilityChoicePersists() async {
     let defaults = makeDefaults()
