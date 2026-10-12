@@ -161,11 +161,51 @@ enum DisplaySupport {
 }
 
 extension NSScreen {
+  /// Every caller lives on the main actor (screen enumeration from UI code
+  /// and timers); the explicit annotation keeps the UUID cache lock-free.
+  @MainActor
   var todoIslandDisplayID: String? {
     let key = NSDeviceDescriptionKey("NSScreenNumber")
     guard let number = deviceDescription[key] as? NSNumber else { return nil }
-    let displayID = CGDirectDisplayID(number.uint32Value)
-    guard let uuid = CGDisplayCreateUUIDFromDisplayID(displayID) else { return nil }
-    return CFUUIDCreateString(nil, uuid.takeRetainedValue()) as String
+    return DisplayIDCache.uuidString(for: CGDirectDisplayID(number.uint32Value))
+  }
+}
+
+/// CGDirectDisplayID → UUID string, cached for the process lifetime: a
+/// display's UUID is stable while it stays connected, and the cache is
+/// invalidated on screen-parameter changes (unplug/replug/reconfigure).
+/// The 50 ms pointer poll resolves every screen's UUID each tick, which
+/// made CGDisplayCreateUUIDFromDisplayID + CFUUIDCreateString the hottest
+/// calls in the idle profile. NSScreen is MainActor-isolated, so is this.
+@MainActor
+enum DisplayIDCache {
+  private static var map: [CGDirectDisplayID: String] = [:]
+  private static var observesScreenChanges = false
+
+  static func uuidString(for id: CGDirectDisplayID) -> String? {
+    if let cached = map[id] { return cached }
+    guard let uuid = CGDisplayCreateUUIDFromDisplayID(id) else { return nil }
+    let string = CFUUIDCreateString(nil, uuid.takeRetainedValue()) as String
+    map[id] = string
+    installInvalidationObserver()
+    return string
+  }
+
+  static func invalidate() {
+    map.removeAll()
+  }
+
+  private static func installInvalidationObserver() {
+    guard !observesScreenChanges else { return }
+    observesScreenChanges = true
+    NotificationCenter.default.addObserver(
+      forName: NSApplication.didChangeScreenParametersNotification,
+      object: nil,
+      queue: .main
+    ) { _ in
+      MainActor.assumeIsolated {
+        invalidate()
+      }
+    }
   }
 }
