@@ -381,17 +381,19 @@ struct AIUsagePanelView: View {
 
   /// Chooses whose quota the collapsed island's chip shows. One compact
   /// menu on the section header — the cards themselves stay untouched.
+  /// Flat button list (checkmark on the current pick) so switching is a
+  /// single open + click, with no submenu level.
   private var islandVendorPicker: some View {
     Menu {
-      Picker(
-        "ai.quota.island-picker.accessibility",
-        selection: Binding(
-          get: { model.collapsedQuotaVendor },
-          set: { model.setCollapsedQuotaVendor($0) }
-        )
-      ) {
-        ForEach(AIUsageVendor.allCases, id: \.self) { vendor in
-          Text(LocalizedStringKey(vendor.localizedKey)).tag(vendor)
+      ForEach(AIUsageVendor.allCases, id: \.self) { vendor in
+        Button {
+          model.setCollapsedQuotaVendor(vendor)
+        } label: {
+          if vendor == model.collapsedQuotaVendor {
+            Label(LocalizedStringKey(vendor.localizedKey), systemImage: "checkmark")
+          } else {
+            Text(LocalizedStringKey(vendor.localizedKey))
+          }
         }
       }
     } label: {
