@@ -343,6 +343,121 @@ final class MusicTests: XCTestCase {
     )
   }
 
+  // MARK: Publish gate
+
+  @MainActor
+  func testShouldPublishGateDropsIdleTicksAndKeepsRealChanges() {
+    // Panel visible: everything flows (progress bar advances on publishes).
+    XCTAssertTrue(
+      NowPlayingController.shouldPublish(previous: nil, next: nil, panelVisible: true))
+
+    // Hidden, idle: {} -> {} suppressed; transitions publish.
+    XCTAssertFalse(
+      NowPlayingController.shouldPublish(previous: nil, next: nil, panelVisible: false))
+    XCTAssertTrue(
+      NowPlayingController.shouldPublish(previous: nil, next: base, panelVisible: false))
+    XCTAssertTrue(
+      NowPlayingController.shouldPublish(previous: base, next: nil, panelVisible: false))
+  }
+
+  @MainActor
+  func testOnScheduleTickIsEquivalentWhileSeekAndPauseAreNot() {
+    let t0 = Date(timeIntervalSinceReferenceDate: 1000)
+    let playing = NowPlayingTrack(
+      title: "T", artist: "A", album: "L", artworkData: nil,
+      duration: 200, elapsed: 50, isPlaying: true, playbackRate: 1,
+      playerBundleID: "x", receivedAt: t0)
+
+    // On-schedule re-anchor 0.5s later with the projected elapsed.
+    let onSchedule = shifted(playing, at: 50.5, receivedAt: t0.addingTimeInterval(0.5))
+    XCTAssertTrue(onSchedule.isEquivalentUpdate(to: playing))
+
+    // Seek ±seconds: far off the projection.
+    XCTAssertFalse(shifted(playing, at: 58, receivedAt: t0.addingTimeInterval(0.5))
+      .isEquivalentUpdate(to: playing))
+    XCTAssertFalse(shifted(playing, at: 48, receivedAt: t0.addingTimeInterval(0.5))
+      .isEquivalentUpdate(to: playing))
+
+    // Pause flips isPlaying/rate even with identical elapsed.
+    var paused = playing
+    paused.isPlaying = false
+    paused.playbackRate = 0
+    XCTAssertFalse(paused.isEquivalentUpdate(to: playing))
+
+    // Paused jitter of a still-frozen elapsed stays equivalent.
+    let pausedJitter = shifted(paused, at: 50.1, receivedAt: t0.addingTimeInterval(0.5))
+    XCTAssertTrue(pausedJitter.isEquivalentUpdate(to: paused))
+  }
+
+  @MainActor
+  func testRateJitterToleranceAndProjectionUsesPreviousRate() {
+    let t0 = Date(timeIntervalSinceReferenceDate: 2000)
+    let playing = NowPlayingTrack(
+      title: "T", artist: "A", album: "L", artworkData: nil,
+      duration: 200, elapsed: 20, isPlaying: true, playbackRate: 2,
+      playerBundleID: "x", receivedAt: t0)
+
+    // Rate jitter within 0.01 is equivalent even if elapsed wobbles.
+    var jittered = playing
+    jittered.playbackRate = 2.005
+    jittered.receivedAt = t0.addingTimeInterval(1)
+    jittered.elapsed = 22
+    XCTAssertTrue(jittered.isEquivalentUpdate(to: playing))
+
+    // 0.02 rate change publishes.
+    var rateChanged = playing
+    rateChanged.playbackRate = 2.02
+    XCTAssertFalse(rateChanged.isEquivalentUpdate(to: playing))
+
+    // Projection runs at the PREVIOUS rate: 1s at 2x means elapsed ~22 is
+    // on-schedule (not 21 at the new rate).
+    var reanchored = playing
+    reanchored.receivedAt = t0.addingTimeInterval(1)
+    reanchored.elapsed = 22
+    XCTAssertTrue(reanchored.isEquivalentUpdate(to: playing))
+
+    // Title/artwork changes always publish.
+    var otherTitle = playing
+    otherTitle.title = "T2"
+    XCTAssertFalse(otherTitle.isEquivalentUpdate(to: playing))
+    var otherArt = playing
+    otherArt.artworkData = Data([1, 2, 3])
+    XCTAssertFalse(otherArt.isEquivalentUpdate(to: playing))
+  }
+
+  @MainActor
+  func testReanchorExtrapolatesAlongPlaybackRate() {
+    let t0 = Date(timeIntervalSinceReferenceDate: 3000)
+    let playing = NowPlayingTrack(
+      title: "T", artist: "A", album: "L", artworkData: nil,
+      duration: 200, elapsed: 30, isPlaying: true, playbackRate: 1,
+      playerBundleID: "x", receivedAt: t0)
+    let reanchored = playing.reanchored(to: t0.addingTimeInterval(10))
+    XCTAssertEqual(reanchored.elapsed, 40, accuracy: 0.001)
+    XCTAssertEqual(reanchored.receivedAt, t0.addingTimeInterval(10))
+
+    var paused = playing
+    paused.isPlaying = false
+    paused.playbackRate = 0
+    XCTAssertEqual(
+      paused.reanchored(to: t0.addingTimeInterval(10)).elapsed, 30, accuracy: 0.001)
+  }
+
+  private var base: NowPlayingTrack {
+    NowPlayingTrack(
+      title: "T", artist: "A", album: "L", artworkData: nil,
+      duration: 200, elapsed: 50, isPlaying: true, playbackRate: 1)
+  }
+
+  private func shifted(
+    _ track: NowPlayingTrack, at elapsed: TimeInterval, receivedAt: Date
+  ) -> NowPlayingTrack {
+    var copy = track
+    copy.elapsed = elapsed
+    copy.receivedAt = receivedAt
+    return copy
+  }
+
   private func makeTrack(
     title: String, artist: String, duration: TimeInterval
   ) -> NowPlayingTrack {
