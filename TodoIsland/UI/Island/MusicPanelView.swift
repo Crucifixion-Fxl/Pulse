@@ -354,7 +354,7 @@ struct MusicPanelView: View {
         if reduceMotion {
           proxy.scrollTo(newValue, anchor: .center)
         } else {
-          withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+          withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
             proxy.scrollTo(newValue, anchor: .center)
           }
         }
@@ -435,8 +435,8 @@ struct MusicPanelView: View {
     // Both triggers matter: the current-line handover animates the font
     // size and mask, and each neighbour's depth-slot shift (1 -> 2 -> 3)
     // animates its scale/opacity/blur — previously those popped.
-    .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: isCurrent)
-    .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: distance)
+    .animation(reduceMotion ? nil : .smooth(duration: 0.6), value: isCurrent)
+    .animation(reduceMotion ? nil : .smooth(duration: 0.6), value: distance)
     .accessibilityAddTraits(isCurrent ? .isSelected : [])
   }
 
