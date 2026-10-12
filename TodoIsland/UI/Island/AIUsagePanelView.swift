@@ -576,17 +576,7 @@ private struct QuotaBar: View {
 
 // MARK: - Vendor presentation
 
-private extension AIUsageVendor {
-  /// Official brand mark bundled as a template vector in the asset
-  /// catalog; rendered small on the tile and tinted with `accent`.
-  var iconName: String {
-    switch self {
-    case .zhipuGLM: "VendorZAI"
-    case .anthropic: "VendorClaude"
-    case .openAI: "VendorOpenAI"
-    }
-  }
-
+extension AIUsageVendor {
   /// Tile-only brand tint: Zhipu's official blue (#1F63EC, lifted for the
   /// dark surface), Claude's terracotta (#D97757), and neutral white for
   /// OpenAI — its brand is monochrome.
@@ -598,3 +588,5 @@ private extension AIUsageVendor {
     }
   }
 }
+
+

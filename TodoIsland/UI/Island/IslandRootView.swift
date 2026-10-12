@@ -365,7 +365,11 @@ struct IslandRootView: View {
     if hostDisplayHasNotch {
       HStack(spacing: 0) {
         if model.canUseActiveList {
-          Color.clear.frame(width: collapsedSideWidth)
+          // Mirrors the face on the right end: the Codex quota chip takes
+          // the left end with the same 12pt corner-clearing inset.
+          collapsedCodexQuota
+            .padding(.leading, 12)
+            .frame(width: collapsedSideWidth, alignment: .leading)
         } else {
           HStack(spacing: 4) {
             Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")
@@ -414,11 +418,16 @@ struct IslandRootView: View {
       .accessibilityLabel(
         Text(model.authorization == .fullAccess ? "list.none" : "island.locked.accessibility"))
     } else {
-      collapsedBotFace
-        .padding(.trailing, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(collapsedAccessibilityLabel)
+      HStack(spacing: 0) {
+        collapsedCodexQuota
+          .padding(.leading, 12)
+        Spacer(minLength: 0)
+        collapsedBotFace
+          .padding(.trailing, 12)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(collapsedAccessibilityLabel)
     }
   }
 
@@ -1693,6 +1702,16 @@ struct IslandRootView: View {
       isPlaying: model.nowPlaying?.isPlaying == true,
       isHovered: model.isPointerInsideIsland,
       isAnimated: collapsedFaceIsAnimated)
+  }
+
+  /// Codex quota shown at the collapsed bar's left end. The OpenAI
+  /// subscription carries the quota for now; a dedicated Codex provider
+  /// slots in behind the same chip later. Hidden until the first fetch.
+  @ViewBuilder
+  private var collapsedCodexQuota: some View {
+    if let codex = model.aiUsage?.subscriptions.first(where: { $0.id == .openAI }) {
+      CollapsedCodexQuotaView(subscription: codex)
+    }
   }
 
   /// Face diameter for the collapsed bar: as large as the 3:1 eyes allow,
