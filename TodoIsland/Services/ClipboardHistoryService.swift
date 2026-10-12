@@ -24,13 +24,14 @@ final class ClipboardHistoryService {
   private var ownChangeCounts: Set<Int> = []
   private var timer: Timer?
 
-  private var storeDirectory: URL {
-    FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent("Library/Application Support/TodoIsland/Clipboard")
-  }
+  private let storeDirectory: URL
   private var indexURL: URL { storeDirectory.appendingPathComponent("history.json") }
 
-  init() {
+  init(directory: URL? = nil) {
+    storeDirectory =
+      directory
+      ?? FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/TodoIsland/Clipboard")
     lastChangeCount = pasteboard.changeCount
     loadPersisted()
   }
@@ -168,7 +169,7 @@ final class ClipboardHistoryService {
       // to the normalized TIFF bytes for screen captures.
       if let url = item.fileURL {
         pasteboard.writeObjects([url as NSURL])
-      } else if let data = item.imageData {
+      } else if let data = fullImageData(for: item.id) {
         pasteboard.setData(data, forType: .tiff)
       }
     case .video:
@@ -182,6 +183,18 @@ final class ClipboardHistoryService {
   }
 
   // MARK: - Persistence (JSON index + image blobs)
+
+  /// Full-fidelity image bytes for an item: kept in RAM when captured this
+  /// session, otherwise read from the blob file on demand (a click-time
+  /// disk read). Restored items no longer load their full blobs at launch —
+  /// only previews render — which kept up to 7 × ~10-17MB TIFFs resident.
+  func fullImageData(for id: UUID) -> Data? {
+    if let item = items.first(where: { $0.id == id }), let data = item.imageData {
+      return data
+    }
+    guard let blob = blobPaths[id] else { return nil }
+    return try? Data(contentsOf: storeDirectory.appendingPathComponent(blob))
+  }
 
   private struct PersistedItem: Codable {
     let id: UUID
@@ -243,9 +256,9 @@ final class ClipboardHistoryService {
     else { return }
     items = entries.compactMap { entry in
       guard let kind = ClipboardItem.Kind(rawValue: entry.kind) else { return nil }
-      var imageData: Data?
+      // Full-fidelity bytes stay on disk: restored items load nil here and
+      // recopy()/thumbnail fallbacks pull them via fullImageData(for:).
       if let blob = entry.blob {
-        imageData = try? Data(contentsOf: storeDirectory.appendingPathComponent(blob))
         blobPaths[entry.id] = blob
       }
       var previewData: Data?
@@ -257,7 +270,7 @@ final class ClipboardHistoryService {
         id: entry.id,
         kind: kind,
         text: entry.text,
-        imageData: imageData,
+        imageData: nil,
         previewImageData: previewData,
         fileURL: entry.fileURL.flatMap(URL.init(string:)),
         capturedAt: entry.capturedAt,
