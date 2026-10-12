@@ -367,7 +367,7 @@ struct IslandRootView: View {
         if model.canUseActiveList {
           // Mirrors the face on the right end: the Codex quota chip takes
           // the left end with the same 12pt corner-clearing inset.
-          collapsedCodexQuota
+          collapsedQuotaChip
             .padding(.leading, 12)
             .frame(width: collapsedSideWidth, alignment: .leading)
         } else {
@@ -419,7 +419,7 @@ struct IslandRootView: View {
         Text(model.authorization == .fullAccess ? "list.none" : "island.locked.accessibility"))
     } else {
       HStack(spacing: 0) {
-        collapsedCodexQuota
+        collapsedQuotaChip
           .padding(.leading, 12)
         Spacer(minLength: 0)
         collapsedBotFace
@@ -1704,13 +1704,14 @@ struct IslandRootView: View {
       isAnimated: collapsedFaceIsAnimated)
   }
 
-  /// Codex quota shown at the collapsed bar's left end. The OpenAI
-  /// subscription carries the quota for now; a dedicated Codex provider
-  /// slots in behind the same chip later. Hidden until the first fetch.
+  /// Quota chip at the collapsed bar's left end; the vendor is picked in
+  /// the AI usage panel (Codex by default). Hidden until the first fetch.
   @ViewBuilder
-  private var collapsedCodexQuota: some View {
-    if let codex = model.aiUsage?.subscriptions.first(where: { $0.id == .openAI }) {
-      CollapsedCodexQuotaView(subscription: codex)
+  private var collapsedQuotaChip: some View {
+    if let subscription = model.aiUsage?.subscriptions.first(where: {
+      $0.id == model.collapsedQuotaVendor
+    }) {
+      CollapsedQuotaChipView(subscription: subscription)
     }
   }
 

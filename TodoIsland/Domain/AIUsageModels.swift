@@ -26,6 +26,16 @@ enum AIUsageVendor: String, CaseIterable, Hashable, Sendable {
     }
   }
 
+  /// Compact product name for the collapsed island chip; proper nouns
+  /// rendered as-is, never localized.
+  var chipLabel: String {
+    switch self {
+    case .zhipuGLM: "GLM"
+    case .anthropic: "Claude"
+    case .openAI: "Codex"
+    }
+  }
+
   /// Official brand mark bundled as a template vector in the asset
   /// catalog; rendered small on tiles and chips, tinted with `accent`.
   var iconName: String {

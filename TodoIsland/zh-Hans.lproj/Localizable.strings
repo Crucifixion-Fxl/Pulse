@@ -19,7 +19,9 @@
 "island.locked.accessibility" = "授权 iCloud 提醒事项后即可显示列表。";
 "island.all-done" = "全部完成";
 "island.collapsed.accessibility" = "列表：%@。还有 %d 项未完成。";
-"island.codex.accessibility" = "Codex 额度，已用 %d%%。";
+"island.quota.accessibility" = "%1$@ 额度，已用 %2$d%%。";
+"ai.quota.island-picker" = "折叠岛 · %@";
+"ai.quota.island-picker.accessibility" = "选择折叠灵动岛显示的额度";
 
 "setup.visibility.title" = "选择折叠灵动岛的显示方式";
 "setup.visibility.detail" = "后续可以随时在设置中更改。";

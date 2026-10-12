@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Codex quota chip for the collapsed island bar's left end: a progress
-/// ring around the vendor mark with the used percentage stacked beside it.
-/// Reads like a watch-face complication — identity from the logo, state
-/// from the ring color and fill, no extra words needed at a glance.
-struct CollapsedCodexQuotaView: View {
+/// Vendor quota chip for the collapsed island bar's left end: a progress
+/// ring around the vendor mark with the product label and used percentage
+/// stacked beside it. Reads like a watch-face complication — identity from
+/// the logo, state from the ring color and fill, no extra words needed at
+/// a glance. Which vendor it shows is picked in the AI usage panel.
+struct CollapsedQuotaChipView: View {
   let subscription: AISubscription
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -50,7 +51,7 @@ struct CollapsedCodexQuotaView: View {
       .frame(width: Self.ringSize, height: Self.ringSize)
 
       VStack(alignment: .leading, spacing: 0) {
-        Text("Codex")
+        Text(subscription.id.chipLabel)
           .font(.system(size: 9, weight: .medium))
           .foregroundStyle(.white.opacity(0.55))
         Text(percentText)
@@ -68,7 +69,8 @@ struct CollapsedCodexQuotaView: View {
     .accessibilityLabel(
       Text(
         String(
-          format: L10n.text("island.codex.accessibility"),
+          format: L10n.text("island.quota.accessibility"),
+          subscription.id.chipLabel,
           Int((subscription.quota.fraction * 100).rounded()))))
   }
 }

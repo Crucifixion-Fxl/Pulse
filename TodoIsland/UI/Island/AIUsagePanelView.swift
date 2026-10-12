@@ -364,8 +364,12 @@ struct AIUsagePanelView: View {
 
   private func subscriptionsSection(_ snapshot: AIUsageSnapshot) -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("ai.subscriptions.title")
-        .font(.system(size: 12.5, weight: .semibold))
+      HStack(spacing: 8) {
+        Text("ai.subscriptions.title")
+          .font(.system(size: 12.5, weight: .semibold))
+        Spacer(minLength: 0)
+        islandVendorPicker
+      }
 
       HStack(spacing: Layout.cardSpacing) {
         ForEach(snapshot.subscriptions) { subscription in
@@ -373,6 +377,44 @@ struct AIUsagePanelView: View {
         }
       }
     }
+  }
+
+  /// Chooses whose quota the collapsed island's chip shows. One compact
+  /// menu on the section header — the cards themselves stay untouched.
+  private var islandVendorPicker: some View {
+    Menu {
+      Picker(
+        "ai.quota.island-picker.accessibility",
+        selection: Binding(
+          get: { model.collapsedQuotaVendor },
+          set: { model.setCollapsedQuotaVendor($0) }
+        )
+      ) {
+        ForEach(AIUsageVendor.allCases, id: \.self) { vendor in
+          Text(LocalizedStringKey(vendor.localizedKey)).tag(vendor)
+        }
+      }
+    } label: {
+      HStack(spacing: 4) {
+        Image(systemName: "dot.radiowaves.left.and.right")
+          .font(.system(size: 9, weight: .semibold))
+        Text(
+          String(
+            format: L10n.text("ai.quota.island-picker"),
+            model.collapsedQuotaVendor.chipLabel))
+          .font(.system(size: 10, weight: .medium))
+          .foregroundStyle(ReUITheme.muted)
+          .lineLimit(1)
+      }
+      .padding(.horizontal, 6)
+      .padding(.vertical, 2.5)
+      .background(Capsule(style: .continuous).fill(.white.opacity(0.07)))
+      .overlay(Capsule(style: .continuous).stroke(ReUITheme.subtleBorder, lineWidth: 1))
+      .contentShape(Capsule(style: .continuous))
+    }
+    .menuStyle(.borderlessButton)
+    .fixedSize()
+    .accessibilityLabel(Text("ai.quota.island-picker.accessibility"))
   }
 
   // MARK: Skeleton

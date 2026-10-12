@@ -81,6 +81,9 @@ final class AppModel: ObservableObject {
   }
   @Published private(set) var collapsedIslandVisibility: CollapsedIslandVisibility?
   @Published private(set) var isCollapsedIslandVisible: Bool
+  /// Whose subscription quota the collapsed bar's chip shows; picked in
+  /// the AI usage panel.
+  @Published private(set) var collapsedQuotaVendor: AIUsageVendor
   @Published var errorMessage: String?
   @Published var activeListID: String? {
     didSet {
@@ -124,6 +127,7 @@ final class AppModel: ObservableObject {
     static let activeListID = "active-list-id"
     static let didInitializeLocalSource = "did-initialize-local-source"
     static let collapsedIslandVisibility = "collapsed-island-visibility"
+    static let collapsedQuotaVendor = "collapsed-quota-vendor"
     static let lyricOffset = "lyric-offset"
     static let neteaseUID = "netease-uid"
     static let neteaseMusicU = "netease-music-u"
@@ -150,6 +154,9 @@ final class AppModel: ObservableObject {
     if savedCollapsedVisibility == nil {
       defaults.set(initialVisibility.rawValue, forKey: Keys.collapsedIslandVisibility)
     }
+    // The chip shipped showing Codex; keep that default for existing users.
+    collapsedQuotaVendor = defaults.string(forKey: Keys.collapsedQuotaVendor)
+      .flatMap(AIUsageVendor.init(rawValue:)) ?? .openAI
     isCollapsedIslandVisible = initialVisibility != .autoHide
     authorization = store.authorizationStatus()
     localStoreAvailability = store.localStoreAvailability
@@ -753,6 +760,14 @@ final class AppModel: ObservableObject {
   /// Refreshes the AI usage panel on panel selection and app activation;
   /// throttled to five minutes so hover-selecting the sidebar icon doesn't
   /// refetch. Stale data is kept when a fetch fails.
+  /// Picks whose quota the collapsed bar's chip shows; persisted so the
+  /// choice survives relaunches.
+  func setCollapsedQuotaVendor(_ vendor: AIUsageVendor) {
+    guard vendor != collapsedQuotaVendor else { return }
+    collapsedQuotaVendor = vendor
+    defaults.set(vendor.rawValue, forKey: Keys.collapsedQuotaVendor)
+  }
+
   func refreshAIUsage() {
     let staleness = lastAIUsageRefresh.map { Date().timeIntervalSince($0) } ?? .infinity
     guard aiUsage == nil || staleness > 300 else { return }
