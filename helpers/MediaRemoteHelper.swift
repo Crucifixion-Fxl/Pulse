@@ -245,6 +245,10 @@ private func postMediaKey(_ key: Int32) {
 
 private var lastInfo: [String: Any] = [:]
 private var lastArtworkBase64: String?
+/// Serialized bytes of the last now-playing line actually written; the
+/// idle-{} suppression in refresh() compares against it.
+private var lastEmittedData: Data?
+private var lastEmittedPlaying = false
 private var elapsedTimer: DispatchSourceTimer?
 /// Polling defaults ON: elapsed updates must never depend on a command
 /// arriving. The "active" command can still gate it for future power
@@ -339,7 +343,26 @@ private func refresh() {
     }
 
     lastInfo = dict
-    emit(dict)
+
+    // Idle-line suppression: while nothing plays, the 0.5s poll produces
+    // byte-identical {} lines forever and each wakes the app's pipe
+    // reader for nothing. Skip a line only when it is byte-identical to
+    // the previous emission AND nothing is or was playing. The structural
+    // rate guard keeps "playing lines always flow" independent of which
+    // fields a player omits — and since the forwarded mediaremoted fetch
+    // Timestamp changes every fetch, any line carrying real info differs
+    // from the previous one anyway. Detection latency is untouched.
+    guard JSONSerialization.isValidJSONObject(dict),
+      let data = try? JSONSerialization.data(withJSONObject: dict)
+    else { return }
+    let rate = (dict["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? NSNumber)?
+      .doubleValue ?? 0
+    let playing = rate > 0
+    if playing || lastEmittedPlaying || lastEmittedData != data {
+      lastEmittedPlaying = playing
+      lastEmittedData = data
+      emit(dict)
+    }
   }
 }
 
