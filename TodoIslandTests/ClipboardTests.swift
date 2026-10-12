@@ -11,6 +11,41 @@ final class ClipboardTests: XCTestCase {
     )
   }
 
+  // MARK: Lazy blob restoration
+
+  /// Restored items keep full-fidelity bytes on disk: only previews load
+  /// at init, and fullImageData(for:) pulls the blob back on demand.
+  @MainActor
+  func testRestoredItemsLoadPreviewsButNotFullBlobs() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("clipboard-tests-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let id = UUID()
+    let full = Data(repeating: 0xAB, count: 2048)
+    let preview = Data(repeating: 0xCD, count: 128)
+    let fullBlob = "blob-\(id.uuidString)"
+    let previewBlob = "prev-\(id.uuidString)"
+    try full.write(to: directory.appendingPathComponent(fullBlob))
+    try preview.write(to: directory.appendingPathComponent(previewBlob))
+    let index = """
+      [{"id":"\(id.uuidString)","kind":"image","text":null,
+        "blob":"\(fullBlob)","previewBlob":"\(previewBlob)",
+        "fileURL":null,"capturedAt":800000000,"contentHash":42}]
+      """
+    try Data(index.utf8).write(to: directory.appendingPathComponent("history.json"))
+
+    let service = ClipboardHistoryService(directory: directory)
+
+    XCTAssertEqual(service.items.count, 1)
+    let restored = try XCTUnwrap(service.items.first)
+    XCTAssertNil(restored.imageData, "full-fidelity bytes must not load at init")
+    XCTAssertEqual(restored.previewImageData, preview)
+    XCTAssertEqual(service.fullImageData(for: id), full, "blob reads back on demand")
+    XCTAssertNil(service.fullImageData(for: UUID()), "unknown id has no blob")
+  }
+
   // MARK: Classification
 
   func testVideoFileURLWinsOverEverything() {

@@ -25,8 +25,12 @@ struct ClipboardPanelView: View {
 
     func image(for item: ClipboardItem) -> NSImage? {
       if let cached = cache.object(forKey: item.id as NSUUID) { return cached }
+      // Restored items carry no in-RAM image data (only previews load at
+      // launch); items whose preview generation also failed fall back to a
+      // one-time decode of the on-disk full blob.
       guard
-        let data = item.previewImageData ?? item.imageData,
+        let data = item.previewImageData ?? item.imageData
+          ?? ClipboardHistoryService.shared.fullImageData(for: item.id),
         let image = NSImage(data: data)
       else { return nil }
       image.cacheMode = .always
