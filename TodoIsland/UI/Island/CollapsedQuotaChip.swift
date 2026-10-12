@@ -53,11 +53,11 @@ struct CollapsedQuotaChipView: View {
       VStack(alignment: .leading, spacing: 0) {
         Text(subscription.id.chipLabel)
           .font(.system(size: 9, weight: .medium))
-          .foregroundStyle(.white.opacity(0.55))
+          .foregroundStyle(.white)
         Text(percentText)
           .font(.system(size: 11, weight: .bold, design: .rounded))
           .monospacedDigit()
-          .foregroundStyle(tint)
+          .foregroundStyle(.white)
           .contentTransition(.numericText())
       }
     }
