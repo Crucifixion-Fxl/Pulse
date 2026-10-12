@@ -298,65 +298,128 @@ struct MusicPanelView: View {
     // Borderless by design: the lyric column floats on the island surface.
   }
 
-  /// The original lyric list: a plain scrolling column. Lines keep their
-  /// natural heights and the active line scrolls to centre with a short
-  /// ease — the behaviour the product started with.
+  /// The lyric list, fume-style: the active line prints character by
+  /// character with a breathing glow at the frontier, neighbours recede
+  /// into scale/blur depth, and line changes ride a near-critical spring
+  /// scroll (folia-major's "浮名" semantics reinterpreted for the panel).
+  /// Paused playback renders one static frame instead of keeping a
+  /// timeline alive.
   private func lyricList(
     lyrics: Lyrics, track: NowPlayingTrack
   ) -> some View {
-    TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
-      let liveElapsed =
-        track.elapsed
-        + (track.isPlaying
-          ? max(timeline.date.timeIntervalSince(track.receivedAt), 0) * track.playbackRate
-          : 0)
-      let currentIndex = LyricsParse.currentLineIndex(
-        at: liveElapsed - model.lyricOffset, lines: lyrics.lines
-      )
-
-      ScrollViewReader { proxy in
-        ScrollView(showsIndicators: false) {
-          LazyVStack(spacing: 12) {
-            ForEach(Array(lyrics.lines.enumerated()), id: \.element.id) { index, line in
-              lyricLine(line, index: index, currentIndex: currentIndex)
-            }
-          }
-          .padding(.vertical, 110)
-          .frame(maxWidth: .infinity)
-          .id(track.lyricsIdentity)
+    Group {
+      if track.isPlaying {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
+          lyricColumn(
+            lyrics: lyrics, track: track,
+            elapsed: Self.liveElapsed(track: track, at: timeline.date))
         }
-        .onChange(of: currentIndex) { _, newValue in
-          guard let newValue else { return }
-          if reduceMotion {
-            proxy.scrollTo(newValue, anchor: .center)
-          } else {
-            withAnimation(.easeInOut(duration: 0.3)) {
-              proxy.scrollTo(newValue, anchor: .center)
-            }
-          }
-        }
-        .onAppear {
-          guard let currentIndex else { return }
-          proxy.scrollTo(currentIndex, anchor: .center)
-        }
+      } else {
+        lyricColumn(
+          lyrics: lyrics, track: track, elapsed: Self.liveElapsed(track: track, at: Date()))
       }
     }
     .overlay(lyricsEdgeFades)
   }
 
-  private func lyricLine(_ line: LyricLine, index: Int, currentIndex: Int?) -> some View {
+  private static func liveElapsed(track: NowPlayingTrack, at date: Date) -> TimeInterval {
+    track.elapsed
+      + (track.isPlaying
+        ? max(date.timeIntervalSince(track.receivedAt), 0) * track.playbackRate
+        : 0)
+  }
+
+  private func lyricColumn(
+    lyrics: Lyrics, track: NowPlayingTrack, elapsed: TimeInterval
+  ) -> some View {
+    let currentIndex = LyricsParse.currentLineIndex(
+      at: elapsed - model.lyricOffset, lines: lyrics.lines
+    )
+
+    return ScrollViewReader { proxy in
+      ScrollView(showsIndicators: false) {
+        LazyVStack(spacing: 12) {
+          ForEach(Array(lyrics.lines.enumerated()), id: \.element.id) { index, line in
+            lyricLine(
+              line, index: index, currentIndex: currentIndex,
+              lyrics: lyrics, track: track, elapsed: elapsed)
+          }
+        }
+        .padding(.vertical, 110)
+        .frame(maxWidth: .infinity)
+        .id(track.lyricsIdentity)
+      }
+      .onChange(of: currentIndex) { _, newValue in
+        guard let newValue else { return }
+        if reduceMotion {
+          proxy.scrollTo(newValue, anchor: .center)
+        } else {
+          withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+            proxy.scrollTo(newValue, anchor: .center)
+          }
+        }
+      }
+      .onAppear {
+        guard let currentIndex else { return }
+        proxy.scrollTo(currentIndex, anchor: .center)
+      }
+    }
+  }
+
+  private func lyricLine(
+    _ line: LyricLine,
+    index: Int,
+    currentIndex: Int?,
+    lyrics: Lyrics,
+    track: NowPlayingTrack,
+    elapsed: TimeInterval
+  ) -> some View {
     let isCurrent = index == currentIndex
     let distance = currentIndex.map { abs($0 - index) } ?? Int.max
+    let depth = LyricDepth(distance: distance)
+
+    let window = lyrics.printWindow(
+      for: index,
+      fallbackSpan: max(4, min(8, track.duration - line.time)))
+    let timing = LyricPrintTiming(
+      charCount: line.text.count, start: window.start, end: window.end)
+    let fill = timing.fillFraction(at: elapsed - model.lyricOffset)
+    let envelope = timing.glowEnvelope(at: elapsed - model.lyricOffset)
+    // Whole-point radii only: fractional blur re-rasterizes every frame.
+    let glowRadius = CGFloat((3 + 5 * envelope).rounded())
 
     return VStack(spacing: 4) {
-      Text(line.text)
-        .font(
-          .system(size: isCurrent ? 28 : 16, weight: isCurrent ? .semibold : .regular)
-        )
-        .foregroundStyle(
-          isCurrent ? .white : (distance <= 2 ? ReUITheme.muted : .white.opacity(0.30))
-        )
-        .multilineTextAlignment(.center)
+      Group {
+        if isCurrent {
+          if reduceMotion {
+            Text(line.text)
+              .font(.system(size: 28, weight: .semibold))
+              .foregroundStyle(.white)
+              .multilineTextAlignment(.center)
+          } else {
+            ZStack {
+              // Unsung ghost text under the printed overlay.
+              Text(line.text)
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.28))
+                .multilineTextAlignment(.center)
+              Text(line.text)
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .shadow(color: .white.opacity(0.35 + 0.3 * envelope), radius: glowRadius)
+                .mask(printFillMask(fraction: fill))
+            }
+          }
+        } else {
+          Text(line.text)
+            .font(.system(size: 16, weight: .regular))
+            .foregroundStyle(.white.opacity(depth.alpha))
+            .multilineTextAlignment(.center)
+            .scaleEffect(reduceMotion ? 1 : depth.scale)
+            .blur(radius: reduceMotion ? 0 : depth.blur)
+        }
+      }
 
       if isCurrent, let translation = line.translation {
         Text(translation)
@@ -374,6 +437,21 @@ struct MusicPanelView: View {
     }
     .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: isCurrent)
     .accessibilityAddTraits(isCurrent ? .isSelected : [])
+  }
+
+  /// Hard-edged left-to-right reveal for the printed overlay, with a soft
+  /// 3% frontier so the glow glides instead of stepping.
+  private func printFillMask(fraction: Double) -> some View {
+    LinearGradient(
+      stops: [
+        .init(color: .white, location: 0),
+        .init(color: .white, location: max(0, fraction - 0.015)),
+        .init(color: .clear, location: min(1, fraction + 0.015)),
+        .init(color: .clear, location: 1),
+      ],
+      startPoint: .leading,
+      endPoint: .trailing
+    )
   }
 
   /// Soft fade into the island surface top and bottom — the Day
@@ -517,6 +595,26 @@ private struct FavoriteRow: View {
     }
     .accessibilityLabel(Text("\(track.name), \(track.artist)"))
     .accessibilityHint(Text("music.favorites.play.accessibility"))
+  }
+}
+
+// MARK: - Lyric depth
+
+/// Distance-based receding slots around the active line — folia-major's
+/// neighbour falloff retuned for the panel: near lines stay legible, far
+/// lines shrink, dim, and soften out of focus.
+private struct LyricDepth {
+  let scale: CGFloat
+  let alpha: Double
+  let blur: CGFloat
+
+  init(distance: Int) {
+    switch distance {
+    case 0: (scale, alpha, blur) = (1, 1, 0)
+    case 1: (scale, alpha, blur) = (0.85, 0.70, 0)
+    case 2: (scale, alpha, blur) = (0.74, 0.45, 1)
+    default: (scale, alpha, blur) = (0.66, 0.25, 1.5)
+    }
   }
 }
 
