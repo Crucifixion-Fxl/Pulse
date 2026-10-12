@@ -16,10 +16,22 @@ private enum Layout {
 struct MusicPanelView: View {
   @EnvironmentObject private var model: AppModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// Last decoded artwork. Both the cover and the blurred ambience used to
+  /// run NSImage(data:) on every body eval — twice per 2Hz publish — for
+  /// the same bytes; one decode per artwork serves both.
+  @State private var artworkImage: (data: Data, image: NSImage)?
 
   enum Metrics {
     /// Matches the AI usage pane so the island height stays uniform.
     static let contentHeight: CGFloat = 324
+  }
+
+  private func cachedArtwork(_ data: Data) -> NSImage? {
+    if let held = artworkImage, held.data == data { return held.image }
+    guard let image = NSImage(data: data) else { return nil }
+    image.cacheMode = .always
+    artworkImage = (data, image)
+    return image
   }
 
   var body: some View {
@@ -156,7 +168,7 @@ struct MusicPanelView: View {
   private var artwork: some View {
     let shape = RoundedRectangle(cornerRadius: Layout.artworkRadius, style: .continuous)
     if let data = model.nowPlaying?.artworkData,
-      let image = NSImage(data: data)
+      let image = cachedArtwork(data)
     {
       Image(nsImage: image)
         .resizable()
@@ -202,7 +214,7 @@ struct MusicPanelView: View {
   @ViewBuilder
   private var artworkAmbience: some View {
     if let data = model.nowPlaying?.artworkData,
-      let image = NSImage(data: data)
+      let image = cachedArtwork(data)
     {
       Image(nsImage: image)
         .resizable()
