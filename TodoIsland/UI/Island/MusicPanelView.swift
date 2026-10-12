@@ -533,21 +533,33 @@ private struct AudioVisualizer: View {
   private let maxBarHeight: CGFloat = 90
 
   var body: some View {
-    TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
-      GeometryReader { geo in
-        let barWidth = max(
-          3, (geo.size.width - CGFloat(barCount - 1) * barSpacing) / CGFloat(barCount)
-        )
-        let phase = isPlaying ? timeline.date.timeIntervalSinceReferenceDate : 0
-        HStack(spacing: barSpacing) {
-          ForEach(0..<barCount, id: \.self) { index in
-            Capsule(style: .continuous)
-              .fill(barColor(index))
-              .frame(width: barWidth, height: barHeight(index, phase: phase))
-          }
+    Group {
+      if isPlaying {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
+          barColumn(phase: timeline.date.timeIntervalSinceReferenceDate)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+      } else {
+        // Paused output is phase-independent (barHeight ignores it), so a
+        // static render is pixel-identical without keeping a 30Hz timeline
+        // alive for frozen bars.
+        barColumn(phase: 0)
       }
+    }
+  }
+
+  private func barColumn(phase: Double) -> some View {
+    GeometryReader { geo in
+      let barWidth = max(
+        3, (geo.size.width - CGFloat(barCount - 1) * barSpacing) / CGFloat(barCount)
+      )
+      HStack(spacing: barSpacing) {
+        ForEach(0..<barCount, id: \.self) { index in
+          Capsule(style: .continuous)
+            .fill(barColor(index))
+            .frame(width: barWidth, height: barHeight(index, phase: phase))
+        }
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
   }
 
