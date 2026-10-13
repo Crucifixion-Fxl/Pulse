@@ -32,13 +32,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private var settingsController: HostedWindowController<AnyView>?
   private var launchAtLoginMenuItem: NSMenuItem?
 
+  /// Hosted unit tests boot this AppDelegate for real; their app instance
+  /// would steal the live socket path (unlink + rebind) and touch the real
+  /// ~/.claude config. Neither belongs in a test run.
+  private static var isRunningTests: Bool {
+    NSClassFromString("XCTestCase") != nil
+      || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
+    guard !Self.isRunningTests else { return }
     // The agent-status socket must be listening before any CLI fires a
     // hook at it (upstream CodeIsland starts the server the same way).
     let server = AgentHookServer(store: agentStore)
     server.start()
     agentServer = server
     wireAgentAutoExpansion()
+    // Stage the bridge binary and (re)install CLI hooks — self-repairing on
+    // every launch, exactly like upstream CodeIsland.
+    Task { @MainActor in
+      _ = AgentHookConfigInstaller().installAll(bundle: .main)
+    }
 
     islandController = IslandWindowController(model: model, agentStore: agentStore)
     configureStatusItem()
