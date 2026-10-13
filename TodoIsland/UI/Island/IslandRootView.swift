@@ -69,7 +69,7 @@ enum ListCreationDraftPolicy {
 /// add a case here without changing the shell or window geometry.
 enum IslandSidebarItem: String, CaseIterable, Identifiable {
   case reminders
-  case aiUsage
+  case agents
   case music
   case clipboard
   case placeholder4
@@ -82,7 +82,7 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
   var title: LocalizedStringKey {
     switch self {
     case .reminders: "sidebar.reminders"
-    case .aiUsage: "sidebar.ai-usage"
+    case .agents: "sidebar.agents"
     case .music: "sidebar.music"
     case .clipboard: "sidebar.clipboard"
     case .placeholder4, .placeholder5, .placeholder6, .placeholder7:
@@ -93,7 +93,7 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
   var symbol: String {
     switch self {
     case .reminders: "checklist"
-    case .aiUsage: "sparkles"
+    case .agents: "person.2.fill"
     case .music: "music.note"
     case .clipboard: "doc.on.clipboard"
     case .placeholder4: "flag"
@@ -112,9 +112,9 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
     // 24-week completion heatmap; the window is sized to their exact
     // natural height so no dead space trails the heatmap.
     case .reminders: IslandRootView.ScheduleMetrics.regular.remindersContentHeight
-    // The AI usage pane's height is fully deterministic — hero, trend and
-    // subscription cards all use fixed metrics.
-    case .aiUsage: AIUsagePanelView.Metrics.contentHeight
+    // Temporary: the agents pane reuses the AI pane's fixed height until
+    // AgentsPanelView lands with its own metrics.
+    case .agents: AIUsagePanelView.Metrics.contentHeight
     // Player and lyrics cards use fixed metrics matching the AI pane, so
     // the island height stays uniform across features.
     case .music: MusicPanelView.Metrics.contentHeight
@@ -527,7 +527,7 @@ struct IslandRootView: View {
     withAnimation(reduceMotion ? nil : .bouncy(duration: 0.35, extraBounce: 0.2)) {
       selectedSidebarItem = item
     }
-    if item == .aiUsage {
+    if item == .agents {
       model.refreshAIUsage()
     }
     if item == .music {
@@ -549,7 +549,7 @@ struct IslandRootView: View {
     switch selectedSidebarItem {
     case .reminders:
       remindersFeatureContent.transition(.opacity)
-    case .aiUsage:
+    case .agents:
       AIUsagePanelView(snapshot: model.aiUsage).transition(.opacity)
     case .music:
       MusicPanelView().transition(.opacity)
@@ -1007,7 +1007,7 @@ struct IslandRootView: View {
   private func updateExpandedContentHeight() {
     let contentHeight: CGFloat
     switch selectedSidebarItem {
-    case .aiUsage, .music, .clipboard, .placeholder4,
+    case .agents, .music, .clipboard, .placeholder4,
       .placeholder5, .placeholder6, .placeholder7:
       contentHeight = selectedSidebarItem.preferredContentHeight
     case .reminders:
