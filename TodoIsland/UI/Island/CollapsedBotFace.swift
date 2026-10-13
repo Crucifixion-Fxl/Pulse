@@ -140,13 +140,15 @@ enum CollapsedBotFace {
 struct CollapsedBotFaceView: View {
   /// Face diameter in points; the caller derives it from the bar height.
   let size: CGFloat
+  /// Follows the selected quota vendor — white for Codex, Claude's
+  /// terracotta, GLM's blue — so the character carries the chip's identity.
+  var faceColor: Color = .white
   let isPlaying: Bool
   let isHovered: Bool
   /// false under Reduce Motion or while the surface is hidden — renders one
   /// static frame instead of subscribing to the 30 Hz timeline.
   let isAnimated: Bool
 
-  static let faceColor = Color.white
   static let eyeColor = Color(red: 0.090, green: 0.090, blue: 0.100)
 
   var body: some View {
@@ -168,7 +170,7 @@ struct CollapsedBotFaceView: View {
   private func face(_ e: CollapsedBotFace.Expression) -> some View {
     let m = Metrics(size: size)
     return ZStack {
-      Circle().fill(Self.faceColor)
+      Circle().fill(faceColor)
       eye(e, side: -1, m: m)
       eye(e, side: 1, m: m)
     }

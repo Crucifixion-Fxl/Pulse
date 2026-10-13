@@ -1719,6 +1719,7 @@ struct IslandRootView: View {
   private var collapsedBotFace: some View {
     CollapsedBotFaceView(
       size: collapsedFaceSize,
+      faceColor: model.collapsedQuotaVendor.accent,
       isPlaying: model.nowPlaying?.isPlaying == true,
       isHovered: model.isPointerInsideIsland,
       isAnimated: collapsedFaceIsAnimated)
