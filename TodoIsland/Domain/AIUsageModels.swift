@@ -102,6 +102,9 @@ struct AISubscription: Hashable, Sendable, Identifiable {
   var planName: String
   var quota: AIQuota
   var resetsAt: Date
+  /// True while this card's numbers are fabricated; real providers clear
+  /// it so the per-card sample marker disappears.
+  var isSample = false
 }
 
 /// Everything the AI usage panel renders for one fetch.
@@ -202,21 +205,24 @@ enum AIUsageSample {
         vendor: .zhipuGLM,
         planName: "Coding Plan",
         quota: AIQuota(used: 2_040, limit: 3_000, unit: .requests),
-        resetsAt: calendar.date(byAdding: .day, value: 3, to: today)!.addingTimeInterval(14 * 3600)
+        resetsAt: calendar.date(byAdding: .day, value: 3, to: today)!.addingTimeInterval(14 * 3600),
+        isSample: true
       ),
       AISubscription(
         id: "anthropic",
         vendor: .anthropic,
         planName: "Claude Max",
         quota: AIQuota(used: 920, limit: 1_000, unit: .credits),
-        resetsAt: calendar.date(byAdding: .day, value: 5, to: today)!.addingTimeInterval(9 * 3600)
+        resetsAt: calendar.date(byAdding: .day, value: 5, to: today)!.addingTimeInterval(9 * 3600),
+        isSample: true
       ),
       AISubscription(
         id: "openai",
         vendor: .openAI,
         planName: "ChatGPT Plus",
         quota: AIQuota(used: 812, limit: 2_000, unit: .requests),
-        resetsAt: calendar.date(byAdding: .day, value: 1, to: today)!.addingTimeInterval(12 * 3600)
+        resetsAt: calendar.date(byAdding: .day, value: 1, to: today)!.addingTimeInterval(12 * 3600),
+        isSample: true
       ),
     ]
 

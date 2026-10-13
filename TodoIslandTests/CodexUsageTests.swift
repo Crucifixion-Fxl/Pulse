@@ -144,6 +144,37 @@ final class CodexUsageTests: XCTestCase {
     XCTAssertEqual(snapshot.subscriptions.first?.id, "codex-weekly")
   }
 
+  /// The default chain keeps the other vendors' virtual cards beside the
+  /// real Codex ones, each flagged as sample.
+  func testChainMergesRealCodexWithVirtualVendors() async throws {
+    let codexOnly = AIUsageSnapshot(
+      days: [],
+      subscriptions: [
+        AISubscription(
+          id: "codex-weekly", vendor: .openAI, planName: "Weekly limit",
+          quota: AIQuota(used: 10, limit: 100, unit: .percent), resetsAt: fixedNow())
+      ],
+      isSample: false)
+
+    let chain = DefaultAIUsageProvider(
+      codex: StubProvider(snapshot: codexOnly),
+      fallback: SampleAIUsageProvider(now: fixedNow()))
+
+    let merged = try await chain.fetchUsage()
+    XCTAssertEqual(merged.isSample, false)
+    XCTAssertEqual(merged.subscriptions.map(\.id).prefix(1), ["codex-weekly"])
+    XCTAssertEqual(
+      Set(merged.subscriptions.map(\.vendor)),
+      Set(AIUsageVendor.allCases))
+    XCTAssertTrue(merged.subscriptions.filter { $0.vendor != .openAI }.allSatisfy(\.isSample))
+    XCTAssertFalse(merged.subscriptions.first!.isSample)
+  }
+
+  private struct StubProvider: AIUsageProvider {
+    let snapshot: AIUsageSnapshot
+    func fetchUsage() async throws -> AIUsageSnapshot { snapshot }
+  }
+
   func testProviderFallsBackToSampleWithoutCodexDirectory() async throws {
     let provider = CodexAIUsageProvider(
       homeDirectory: URL(fileURLWithPath: NSTemporaryDirectory())
