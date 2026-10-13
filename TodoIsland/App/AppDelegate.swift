@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @main
@@ -23,13 +24,23 @@ enum TodoIslandApplication {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private let model = AppModel()
+  private let agentStore = AgentSessionStore()
+  private var agentServer: AgentHookServer?
+  private var agentCancellables: Set<AnyCancellable> = []
   private var islandController: IslandWindowController?
   private var statusItem: NSStatusItem?
   private var settingsController: HostedWindowController<AnyView>?
   private var launchAtLoginMenuItem: NSMenuItem?
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    islandController = IslandWindowController(model: model)
+    // The agent-status socket must be listening before any CLI fires a
+    // hook at it (upstream CodeIsland starts the server the same way).
+    let server = AgentHookServer(store: agentStore)
+    server.start()
+    agentServer = server
+    wireAgentAutoExpansion()
+
+    islandController = IslandWindowController(model: model, agentStore: agentStore)
     configureStatusItem()
 
     // Now Playing observer lives for the process lifetime; elapsed polling
@@ -60,6 +71,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   func applicationDidBecomeActive(_ notification: Notification) {
     model.markApplicationActive()
+  }
+
+  /// A queued approval or question auto-expands the island onto the agents
+  /// pane (CodeIsland's default autoExpandOnPermission behavior).
+  private func wireAgentAutoExpansion() {
+    Publishers.CombineLatest(agentStore.$permissionQueue, agentStore.$questionQueue)
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] permissions, questions in
+        guard let self else { return }
+        guard !(permissions.isEmpty && questions.isEmpty) else { return }
+        guard self.model.islandState == .collapsed else { return }
+        self.model.requestSidebarItem(.agents)
+        self.model.pinIsland()
+      }
+      .store(in: &agentCancellables)
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

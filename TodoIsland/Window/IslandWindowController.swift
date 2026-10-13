@@ -17,6 +17,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   }
 
   private let model: AppModel
+  private let agentStore: AgentSessionStore
   private var windows: [String: DisplayWindow] = [:]
   private(set) var appliedState: IslandPresentationState?
   private(set) var appliedExpandedContentHeight: CGFloat?
@@ -28,8 +29,9 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   private var pointerDisplayTimer: Timer?
   private var fullScreenTimer: Timer?
 
-  init(model: AppModel) {
+  init(model: AppModel, agentStore: AgentSessionStore = AgentSessionStore()) {
     self.model = model
+    self.agentStore = agentStore
     super.init()
 
     syncWindows()
@@ -161,7 +163,10 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       let panel = IslandPanel()
       panel.delegate = self
       let hostingView = NSHostingView(
-        rootView: AnyView(IslandRootView(displayID: id).environmentObject(model))
+        rootView: AnyView(
+          IslandRootView(displayID: id)
+            .environmentObject(model)
+            .environmentObject(agentStore))
       )
       hostingView.wantsLayer = true
       // The panel frame is driven per-frame by the spring; skipping intrinsic

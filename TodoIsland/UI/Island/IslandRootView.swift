@@ -112,9 +112,7 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
     // 24-week completion heatmap; the window is sized to their exact
     // natural height so no dead space trails the heatmap.
     case .reminders: IslandRootView.ScheduleMetrics.regular.remindersContentHeight
-    // Temporary: the agents pane reuses the AI pane's fixed height until
-    // AgentsPanelView lands with its own metrics.
-    case .agents: AIUsagePanelView.Metrics.contentHeight
+    case .agents: AgentsPanelView.Metrics.contentHeight
     // Player and lyrics cards use fixed metrics matching the AI pane, so
     // the island height stays uniform across features.
     case .music: MusicPanelView.Metrics.contentHeight
@@ -199,6 +197,7 @@ private struct ScheduledConfetti: Identifiable {
 
 struct IslandRootView: View {
   @EnvironmentObject private var model: AppModel
+  @EnvironmentObject private var agentStore: AgentSessionStore
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @FocusState private var editorTitleFocused: Bool
   @State private var reminderPendingDeletion: ReminderSnapshot?
@@ -414,6 +413,12 @@ struct IslandRootView: View {
         Color.clear.frame(width: hostPhysicalNotchWidth)
 
         if model.canUseActiveList {
+          if agentStore.hasPending {
+            Image(systemName: "bell.fill")
+              .font(.system(size: 9, weight: .bold))
+              .foregroundStyle(AgentsPanelPalette.bell)
+              .symbolEffect(.pulse, options: .repeating)
+          }
           // The bot character sits at the island's right end. The 12pt
           // trailing inset keeps it clear of the rounded corner cap so it
           // never crosses the surface outline.
@@ -448,6 +453,12 @@ struct IslandRootView: View {
         collapsedQuotaChip
           .padding(.leading, 12)
         Spacer(minLength: 0)
+        if agentStore.hasPending {
+          Image(systemName: "bell.fill")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(AgentsPanelPalette.bell)
+            .symbolEffect(.pulse, options: .repeating)
+        }
         collapsedBotFace
           .padding(.trailing, 12)
       }
@@ -550,7 +561,7 @@ struct IslandRootView: View {
     case .reminders:
       remindersFeatureContent.transition(.opacity)
     case .agents:
-      AIUsagePanelView(snapshot: model.aiUsage).transition(.opacity)
+      AgentsPanelView().transition(.opacity)
     case .music:
       MusicPanelView().transition(.opacity)
     case .clipboard:
