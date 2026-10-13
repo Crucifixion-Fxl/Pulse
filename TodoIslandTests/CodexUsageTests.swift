@@ -1,0 +1,120 @@
+import XCTest
+
+@testable import TodoIsland
+
+/// Codex rollout parsing: filename dating, tail token_count extraction,
+/// and the snapshot aggregation — all pure functions.
+final class CodexUsageTests: XCTestCase {
+  private let calendar = Calendar.current
+
+  private func fixedNow() -> Date {
+    var comps = DateComponents()
+    comps.year = 2026
+    comps.month = 10
+    comps.day = 13
+    comps.hour = 12
+    return calendar.date(from: comps)!
+  }
+
+  private func day(_ month: Int, _ day: Int) -> Date {
+    var comps = DateComponents()
+    comps.year = 2026
+    comps.month = month
+    comps.day = day
+    comps.hour = 10
+    return calendar.date(from: comps)!
+  }
+
+  func testSessionDateParsesRolloutFilenames() {
+    XCTAssertEqual(
+      CodexUsageParser.sessionDate(
+        filename: "rollout-2026-09-24T13-49-23-01a0d1f6-2055-7cd2-bb04-d647576005fe.jsonl",
+        calendar: calendar).map { calendar.startOfDay(for: $0) },
+      calendar.startOfDay(for: day(9, 24)))
+    XCTAssertNil(CodexUsageParser.sessionDate(filename: "history.jsonl"))
+    XCTAssertNil(CodexUsageParser.sessionDate(filename: "rollout-short.jsonl"))
+  }
+
+  func testLastTokenCountReadsFinalEventWithRateLimits() {
+    let jsonl = """
+      {"timestamp":"2026-10-13T02:00:00.000Z","type":"event_msg","payload":{"type":"turn_started"}}
+      {"timestamp":"2026-10-13T02:01:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":40,"cache_write_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":2,"total_tokens":110}}}}
+      {"timestamp":"2026-10-13T02:02:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":7357928,"cached_input_tokens":6962304,"cache_write_input_tokens":12,"output_tokens":21918}},"rate_limits":{"limit_id":"codex","primary":{"used_percent":34.0,"window_minutes":10080,"resets_at":1790573343}}}}
+      """
+    let parsed = CodexUsageParser.lastTokenCount(in: Data(jsonl.utf8))
+    XCTAssertEqual(parsed?.usage.input, 7_357_928)
+    XCTAssertEqual(parsed?.usage.cached, 6_962_304)
+    XCTAssertEqual(parsed?.usage.cacheWrite, 12)
+    XCTAssertEqual(parsed?.usage.output, 21_918)
+    XCTAssertEqual(parsed?.rateLimit?.usedPercent, 34.0)
+    XCTAssertEqual(parsed?.rateLimit?.resetsAt, Date(timeIntervalSince1970: 1_790_573_343))
+    // No token_count at all.
+    XCTAssertNil(CodexUsageParser.lastTokenCount(in: Data("{}".utf8)))
+  }
+
+  func testBuildSnapshotAggregatesDaysAndKeepsNewestRate() {
+    let sessions: [(date: Date, usage: CodexTokenUsage, rateLimit: CodexRateLimit?)] = [
+      (
+        day(10, 13),
+        CodexTokenUsage(input: 1000, cached: 400, cacheWrite: 0, output: 100),
+        CodexRateLimit(usedPercent: 34, resetsAt: Date(timeIntervalSince1970: 1_790_573_343))
+      ),
+      (
+        day(10, 13),
+        CodexTokenUsage(input: 500, cached: 0, cacheWrite: 50, output: 50),
+        nil
+      ),
+      (
+        day(10, 11),
+        CodexTokenUsage(input: 200, cached: 0, cacheWrite: 0, output: 20),
+        CodexRateLimit(usedPercent: 12, resetsAt: Date(timeIntervalSince1970: 1_790_000_000))
+      ),
+      (
+        day(8, 1),
+        CodexTokenUsage(input: 999, cached: 0, cacheWrite: 0, output: 9),
+        nil
+      ),
+    ]
+
+    let snapshot = CodexUsageParser.buildSnapshot(
+      sessions: sessions, now: fixedNow(), calendar: calendar)
+
+    XCTAssertEqual(snapshot.days.count, 15, "half-month window ending today")
+    XCTAssertEqual(snapshot.isSample, false)
+    // Cache is subtracted from input (the panel splits them) and cache
+    // writes fold into the cache column.
+    let today = snapshot.days.last!
+    XCTAssertEqual(today.inputTokens, 1_100)  // (1000-400) + (500-0)
+    XCTAssertEqual(today.outputTokens, 150)
+    XCTAssertEqual(today.cacheTokens, 450)  // 400 + 0 + 0 + 50
+    // Days outside the window are dropped entirely.
+    XCTAssertFalse(snapshot.days.contains { $0.day == calendar.startOfDay(for: day(8, 1)) })
+    // Zero-filled day in the middle.
+    XCTAssertEqual(snapshot.days[snapshot.days.count - 3].totalTokens, 220)
+
+    XCTAssertEqual(snapshot.subscriptions.count, 1)
+    let codex = snapshot.subscriptions[0]
+    XCTAssertEqual(codex.id, .openAI)
+    XCTAssertEqual(codex.planName, "Codex")
+    XCTAssertEqual(codex.quota.used, 34)
+    XCTAssertEqual(codex.quota.limit, 100)
+    XCTAssertEqual(codex.quota.unit, .percent)
+    XCTAssertEqual(codex.resetsAt, Date(timeIntervalSince1970: 1_790_573_343))
+  }
+
+  func testProviderFallsBackToSampleWithoutCodexDirectory() async throws {
+    let provider = CodexAIUsageProvider(
+      homeDirectory: URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("codex-missing-\(UUID().uuidString)"))
+    do {
+      _ = try await provider.fetchUsage()
+      XCTFail("expected a throw for a missing sessions directory")
+    } catch {
+      // expected
+    }
+
+    let chain = DefaultAIUsageProvider()
+    let snapshot = try await chain.fetchUsage()
+    XCTAssertEqual(snapshot.isSample, true, "chain falls back to the sample")
+  }
+}
