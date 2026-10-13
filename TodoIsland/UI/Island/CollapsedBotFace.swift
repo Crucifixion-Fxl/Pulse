@@ -194,7 +194,7 @@ struct CollapsedBotFaceView: View {
     let size: CGFloat
     /// Grok Bot proportions: a 3:1 vertical pill (their render script uses
     /// length 18 / width 5.2 ≈ 3.5:1; 3:1 holds up better at 24 pt).
-    var eyeWidth: CGFloat { size * 0.115 }
+    var eyeWidth: CGFloat { size * 0.14 }
     var eyeHeight: CGFloat { size * 0.346 }
     var eyeCenterX: CGFloat { size * 0.175 }
     var eyeCenterY: CGFloat { size * 0.48 }
