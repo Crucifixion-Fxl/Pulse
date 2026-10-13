@@ -488,7 +488,13 @@ private struct SubscriptionCard: View {
       vendorRow
 
       QuotaBar(
-        fraction: barAppeared || reduceMotion ? subscription.quota.fraction : 0,
+        // Window-style quotas drain like a battery (fill = remaining);
+        // counted quotas fill up as they are spent.
+        fraction: barAppeared || reduceMotion
+          ? (subscription.quota.unit == .percent
+            ? 1 - subscription.quota.fraction
+            : subscription.quota.fraction)
+          : 0,
         tint: barTint
       )
       .frame(height: 5)
@@ -573,10 +579,20 @@ private struct SubscriptionCard: View {
 
       Spacer(minLength: 2)
 
-      Text("\(Int((subscription.quota.fraction * 100).rounded()))%")
-        .font(.system(size: 10.5, weight: .semibold))
-        .monospacedDigit()
-        .foregroundStyle(barTint)
+      if subscription.quota.unit == .percent {
+        Text(
+          String(
+            format: L10n.text("ai.quota.remaining-percent"),
+            Int(((1 - subscription.quota.fraction) * 100).rounded())))
+          .font(.system(size: 10.5, weight: .semibold))
+          .monospacedDigit()
+          .foregroundStyle(barTint)
+      } else {
+        Text("\(Int((subscription.quota.fraction * 100).rounded()))%")
+          .font(.system(size: 10.5, weight: .semibold))
+          .monospacedDigit()
+          .foregroundStyle(barTint)
+      }
     }
   }
 

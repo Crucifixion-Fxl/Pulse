@@ -25,8 +25,11 @@ struct CollapsedQuotaChipView: View {
     }
   }
 
+  /// The chip shows what is LEFT (额度), not what is spent: a fresh quota
+  /// reads 100% and the ring drains as it is consumed. Status colors stay
+  /// driven by the used fraction (amber past 80%, red past 95%).
   private var percentText: String {
-    "\(Int((subscription.quota.fraction * 100).rounded()))%"
+    "\(Int(((1 - subscription.quota.fraction) * 100).rounded()))%"
   }
 
   var body: some View {
@@ -37,7 +40,7 @@ struct CollapsedQuotaChipView: View {
         Circle()
           .trim(
             from: 0,
-            to: appeared || reduceMotion ? subscription.quota.fraction : 0
+            to: appeared || reduceMotion ? 1 - subscription.quota.fraction : 0
           )
           .stroke(tint, style: StrokeStyle(lineWidth: Self.ringLineWidth, lineCap: .round))
           .rotationEffect(.degrees(-90))
