@@ -481,7 +481,7 @@ private struct SubscriptionCard: View {
   @State private var isHovering = false
   @State private var barAppeared = false
 
-  private var accent: Color { subscription.id.accent }
+  private var accent: Color { subscription.vendor.accent }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -526,7 +526,7 @@ private struct SubscriptionCard: View {
         .fill(accent.opacity(0.16))
         .frame(width: 26, height: 26)
         .overlay(
-          Image(subscription.id.iconName)
+          Image(subscription.vendor.iconName)
             .resizable()
             .renderingMode(.template)
             .scaledToFit()
@@ -535,7 +535,7 @@ private struct SubscriptionCard: View {
         )
 
       VStack(alignment: .leading, spacing: 1) {
-        Text(LocalizedStringKey(subscription.id.localizedKey))
+        Text(LocalizedStringKey(subscription.vendor.localizedKey))
           .font(.system(size: 12.5, weight: .semibold))
           .lineLimit(1)
         Text(subscription.planName)
@@ -602,7 +602,7 @@ private struct SubscriptionCard: View {
       AIUsageFormat.grouped(subscription.quota.limit)
     )
     return Text(
-      "\(L10n.text(subscription.id.localizedKey)), \(subscription.planName), \(usedOf), \(percent)%"
+      "\(L10n.text(subscription.vendor.localizedKey)), \(subscription.planName), \(usedOf), \(percent)%"
     )
   }
 }

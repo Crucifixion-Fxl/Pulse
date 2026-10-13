@@ -3,7 +3,7 @@ import XCTest
 @testable import TodoIsland
 
 /// Codex rollout parsing: filename dating, tail token_count extraction,
-/// and the snapshot aggregation — all pure functions.
+/// lane-classified windows, and the snapshot aggregation — pure functions.
 final class CodexUsageTests: XCTestCase {
   private let calendar = Calendar.current
 
@@ -46,18 +46,18 @@ final class CodexUsageTests: XCTestCase {
     XCTAssertEqual(parsed?.usage.cached, 6_962_304)
     XCTAssertEqual(parsed?.usage.cacheWrite, 12)
     XCTAssertEqual(parsed?.usage.output, 21_918)
-    XCTAssertEqual(parsed?.rateLimit?.usedPercent, 34.0)
-    XCTAssertEqual(parsed?.rateLimit?.resetsAt, Date(timeIntervalSince1970: 1_790_573_343))
+    XCTAssertEqual(parsed?.rateWindow?.usedPercent, 34.0)
+    XCTAssertEqual(parsed?.rateWindow?.resetsAt, Date(timeIntervalSince1970: 1_790_573_343))
     // No token_count at all.
     XCTAssertNil(CodexUsageParser.lastTokenCount(in: Data("{}".utf8)))
   }
 
   func testBuildSnapshotAggregatesDaysAndKeepsNewestRate() {
-    let sessions: [(date: Date, usage: CodexTokenUsage, rateLimit: CodexRateLimit?)] = [
+    let sessions: [(date: Date, usage: CodexTokenUsage, rateWindow: CodexRateWindow?)] = [
       (
         day(10, 13),
         CodexTokenUsage(input: 1000, cached: 400, cacheWrite: 0, output: 100),
-        CodexRateLimit(usedPercent: 34, resetsAt: Date(timeIntervalSince1970: 1_790_573_343))
+        CodexRateWindow(usedPercent: 34, windowMinutes: 10_080, resetsAt: Date(timeIntervalSince1970: 1_790_573_343))
       ),
       (
         day(10, 13),
@@ -67,7 +67,7 @@ final class CodexUsageTests: XCTestCase {
       (
         day(10, 11),
         CodexTokenUsage(input: 200, cached: 0, cacheWrite: 0, output: 20),
-        CodexRateLimit(usedPercent: 12, resetsAt: Date(timeIntervalSince1970: 1_790_000_000))
+        CodexRateWindow(usedPercent: 12, windowMinutes: 10_080, resetsAt: Date(timeIntervalSince1970: 1_790_000_000))
       ),
       (
         day(8, 1),
@@ -94,12 +94,54 @@ final class CodexUsageTests: XCTestCase {
 
     XCTAssertEqual(snapshot.subscriptions.count, 1)
     let codex = snapshot.subscriptions[0]
-    XCTAssertEqual(codex.id, .openAI)
-    XCTAssertEqual(codex.planName, "Codex")
+    XCTAssertEqual(codex.id, "codex-weekly")
+    XCTAssertEqual(codex.vendor, .openAI)
+    XCTAssertEqual(codex.planName, "Weekly limit")
     XCTAssertEqual(codex.quota.used, 34)
     XCTAssertEqual(codex.quota.limit, 100)
     XCTAssertEqual(codex.quota.unit, .percent)
     XCTAssertEqual(codex.resetsAt, Date(timeIntervalSince1970: 1_790_573_343))
+  }
+
+  func testWindowLaneClassificationCanonicalizesJitter() {
+    XCTAssertEqual(
+      CodexRateWindow(usedPercent: 10, windowMinutes: 298, resetsAt: Date()).lane, .session)
+    XCTAssertEqual(
+      CodexRateWindow(usedPercent: 10, windowMinutes: 305, resetsAt: Date()).lane, .session)
+    XCTAssertEqual(
+      CodexRateWindow(usedPercent: 10, windowMinutes: 10_083, resetsAt: Date()).lane, .weekly)
+    XCTAssertEqual(
+      CodexRateWindow(usedPercent: 10, windowMinutes: 720, resetsAt: Date()).lane, .unknown)
+  }
+
+  func testLiveWindowsProduceBothCardsAndWeeklyCapsSession() {
+    let weekly = CodexRateWindow(
+      usedPercent: 100, windowMinutes: 10_080,
+      resetsAt: fixedNow().addingTimeInterval(3 * 24 * 3600))
+    let session = CodexRateWindow(
+      usedPercent: 42, windowMinutes: 300,
+      resetsAt: fixedNow().addingTimeInterval(3600))
+
+    let snapshot = CodexUsageParser.buildSnapshot(
+      sessions: [], liveWindows: (session, weekly), now: fixedNow(), calendar: calendar)
+
+    XCTAssertEqual(snapshot.subscriptions.map(\.id), ["codex-weekly", "codex-session"])
+    XCTAssertEqual(snapshot.subscriptions[0].quota.used, 100)
+    // The spent week drags the session bar up so it cannot imply headroom.
+    XCTAssertEqual(snapshot.subscriptions[1].quota.used, 100)
+    XCTAssertEqual(snapshot.subscriptions[1].planName, "5-hour window")
+  }
+
+  func testSlotOrderDoesNotMatterForLiveWindows() {
+    // A provider that hands the weekly window in the "session" tuple slot
+    // by mistake still lands on the right card via lane classification —
+    // exercised through buildSnapshot's lane-based fallback path.
+    let only = CodexRateWindow(
+      usedPercent: 7, windowMinutes: 10_080, resetsAt: fixedNow().addingTimeInterval(3600))
+    let snapshot = CodexUsageParser.buildSnapshot(
+      sessions: [(date: fixedNow(), usage: CodexTokenUsage(input: 10, cached: 0, cacheWrite: 0, output: 2), rateWindow: only)],
+      now: fixedNow(), calendar: calendar)
+    XCTAssertEqual(snapshot.subscriptions.first?.id, "codex-weekly")
   }
 
   func testProviderFallsBackToSampleWithoutCodexDirectory() async throws {
@@ -113,7 +155,9 @@ final class CodexUsageTests: XCTestCase {
       // expected
     }
 
-    let chain = DefaultAIUsageProvider()
+    // Inject the doomed codex provider so the chain verdict does not
+    // depend on whether THIS machine happens to be logged in.
+    let chain = DefaultAIUsageProvider(codex: provider, fallback: SampleAIUsageProvider())
     let snapshot = try await chain.fetchUsage()
     XCTAssertEqual(snapshot.isSample, true, "chain falls back to the sample")
   }

@@ -1707,7 +1707,7 @@ struct IslandRootView: View {
   @ViewBuilder
   private var collapsedQuotaChip: some View {
     if let subscription = model.aiUsage?.subscriptions.first(where: {
-      $0.id == model.collapsedQuotaVendor
+      $0.vendor == model.collapsedQuotaVendor
     }) {
       CollapsedQuotaChipView(subscription: subscription)
     }
