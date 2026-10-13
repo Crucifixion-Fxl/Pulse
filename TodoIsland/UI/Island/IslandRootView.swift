@@ -223,6 +223,24 @@ struct IslandRootView: View {
 
   private var isPinned: Bool { model.islandState == .pinned }
 
+  /// Identity of the display this island window lives on — injected by the
+  /// window controller (one island per display). nil keeps the legacy
+  /// single-window behavior of always hosting the active state.
+  let displayID: String?
+
+  init(displayID: String? = nil) {
+    self.displayID = displayID
+  }
+
+  /// What this window should render: the global state only when the active
+  /// island is on this display; every other window stays a collapsed bar.
+  private var effectiveState: IslandPresentationState {
+    IslandRouting.effectiveState(
+      global: model.islandState,
+      activeDisplayID: model.hostDisplayID,
+      windowDisplayID: displayID)
+  }
+
   var body: some View {
     GeometryReader { proxy in
       let surfaceSize = IslandAnimatedSurfaceLayout.surfaceSize(
@@ -231,7 +249,7 @@ struct IslandRootView: View {
       )
 
       ZStack(alignment: .top) {
-        if model.islandState == .collapsed {
+        if effectiveState == .collapsed {
           collapsedContent
             .transition(
               .asymmetric(
@@ -240,10 +258,96 @@ struct IslandRootView: View {
               )
             )
         } else {
+          // Expanded-only chrome rides the branch: event monitors, dialogs,
+          // and the height-measurement pipeline exist solely on the one
+          // window hosting the expanded surface, so per-display windows
+          // never multiply global monitors or fight over one alert.
           expandedContent
             .transition(
               .opacity.combined(with: .scale(scale: 0.965, anchor: .top))
             )
+            .background(KeyboardEventMonitor(handler: handleKeyEvent))
+            .background(
+              MouseDownMonitor { event in
+                if model.islandState == .preview {
+                  model.pinIsland()
+                }
+              }
+            )
+            .confirmationDialog(
+              L10n.text("delete.title"),
+              isPresented: Binding(
+                get: { reminderPendingDeletion != nil },
+                set: { if !$0 { reminderPendingDeletion = nil } }
+              )
+            ) {
+              Button(L10n.text("delete.confirm"), role: .destructive) {
+                if let reminderPendingDeletion { model.delete(reminderPendingDeletion) }
+                reminderPendingDeletion = nil
+              }
+              Button(L10n.text("common.cancel"), role: .cancel) {
+                reminderPendingDeletion = nil
+              }
+            } message: {
+              Text(reminderPendingDeletion?.title ?? "")
+            }
+            .alert(
+              L10n.text("error.title"),
+              isPresented: Binding(
+                get: { model.errorMessage != nil },
+                set: { if !$0 { model.errorMessage = nil } }
+              )
+            ) {
+              Button(L10n.text("common.ok")) { model.errorMessage = nil }
+            } message: {
+              Text(model.errorMessage ?? "")
+            }
+            .onChange(of: model.editingReminderID) { _, id in
+              if id != nil { editorTitleFocused = true }
+            }
+            .onChange(of: model.editingFocusRequestID) { _, _ in
+              Task { @MainActor in editorTitleFocused = true }
+            }
+            .onChange(of: effectiveState) { _, state in
+              if state == .collapsed {
+                hoveredSidebarItem = nil
+                hoveredReminderID = nil
+                editorTitleFocused = false
+                newTaskFocused = false
+              }
+              // A pinned island is the typing surface: put the caret straight
+              // into the Task Input so the first keystroke lands there. When the
+              // click that pinned the Island is still in flight, the panel has
+              // not become key yet and this request cannot land — the
+              // taskInputFocusRequestID handler below re-issues it when it can.
+              if state == .pinned, model.editingReminderID == nil {
+                newTaskFocused = true
+              }
+            }
+            .onChange(of: model.taskInputFocusRequestID) { _, _ in
+              guard model.islandState == .pinned, model.editingReminderID == nil else { return }
+              // Pass through false first: the pin already left the state true,
+              // and re-asserting true alone would not re-issue the focus request.
+              newTaskFocused = false
+              Task { @MainActor in newTaskFocused = true }
+            }
+            .onAppear {
+              updateExpandedContentHeight()
+              syncMusicPanelActivity()
+            }
+            .onChange(of: selectedSidebarItem) { _, _ in updateExpandedContentHeight() }
+            .onChange(of: model.islandState) { _, _ in syncMusicPanelActivity() }
+            // Height must track exactly what expandedFeatureContent branches on.
+            // canUseActiveList (not lists.count) is the real gate: it also flips
+            // when the local store becomes available or the active list changes,
+            // neither of which necessarily changes lists.count.
+            .onChange(of: model.canUseActiveList) { _, _ in updateExpandedContentHeight() }
+            .onChange(of: model.authorization) { _, _ in updateExpandedContentHeight() }
+            .onPreferenceChange(CalendarPaneHeightKey.self) { height in
+              guard height.isFinite, height > 0, calendarPaneIdealHeight != height else { return }
+              calendarPaneIdealHeight = height
+            }
+            .onChange(of: calendarPaneIdealHeight) { _, _ in updateExpandedContentHeight() }
         }
       }
       .frame(width: surfaceSize.width, height: surfaceSize.height, alignment: .top)
@@ -251,7 +355,7 @@ struct IslandRootView: View {
       .clipShape(islandShape)
       .contentShape(Rectangle())
       .onHover { hovering in
-        model.setIslandHovered(hovering)
+        model.setIslandHovered(hovering, on: displayID)
       }
       .onTapGesture {
         // Only a hover preview becomes pinned from a surface tap. This keeps
@@ -259,98 +363,16 @@ struct IslandRootView: View {
         // from being re-pinned by the parent gesture after they act.
         if model.islandState == .preview { model.pinIsland() }
       }
-      .background(KeyboardEventMonitor(handler: handleKeyEvent))
-      .background(
-        MouseDownMonitor { event in
-          if model.islandState == .preview {
-            model.pinIsland()
-          }
-        }
-      )
-      .animation(surfaceAnimation, value: model.islandState)
+      .animation(surfaceAnimation, value: effectiveState)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-      .confirmationDialog(
-        L10n.text("delete.title"),
-        isPresented: Binding(
-          get: { reminderPendingDeletion != nil },
-          set: { if !$0 { reminderPendingDeletion = nil } }
-        )
-      ) {
-        Button(L10n.text("delete.confirm"), role: .destructive) {
-          if let reminderPendingDeletion { model.delete(reminderPendingDeletion) }
-          reminderPendingDeletion = nil
-        }
-        Button(L10n.text("common.cancel"), role: .cancel) {
-          reminderPendingDeletion = nil
-        }
-      } message: {
-        Text(reminderPendingDeletion?.title ?? "")
-      }
-      .alert(
-        L10n.text("error.title"),
-        isPresented: Binding(
-          get: { model.errorMessage != nil },
-          set: { if !$0 { model.errorMessage = nil } }
-        )
-      ) {
-        Button(L10n.text("common.ok")) { model.errorMessage = nil }
-      } message: {
-        Text(model.errorMessage ?? "")
-      }
-      .onChange(of: model.editingReminderID) { _, id in
-        if id != nil { editorTitleFocused = true }
-      }
-      .onChange(of: model.editingFocusRequestID) { _, _ in
-        Task { @MainActor in editorTitleFocused = true }
-      }
-      .onChange(of: model.islandState) { _, state in
-        if state == .collapsed {
-          hoveredSidebarItem = nil
-          hoveredReminderID = nil
-          editorTitleFocused = false
-          newTaskFocused = false
-        }
-        // A pinned island is the typing surface: put the caret straight
-        // into the Task Input so the first keystroke lands there. When the
-        // click that pinned the Island is still in flight, the panel has
-        // not become key yet and this request cannot land — the
-        // taskInputFocusRequestID handler below re-issues it when it can.
-        if state == .pinned, model.editingReminderID == nil {
-          newTaskFocused = true
-        }
-      }
-      .onChange(of: model.taskInputFocusRequestID) { _, _ in
-        guard model.islandState == .pinned, model.editingReminderID == nil else { return }
-        // Pass through false first: the pin already left the state true,
-        // and re-asserting true alone would not re-issue the focus request.
-        newTaskFocused = false
-        Task { @MainActor in newTaskFocused = true }
-      }
-      .onAppear {
-        updateExpandedContentHeight()
-        syncMusicPanelActivity()
-      }
-      .onChange(of: selectedSidebarItem) { _, _ in updateExpandedContentHeight() }
-      .onChange(of: model.islandState) { _, _ in syncMusicPanelActivity() }
-      // Height must track exactly what expandedFeatureContent branches on.
-      // canUseActiveList (not lists.count) is the real gate: it also flips
-      // when the local store becomes available or the active list changes,
-      // neither of which necessarily changes lists.count.
-      .onChange(of: model.canUseActiveList) { _, _ in updateExpandedContentHeight() }
-      .onChange(of: model.authorization) { _, _ in updateExpandedContentHeight() }
-      .onPreferenceChange(CalendarPaneHeightKey.self) { height in
-        guard height.isFinite, height > 0, calendarPaneIdealHeight != height else { return }
-        calendarPaneIdealHeight = height
-      }
-      .onChange(of: calendarPaneIdealHeight) { _, _ in updateExpandedContentHeight() }
     }
   }
 
   private var islandShape: IslandSurfaceShape {
     IslandSurfaceShape(
-      shoulderInset: model.islandState == .collapsed ? 0 : 8,
-      topShoulderDepth: model.islandState == .collapsed ? 0 : expandedTopShoulderDepth,
-      bottomRadius: model.islandState == .collapsed
+      shoulderInset: effectiveState == .collapsed ? 0 : 8,
+      topShoulderDepth: effectiveState == .collapsed ? 0 : expandedTopShoulderDepth,
+      bottomRadius: effectiveState == .collapsed
         ? (hostDisplayHasNotch ? 14 : 18)
         : 36
     )
@@ -1681,11 +1703,11 @@ struct IslandRootView: View {
   }
 
   private var hostDisplayHasNotch: Bool {
-    DisplaySupport.cachedMetrics(for: model.hostDisplayID)?.hasPhysicalNotch ?? false
+    DisplaySupport.cachedMetrics(for: displayID ?? model.hostDisplayID)?.hasPhysicalNotch ?? false
   }
 
   private var hostPhysicalNotchWidth: CGFloat {
-    DisplaySupport.cachedMetrics(for: model.hostDisplayID)?.physicalNotchWidth ?? 0
+    DisplaySupport.cachedMetrics(for: displayID ?? model.hostDisplayID)?.physicalNotchWidth ?? 0
   }
 
   private var expandedTopShoulderDepth: CGFloat { 8 }
@@ -1728,19 +1750,19 @@ struct IslandRootView: View {
   }
 
   private var expandedContentTopInset: CGFloat {
-    guard let metrics = DisplaySupport.cachedMetrics(for: model.hostDisplayID) else { return 16 }
+    guard let metrics = DisplaySupport.cachedMetrics(for: displayID ?? model.hostDisplayID) else { return 16 }
     return max(16, metrics.safeAreaTop + 6)
   }
 
   private var islandSurfaceSize: CGSize {
-    guard let metrics = DisplaySupport.cachedMetrics(for: model.hostDisplayID) else {
+    guard let metrics = DisplaySupport.cachedMetrics(for: displayID ?? model.hostDisplayID) else {
       return .zero
     }
     return DisplayGeometryCalculator.geometry(
       for: metrics,
       expandedContentHeight: model.expandedContentHeight
     )
-      .size(for: model.islandState)
+      .size(for: effectiveState)
   }
 
   private var collapsedAccessibilityLabel: Text {

@@ -58,3 +58,29 @@ struct IslandStateMachine: Equatable, Sendable {
     state = .collapsed
   }
 }
+
+/// Multi-display routing: every screen carries its own island window, but
+/// the app still expands exactly one island at a time. `activeDisplayID`
+/// (AppModel.hostDisplayID) names it; every other window renders — and is
+/// sized as — a collapsed bar regardless of the global state.
+enum IslandRouting {
+  /// The presentation state a window on `windowDisplayID` should render.
+  ///
+  /// - The global state collapsed → everything collapsed.
+  /// - A legacy window without display identity always hosts the state
+  ///   (single-window compatibility).
+  /// - Identified windows host the expanded state only when the active
+  ///   display matches; with no active display nobody expands (the
+  ///   controller maintains a non-nil active display whenever a screen
+  ///   exists, so this is a safe default rather than a steady state).
+  static func effectiveState(
+    global: IslandPresentationState,
+    activeDisplayID: String?,
+    windowDisplayID: String?
+  ) -> IslandPresentationState {
+    guard global != .collapsed else { return .collapsed }
+    guard let windowDisplayID else { return global }
+    guard let activeDisplayID else { return .collapsed }
+    return windowDisplayID == activeDisplayID ? global : .collapsed
+  }
+}

@@ -673,12 +673,18 @@ final class AppModel: ObservableObject {
     selectedReminderID = navigable[nextIndex].id
   }
 
-  func setIslandHovered(_ hovering: Bool) {
+  func setIslandHovered(_ hovering: Bool, on displayID: String? = nil) {
     guard isPointerInsideIsland != hovering else { return }
     isPointerInsideIsland = hovering
     hoverTask?.cancel()
 
     if hovering {
+      // With one island per display, hover names the display whose island
+      // should expand; hostDisplayID is the routing key the controller and
+      // the per-display views agree on.
+      if let displayID, displayID != hostDisplayID {
+        setHostDisplayID(displayID)
+      }
       guard islandState == .collapsed else { return }
       showCollapsedIsland()
       if suspendedEditingFocus != nil {
