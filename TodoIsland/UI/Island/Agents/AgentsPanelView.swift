@@ -121,7 +121,7 @@ private struct SessionCard: View {
   var body: some View {
     HStack(alignment: .top, spacing: 10) {
       VStack(spacing: 2) {
-        AgentMonogramView(source: session.source, size: 32)
+        AgentMascotView(source: session.source, status: session.status, size: 32)
         if !session.subagents.isEmpty {
           Text("+\(session.subagents.count)")
             .font(.system(size: 8, weight: .bold, design: .monospaced))
