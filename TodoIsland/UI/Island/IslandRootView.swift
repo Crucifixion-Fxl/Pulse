@@ -336,6 +336,10 @@ struct IslandRootView: View {
               syncMusicPanelActivity()
             }
             .onChange(of: selectedSidebarItem) { _, _ in updateExpandedContentHeight() }
+      .onChange(of: model.requestedSidebarItem) { _, item in
+        guard let item, item != selectedSidebarItem else { return }
+        selectedSidebarItem = item
+      }
             .onChange(of: model.islandState) { _, _ in syncMusicPanelActivity() }
             // Height must track exactly what expandedFeatureContent branches on.
             // canUseActiveList (not lists.count) is the real gate: it also flips

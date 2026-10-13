@@ -37,6 +37,10 @@ final class AppModel: ObservableObject {
   @Published private(set) var isEditingDraftValidated = true
   @Published private(set) var completingReminderIDs: Set<String> = []
   @Published private(set) var hostDisplayID: String?
+  /// Sidebar pane the UI should switch to — bumped by features that
+  /// auto-expand the island (e.g. an agent approval request routing to the
+  /// agents pane). IslandRootView observes and syncs its local selection.
+  @Published private(set) var requestedSidebarItem: IslandSidebarItem?
   @Published private(set) var localStoreAvailability: LocalStoreAvailability = .available
   @Published private(set) var listDeletionCandidate: ReminderListDeletionSummary?
   @Published private(set) var preferredEmptySource: ReminderSource?
@@ -746,6 +750,12 @@ final class AppModel: ObservableObject {
     case .autoHide:
       reconcileCollapsedIslandVisibility()
     }
+  }
+
+  /// Routes the island's sidebar to a pane; used with pinIsland() by
+  /// auto-expansion flows.
+  func requestSidebarItem(_ item: IslandSidebarItem) {
+    requestedSidebarItem = item
   }
 
   func setHostDisplayID(_ displayID: String?) {
