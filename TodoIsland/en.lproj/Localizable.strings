@@ -116,6 +116,7 @@
 "ai.quota.reset.days" = "Resets in %d days";
 "ai.quota.reset.tomorrow" = "Resets tomorrow";
 "ai.quota.reset.today" = "Resets today";
+"ai.quota.remaining-percent" = "%d%% left";
 "ai.unit.tokens" = "tokens";
 "ai.unit.requests" = "requests";
 "ai.unit.credits" = "credits";

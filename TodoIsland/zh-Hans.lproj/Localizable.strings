@@ -116,6 +116,7 @@
 "ai.quota.reset.days" = "%d 天后重置";
 "ai.quota.reset.tomorrow" = "明天重置";
 "ai.quota.reset.today" = "今天重置";
+"ai.quota.remaining-percent" = "剩余 %d%%";
 "ai.unit.tokens" = "tokens";
 "ai.unit.requests" = "次";
 "ai.unit.credits" = "额度";
