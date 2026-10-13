@@ -129,7 +129,8 @@ final class AIUsageTests: XCTestCase {
   // MARK: Panel height
 
   func testAIUsageSidebarHeightIsSane() {
-    XCTAssertGreaterThan(IslandSidebarItem.aiUsage.preferredContentHeight, 300)
+    // `aiUsage` was renamed to `agents` (ed05c58); the panel behind it is unchanged.
+    XCTAssertGreaterThan(IslandSidebarItem.agents.preferredContentHeight, 300)
   }
 
   // MARK: AppModel wiring
