@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Read-only AI usage source for the usage panel. The sample provider is the
 /// only conformer today; local ~/.claude log parsing and vendor APIs arrive
@@ -26,7 +27,16 @@ struct DefaultAIUsageProvider: AIUsageProvider {
   var fallback: AIUsageProvider = SampleAIUsageProvider()
 
   func fetchUsage() async throws -> AIUsageSnapshot {
-    guard let real = try? await codex.fetchUsage() else {
+    let real: AIUsageSnapshot?
+    do {
+      real = try await codex.fetchUsage()
+    } catch {
+      // Diagnostic: the chip silently falling back to sample/session data
+      // is invisible otherwise.
+      Self.log.error("codex provider failed, falling back: \(String(describing: error), privacy: .public)")
+      real = nil
+    }
+    guard let real else {
       return try await fallback.fetchUsage()
     }
     // Keep the other vendors' (virtual) cards beside the real Codex ones
@@ -36,4 +46,6 @@ struct DefaultAIUsageProvider: AIUsageProvider {
     merged.subscriptions += sample.subscriptions.filter { $0.vendor != .openAI }
     return merged
   }
+
+  private static let log = Logger(subsystem: "com.fxl.TodoIsland", category: "ai-usage")
 }
