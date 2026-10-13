@@ -90,9 +90,14 @@ struct AIQuota: Hashable, Sendable {
   }
 }
 
-/// One subscription card: vendor identity, plan, weekly quota, reset date.
+/// One subscription card: vendor identity, plan, quota, reset date.
 struct AISubscription: Hashable, Sendable, Identifiable {
-  let id: AIUsageVendor
+  /// Stable card identity — vendors can carry several windows
+  /// ("codex-weekly", "codex-session").
+  let id: String
+  /// Whose logo and label the card carries; also drives the collapsed
+  /// chip's vendor selection.
+  var vendor: AIUsageVendor
   /// Proper noun rendered as-is; never localized.
   var planName: String
   var quota: AIQuota
@@ -193,19 +198,22 @@ enum AIUsageSample {
 
     let subscriptions = [
       AISubscription(
-        id: .zhipuGLM,
+        id: "zhipu-glm",
+        vendor: .zhipuGLM,
         planName: "Coding Plan",
         quota: AIQuota(used: 2_040, limit: 3_000, unit: .requests),
         resetsAt: calendar.date(byAdding: .day, value: 3, to: today)!.addingTimeInterval(14 * 3600)
       ),
       AISubscription(
-        id: .anthropic,
+        id: "anthropic",
+        vendor: .anthropic,
         planName: "Claude Max",
         quota: AIQuota(used: 920, limit: 1_000, unit: .credits),
         resetsAt: calendar.date(byAdding: .day, value: 5, to: today)!.addingTimeInterval(9 * 3600)
       ),
       AISubscription(
-        id: .openAI,
+        id: "openai",
+        vendor: .openAI,
         planName: "ChatGPT Plus",
         quota: AIQuota(used: 812, limit: 2_000, unit: .requests),
         resetsAt: calendar.date(byAdding: .day, value: 1, to: today)!.addingTimeInterval(12 * 3600)

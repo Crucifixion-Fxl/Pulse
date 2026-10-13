@@ -53,7 +53,7 @@ final class AIUsageTests: XCTestCase {
   func testSampleSubscriptionsCoverThreeUniqueVendors() {
     let snapshot = AIUsageSample.makeSnapshot(now: fixedNow(), calendar: calendar)
     XCTAssertEqual(
-      Set(snapshot.subscriptions.map(\.id)),
+      Set(snapshot.subscriptions.map(\.vendor)),
       Set(AIUsageVendor.allCases)
     )
   }

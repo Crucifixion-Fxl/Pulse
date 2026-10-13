@@ -8,10 +8,39 @@ struct CodexTokenUsage: Equatable, Sendable {
   var output: Int
 }
 
-/// The newest rate-limit window a session reported.
-struct CodexRateLimit: Equatable, Sendable {
+/// One rate-limit window observation, lane-classified by its span the way
+/// CodexBar does it — providers hand the two windows back in either slot,
+/// so 300-minute and 10080-minute classification is more reliable than the
+/// primary/secondary field order.
+struct CodexRateWindow: Equatable, Sendable {
+  enum Lane: Equatable, Sendable {
+    case session
+    case weekly
+    case unknown
+  }
+
   var usedPercent: Double
+  var windowMinutes: Int
   var resetsAt: Date
+
+  init(usedPercent: Double, windowMinutes: Int, resetsAt: Date) {
+    self.usedPercent = usedPercent
+    // Canonicalize the jitter providers report (295...305, 10070...10090).
+    switch windowMinutes {
+    case 295...305: self.windowMinutes = 300
+    case 10_070...10_090: self.windowMinutes = 10_080
+    default: self.windowMinutes = windowMinutes
+    }
+    self.resetsAt = resetsAt
+  }
+
+  var lane: Lane {
+    switch windowMinutes {
+    case 300: .session
+    case 10_080: .weekly
+    default: .unknown
+    }
+  }
 }
 
 /// Pure parsing for Codex rollout files — no I/O, fully unit-testable.
@@ -56,6 +85,7 @@ enum CodexUsageParser {
       }
       struct Window: Decodable {
         let used_percent: Double?
+        let window_minutes: Int?
         let resets_at: Int64?
       }
       struct Limits: Decodable {
@@ -71,7 +101,7 @@ enum CodexUsageParser {
   /// cumulative counters plus whatever rate-limit window accompanied it.
   static func lastTokenCount(
     in tail: Data, now: Date = Date()
-  ) -> (usage: CodexTokenUsage, rateLimit: CodexRateLimit?)? {
+  ) -> (usage: CodexTokenUsage, rateWindow: CodexRateWindow?)? {
     guard !tail.isEmpty else { return nil }
     // Split on newlines from the end; event lines are well under 2 KB so a
     // 128 KB tail always contains the last complete event.
@@ -93,12 +123,13 @@ enum CodexUsageParser {
         cached: usage.cached_input_tokens ?? 0,
         cacheWrite: usage.cache_write_input_tokens ?? 0,
         output: usage.output_tokens ?? 0)
-      let limit = event.payload?.rate_limits?.primary.flatMap { window in
-        CodexRateLimit(
-          usedPercent: window.used_percent ?? 0,
-          resetsAt: window.resets_at.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? now)
+      let window = event.payload?.rate_limits?.primary.flatMap { raw in
+        CodexRateWindow(
+          usedPercent: raw.used_percent ?? 0,
+          windowMinutes: raw.window_minutes ?? 0,
+          resetsAt: raw.resets_at.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? now)
       }
-      return (tokens, limit)
+      return (tokens, window)
     }
     return nil
   }
@@ -106,16 +137,18 @@ enum CodexUsageParser {
   /// Aggregates parsed sessions into the panel's snapshot shape: exactly
   /// fifteen ascending days ending today (zero-filled), the day split
   /// following the panel's input/output/cache breakdown, and the Codex
-  /// subscription built from the newest rate-limit window seen.
+  /// subscription cards built from live OAuth windows when present, else
+  /// from the newest session-recorded window.
   static func buildSnapshot(
-    sessions: [(date: Date, usage: CodexTokenUsage, rateLimit: CodexRateLimit?)],
+    sessions: [(date: Date, usage: CodexTokenUsage, rateWindow: CodexRateWindow?)],
+    liveWindows: (session: CodexRateWindow?, weekly: CodexRateWindow?)? = nil,
     now: Date = Date(),
     calendar: Calendar = .current
   ) -> AIUsageSnapshot {
     let today = calendar.startOfDay(for: now)
     var days: [AIUsageDay] = []
     var byDay: [Date: (input: Int, output: Int, cache: Int)] = [:]
-    var newestRate: CodexRateLimit?
+    var newestSessionWindow: CodexRateWindow?
 
     for session in sessions {
       let key = calendar.startOfDay(for: session.date)
@@ -125,10 +158,10 @@ enum CodexUsageParser {
         entry.output + session.usage.output,
         entry.cache + session.usage.cached + session.usage.cacheWrite
       )
-      if let rate = session.rateLimit {
-        if newestRate == nil || rate.resetsAt > newestRate!.resetsAt {
-          newestRate = rate
-        }
+      if let window = session.rateWindow,
+        newestSessionWindow == nil || window.resetsAt > newestSessionWindow!.resetsAt
+      {
+        newestSessionWindow = window
       }
     }
 
@@ -141,73 +174,185 @@ enum CodexUsageParser {
           cacheTokens: totals.cache))
     }
 
-    let subscription: AISubscription
-    if let rate = newestRate {
-      subscription = AISubscription(
-        id: .openAI,
-        planName: "Codex",
-        quota: AIQuota(
-          used: Int(rate.usedPercent.rounded()),
-          limit: 100,
-          unit: .percent),
-        resetsAt: rate.resetsAt)
-    } else {
-      // Sessions exist but none reported a window yet — an expired-looking
-      // zero is more honest than no card.
-      subscription = AISubscription(
-        id: .openAI,
-        planName: "Codex",
-        quota: AIQuota(used: 0, limit: 100, unit: .percent),
-        resetsAt: now)
+    // Live OAuth windows win; a session-recorded window is the fallback.
+    var weekly = liveWindows?.weekly
+    var sessionWindow = liveWindows?.session
+    if weekly == nil, sessionWindow == nil, let fallback = newestSessionWindow {
+      switch fallback.lane {
+      case .weekly: weekly = fallback
+      case .session, .unknown: sessionWindow = fallback
+      }
     }
 
-    return AIUsageSnapshot(days: days, subscriptions: [subscription], isSample: false)
+    var subscriptions: [AISubscription] = []
+    if let weekly {
+      subscriptions.append(Self.percentCard(id: "codex-weekly", name: "Weekly limit", window: weekly))
+    }
+    if var sessionWindow {
+      // The weekly window caps the session one: a spent week must not
+      // leave the 5h bar implying headroom that is not really there.
+      if let weekly, weekly.usedPercent >= 100 {
+        sessionWindow.usedPercent = max(sessionWindow.usedPercent, 100)
+      }
+      subscriptions.append(
+        Self.percentCard(id: "codex-session", name: "5-hour window", window: sessionWindow))
+    }
+    if subscriptions.isEmpty {
+      // Nothing observed a window yet — an expired-looking zero is more
+      // honest than no card.
+      subscriptions.append(
+        AISubscription(
+          id: "codex-weekly",
+          vendor: .openAI,
+          planName: "Weekly limit",
+          quota: AIQuota(used: 0, limit: 100, unit: .percent),
+          resetsAt: now))
+    }
+
+    return AIUsageSnapshot(days: days, subscriptions: subscriptions, isSample: false)
+  }
+
+  private static func percentCard(
+    id: String, name: String, window: CodexRateWindow
+  ) -> AISubscription {
+    AISubscription(
+      id: id,
+      vendor: .openAI,
+      planName: name,
+      quota: AIQuota(
+        used: Int(window.usedPercent.rounded()),
+        limit: 100,
+        unit: .percent),
+      resetsAt: window.resetsAt)
   }
 }
 
-/// Real Codex usage from `~/.codex/sessions`: the last `token_count` event
-/// of each recent rollout carries the session's cumulative tokens and the
-/// account's current rate-limit window.
+/// Live quota windows from the ChatGPT backend using the Codex CLI's own
+/// credentials — the same source of truth CodexBar uses. The tokens from
+/// `~/.codex/auth.json` live only in memory for this request; they are
+/// never logged or persisted anywhere else.
+enum CodexOAuthUsage {
+  struct Credentials: Decodable {
+    struct Tokens: Decodable {
+      let access_token: String?
+      let account_id: String?
+    }
+    let tokens: Tokens?
+  }
+
+  struct UsageResponse: Decodable {
+    struct Window: Decodable {
+      let used_percent: Int?
+      let reset_at: Int?
+      let limit_window_seconds: Int?
+    }
+    struct RateLimit: Decodable {
+      let primary_window: Window?
+      let secondary_window: Window?
+    }
+    let rate_limit: RateLimit?
+  }
+
+  static let endpoint = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
+
+  static func fetchWindows(
+    homeDirectory: URL,
+    session: URLSession = .shared,
+    now: Date = Date()
+  ) async throws -> (session: CodexRateWindow?, weekly: CodexRateWindow?) {
+    let authURL = homeDirectory.appendingPathComponent(".codex/auth.json")
+    guard
+      let authData = try? Data(contentsOf: authURL),
+      let credentials = try? JSONDecoder().decode(Credentials.self, from: authData),
+      let accessToken = credentials.tokens?.access_token,
+      let accountID = credentials.tokens?.account_id
+    else {
+      throw URLError(.userAuthenticationRequired)
+    }
+
+    var request = URLRequest(url: endpoint)
+    request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+    request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
+    request.timeoutInterval = 10
+
+    let (data, response) = try await session.data(for: request)
+    guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+      throw URLError(.badServerResponse)
+    }
+    let decoded = try JSONDecoder().decode(UsageResponse.self, from: data)
+    guard let rate = decoded.rate_limit else {
+      throw URLError(.cannotParseResponse)
+    }
+
+    func window(_ raw: UsageResponse.Window?) -> CodexRateWindow? {
+      raw.flatMap {
+        CodexRateWindow(
+          usedPercent: Double($0.used_percent ?? 0),
+          windowMinutes: ($0.limit_window_seconds ?? 0) / 60,
+          resetsAt: $0.reset_at.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? now)
+      }
+    }
+
+    // Lane classification is by window span, not slot order.
+    let primary = window(rate.primary_window)
+    let secondary = window(rate.secondary_window)
+    var sessionWindow: CodexRateWindow?
+    var weekly: CodexRateWindow?
+    for candidate in [primary, secondary].compactMap({ $0 }) {
+      switch candidate.lane {
+      case .session where sessionWindow == nil: sessionWindow = candidate
+      case .weekly where weekly == nil: weekly = candidate
+      default: break
+      }
+    }
+    return (sessionWindow, weekly)
+  }
+}
+
+/// Real Codex usage: live quota windows from the ChatGPT backend (OAuth
+/// credentials from `~/.codex/auth.json`) plus per-day tokens parsed from
+/// `~/.codex/sessions` rollouts.
 struct CodexAIUsageProvider: AIUsageProvider {
   private static let dayWindow = 15
 
   var homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
 
   func fetchUsage() async throws -> AIUsageSnapshot {
+    // Independent sources: live windows work with zero recent sessions,
+    // and day tokens still render when the backend is unreachable.
+    let windows = try? await CodexOAuthUsage.fetchWindows(homeDirectory: homeDirectory)
+
     let sessionsRoot = homeDirectory.appendingPathComponent(".codex/sessions")
-    guard let enumerator = FileManager.default.enumerator(
-      at: sessionsRoot, includingPropertiesForKeys: []
-    ) else {
-      throw URLError(.fileDoesNotExist)
-    }
-
-    let today = Calendar.current.startOfDay(for: Date())
-    let cutoff = Calendar.current.date(byAdding: .day, value: -Self.dayWindow + 1, to: today)!
-    var parsed: [(date: Date, usage: CodexTokenUsage, rateLimit: CodexRateLimit?)] = []
-
-    // NSFastEnumeration's iterator is unavailable in async contexts; the
-    // sessions tree is a few hundred URLs, so materialize it.
-    let urls = (enumerator.allObjects as? [URL]) ?? []
-    for url in urls where
-      url.lastPathComponent.hasPrefix("rollout-") && url.pathExtension == "jsonl"
+    var parsed: [(date: Date, usage: CodexTokenUsage, rateWindow: CodexRateWindow?)] = []
+    if let enumerator = FileManager.default.enumerator(
+      at: sessionsRoot, includingPropertiesForKeys: [])
     {
-      guard let date = CodexUsageParser.sessionDate(filename: url.lastPathComponent),
-        date >= cutoff
-      else { continue }
-      guard
-        let handle = try? FileHandle(forReadingFrom: url),
-        let tail = try? Self.tail(handle)
-      else { continue }
-      try? handle.close()
-      if let entry = CodexUsageParser.lastTokenCount(in: tail) {
-        parsed.append((date, entry.usage, entry.rateLimit))
+      let today = Calendar.current.startOfDay(for: Date())
+      let cutoff = Calendar.current.date(byAdding: .day, value: -Self.dayWindow + 1, to: today)!
+      // NSFastEnumeration's iterator is unavailable in async contexts; the
+      // sessions tree is a few hundred URLs, so materialize it.
+      let urls = (enumerator.allObjects as? [URL]) ?? []
+      for url in urls where
+        url.lastPathComponent.hasPrefix("rollout-") && url.pathExtension == "jsonl"
+      {
+        guard let date = CodexUsageParser.sessionDate(filename: url.lastPathComponent),
+          date >= cutoff
+        else { continue }
+        guard
+          let handle = try? FileHandle(forReadingFrom: url),
+          let tail = try? Self.tail(handle)
+        else { continue }
+        try? handle.close()
+        if let entry = CodexUsageParser.lastTokenCount(in: tail) {
+          parsed.append((date, entry.usage, entry.rateWindow))
+        }
       }
     }
 
-    guard !parsed.isEmpty else {
+    guard windows?.session != nil || windows?.weekly != nil || !parsed.isEmpty else {
       throw URLError(.cannotParseResponse)
     }
-    return CodexUsageParser.buildSnapshot(sessions: parsed)
+    return CodexUsageParser.buildSnapshot(sessions: parsed, liveWindows: windows)
   }
 
   /// The final `length` bytes of an open file, or everything when shorter.

@@ -41,7 +41,7 @@ struct CollapsedQuotaChipView: View {
           )
           .stroke(tint, style: StrokeStyle(lineWidth: Self.ringLineWidth, lineCap: .round))
           .rotationEffect(.degrees(-90))
-        Image(subscription.id.iconName)
+        Image(subscription.vendor.iconName)
           .resizable()
           .renderingMode(.template)
           .scaledToFit()
@@ -51,7 +51,7 @@ struct CollapsedQuotaChipView: View {
       .frame(width: Self.ringSize, height: Self.ringSize)
 
       VStack(alignment: .leading, spacing: 0) {
-        Text(subscription.id.chipLabel)
+        Text(subscription.vendor.chipLabel)
           .font(.system(size: 9, weight: .medium))
           .foregroundStyle(.white)
         Text(percentText)
@@ -70,7 +70,7 @@ struct CollapsedQuotaChipView: View {
       Text(
         String(
           format: L10n.text("island.quota.accessibility"),
-          subscription.id.chipLabel,
+          subscription.vendor.chipLabel,
           Int((subscription.quota.fraction * 100).rounded()))))
   }
 }

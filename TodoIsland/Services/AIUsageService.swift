@@ -22,10 +22,13 @@ struct SampleAIUsageProvider: AIUsageProvider {
 /// populated panel and the sample badge clears itself the moment real
 /// data appears.
 struct DefaultAIUsageProvider: AIUsageProvider {
+  var codex: AIUsageProvider = CodexAIUsageProvider()
+  var fallback: AIUsageProvider = SampleAIUsageProvider()
+
   func fetchUsage() async throws -> AIUsageSnapshot {
-    if let real = try? await CodexAIUsageProvider().fetchUsage() {
+    if let real = try? await codex.fetchUsage() {
       return real
     }
-    return try await SampleAIUsageProvider().fetchUsage()
+    return try await fallback.fetchUsage()
   }
 }
