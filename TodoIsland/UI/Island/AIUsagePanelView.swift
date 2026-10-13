@@ -541,9 +541,20 @@ private struct SubscriptionCard: View {
         )
 
       VStack(alignment: .leading, spacing: 1) {
-        Text(LocalizedStringKey(subscription.vendor.localizedKey))
-          .font(.system(size: 12.5, weight: .semibold))
-          .lineLimit(1)
+        HStack(spacing: 4) {
+          Text(LocalizedStringKey(subscription.vendor.localizedKey))
+            .font(.system(size: 12.5, weight: .semibold))
+            .lineLimit(1)
+          if subscription.isSample {
+            Text("ai.sample-data")
+              .font(.system(size: 8.5, weight: .medium))
+              .foregroundStyle(ReUITheme.muted)
+              .padding(.horizontal, 4)
+              .padding(.vertical, 1)
+              .background(Capsule(style: .continuous).fill(.white.opacity(0.07)))
+              .overlay(Capsule(style: .continuous).stroke(ReUITheme.subtleBorder, lineWidth: 1))
+          }
+        }
         Text(subscription.planName)
           .font(.system(size: 10, weight: .medium))
           .foregroundStyle(ReUITheme.muted)

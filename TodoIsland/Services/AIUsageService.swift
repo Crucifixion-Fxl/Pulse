@@ -26,9 +26,14 @@ struct DefaultAIUsageProvider: AIUsageProvider {
   var fallback: AIUsageProvider = SampleAIUsageProvider()
 
   func fetchUsage() async throws -> AIUsageSnapshot {
-    if let real = try? await codex.fetchUsage() {
-      return real
+    guard let real = try? await codex.fetchUsage() else {
+      return try await fallback.fetchUsage()
     }
-    return try await fallback.fetchUsage()
+    // Keep the other vendors' (virtual) cards beside the real Codex ones
+    // until real providers land; each carries its per-card sample marker.
+    let sample = try await fallback.fetchUsage()
+    var merged = real
+    merged.subscriptions += sample.subscriptions.filter { $0.vendor != .openAI }
+    return merged
   }
 }
