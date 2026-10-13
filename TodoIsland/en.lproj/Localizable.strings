@@ -101,7 +101,7 @@
 "sidebar.placeholder" = "Coming soon";
 "sidebar.placeholder.detail" = "Nothing here yet.";
 
-"sidebar.ai-usage" = "AI Usage";
+"sidebar.agents" = "Agents";
 "ai.title" = "AI Usage";
 "ai.sample-data" = "Sample data";
 "ai.today.title" = "Today's Tokens";

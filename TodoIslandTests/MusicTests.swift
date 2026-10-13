@@ -283,7 +283,7 @@ final class MusicTests: XCTestCase {
   func testMusicSidebarHeightMatchesAIPanel() {
     XCTAssertEqual(
       IslandSidebarItem.music.preferredContentHeight,
-      IslandSidebarItem.aiUsage.preferredContentHeight
+      IslandSidebarItem.agents.preferredContentHeight
     )
   }
 

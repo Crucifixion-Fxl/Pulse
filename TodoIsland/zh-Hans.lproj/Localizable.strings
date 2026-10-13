@@ -101,7 +101,7 @@
 "sidebar.placeholder" = "待添加";
 "sidebar.placeholder.detail" = "待添加";
 
-"sidebar.ai-usage" = "AI 使用";
+"sidebar.agents" = "智能体";
 "ai.title" = "AI 使用";
 "ai.sample-data" = "示例数据";
 "ai.today.title" = "今日 Token";
