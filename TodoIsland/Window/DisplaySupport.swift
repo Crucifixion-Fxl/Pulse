@@ -1,91 +1,6 @@
 import AppKit
 import CoreGraphics
 
-enum HostDisplayChangeReason: Equatable, Sendable {
-  case initial
-  case pointerDwell
-  case disconnected
-}
-
-struct HostDisplayChange: Equatable, Sendable {
-  let displayID: String?
-  let reason: HostDisplayChangeReason
-}
-
-struct HostDisplayTracker: Equatable, Sendable {
-  private(set) var hostDisplayID: String?
-  private var candidateDisplayID: String?
-  private var candidateSince: TimeInterval?
-  let dwellInterval: TimeInterval
-
-  init(hostDisplayID: String? = nil, dwellInterval: TimeInterval = 0.35) {
-    self.hostDisplayID = hostDisplayID
-    self.dwellInterval = dwellInterval
-  }
-
-  mutating func observe(
-    pointerDisplayID: String?,
-    fallbackDisplayID: String?,
-    availableDisplayIDs: Set<String>,
-    locksHostDisplay: Bool,
-    now: TimeInterval
-  ) -> HostDisplayChange? {
-    let pointerDisplayID = pointerDisplayID.flatMap {
-      availableDisplayIDs.contains($0) ? $0 : nil
-    }
-    let fallbackDisplayID = fallbackDisplayID.flatMap {
-      availableDisplayIDs.contains($0) ? $0 : nil
-    }
-
-    guard !availableDisplayIDs.isEmpty else {
-      resetCandidate()
-      guard hostDisplayID != nil else { return nil }
-      hostDisplayID = nil
-      return HostDisplayChange(displayID: nil, reason: .disconnected)
-    }
-
-    guard let hostDisplayID else {
-      let destination = pointerDisplayID ?? fallbackDisplayID ?? availableDisplayIDs.sorted().first
-      self.hostDisplayID = destination
-      resetCandidate()
-      return HostDisplayChange(displayID: destination, reason: .initial)
-    }
-
-    guard availableDisplayIDs.contains(hostDisplayID) else {
-      let destination = pointerDisplayID ?? fallbackDisplayID ?? availableDisplayIDs.sorted().first
-      self.hostDisplayID = destination
-      resetCandidate()
-      return HostDisplayChange(displayID: destination, reason: .disconnected)
-    }
-
-    guard !locksHostDisplay else {
-      resetCandidate()
-      return nil
-    }
-
-    guard let pointerDisplayID, pointerDisplayID != hostDisplayID else {
-      resetCandidate()
-      return nil
-    }
-
-    if candidateDisplayID != pointerDisplayID {
-      candidateDisplayID = pointerDisplayID
-      candidateSince = now
-      return nil
-    }
-
-    guard let candidateSince, now - candidateSince >= dwellInterval else { return nil }
-    self.hostDisplayID = pointerDisplayID
-    resetCandidate()
-    return HostDisplayChange(displayID: pointerDisplayID, reason: .pointerDwell)
-  }
-
-  private mutating func resetCandidate() {
-    candidateDisplayID = nil
-    candidateSince = nil
-  }
-}
-
 @MainActor
 enum DisplaySupport {
   static func screenContainingPointer() -> NSScreen? {
@@ -191,12 +106,6 @@ extension NSScreen {
   }
 }
 
-/// CGDirectDisplayID → UUID string, cached for the process lifetime: a
-/// display's UUID is stable while it stays connected, and the cache is
-/// invalidated on screen-parameter changes (unplug/replug/reconfigure).
-/// The 50 ms pointer poll resolves every screen's UUID each tick, which
-/// made CGDisplayCreateUUIDFromDisplayID + CFUUIDCreateString the hottest
-/// calls in the idle profile. NSScreen is MainActor-isolated, so is this.
 /// Fullscreen-hide verdicts keyed by everything the scan can report on:
 /// the frontmost app, the active space (generation), and the display. The
 /// 1s watchdog and the 20Hz auto-hide activation-zone path both called
@@ -262,6 +171,12 @@ enum FullScreenVerdictCache {
   }
 }
 
+/// CGDirectDisplayID → UUID string, cached for the process lifetime: a
+/// display's UUID is stable while it stays connected, and the cache is
+/// invalidated on screen-parameter changes (unplug/replug/reconfigure).
+/// The 50 ms pointer poll resolves every screen's UUID each tick, which
+/// made CGDisplayCreateUUIDFromDisplayID + CFUUIDCreateString the hottest
+/// calls in the idle profile. NSScreen is MainActor-isolated, so is this.
 @MainActor
 enum DisplayIDCache {
   private static var map: [CGDirectDisplayID: String] = [:]

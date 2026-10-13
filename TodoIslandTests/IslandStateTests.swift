@@ -54,6 +54,36 @@ final class IslandStateTests: XCTestCase {
     XCTAssertEqual(controller.appliedExpandedContentHeight, 300)
   }
 
+  func testMultiDisplayRoutingExpandsOnlyTheActiveWindow() {
+    // Global collapsed: everything collapsed, legacy or not.
+    for window in ["a", nil] {
+      XCTAssertEqual(
+        IslandRouting.effectiveState(
+          global: .collapsed, activeDisplayID: "a", windowDisplayID: window),
+        .collapsed)
+    }
+    // Legacy window without identity always hosts the active state.
+    XCTAssertEqual(
+      IslandRouting.effectiveState(
+        global: .pinned, activeDisplayID: "a", windowDisplayID: nil),
+      .pinned)
+    // Identified windows: only the active one expands.
+    XCTAssertEqual(
+      IslandRouting.effectiveState(
+        global: .preview, activeDisplayID: "a", windowDisplayID: "a"),
+      .preview)
+    XCTAssertEqual(
+      IslandRouting.effectiveState(
+        global: .pinned, activeDisplayID: "a", windowDisplayID: "b"),
+      .collapsed)
+    // No active display: nobody expands (safe default; the controller
+    // keeps the active display non-nil whenever a screen exists).
+    XCTAssertEqual(
+      IslandRouting.effectiveState(
+        global: .pinned, activeDisplayID: nil, windowDisplayID: "a"),
+      .collapsed)
+  }
+
   func testMotionProfilesUseSmoothStateSpecificTiming() {
     XCTAssertEqual(
       IslandPresentationState.preview.motionProfile,
