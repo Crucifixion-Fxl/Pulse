@@ -135,7 +135,7 @@ struct ApprovalCard: View {
 
   private var contextRow: some View {
     HStack(spacing: 6) {
-      AgentMonogramView(source: session?.source ?? "claude", size: type.icon)
+      AgentMascotView(source: session?.source ?? "claude", status: .waitingApproval, size: type.icon)
       Text(session?.displayTitle(sessionId: request.sessionId) ?? "session")
         .font(.system(size: type.body, weight: .bold, design: .monospaced))
         .foregroundStyle(.white.opacity(0.9))
