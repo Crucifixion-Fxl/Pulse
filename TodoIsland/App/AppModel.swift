@@ -139,7 +139,7 @@ final class AppModel: ObservableObject {
   init(
     store: ReminderStore = SourceAwareReminderStore(),
     defaults: UserDefaults = .standard,
-    aiUsageProvider: AIUsageProvider = SampleAIUsageProvider(),
+    aiUsageProvider: AIUsageProvider = DefaultAIUsageProvider(),
     lyricsService: LyricsService = LyricsService(),
     nowPlayingController: any NowPlayingControlling = NowPlayingController.shared
   ) {

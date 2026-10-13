@@ -59,12 +59,15 @@ struct AIQuota: Hashable, Sendable {
     case tokens
     case requests
     case credits
+    /// Window-style quotas that only report a percentage (Codex).
+    case percent
 
     var localizedKey: String {
       switch self {
       case .tokens: "ai.unit.tokens"
       case .requests: "ai.unit.requests"
       case .credits: "ai.unit.credits"
+      case .percent: "ai.unit.percent"
       }
     }
   }

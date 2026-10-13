@@ -119,6 +119,7 @@
 "ai.unit.tokens" = "tokens";
 "ai.unit.requests" = "次";
 "ai.unit.credits" = "额度";
+"ai.unit.percent" = "%";
 "ai.vendor.zhipu" = "智谱 GLM";
 "ai.vendor.anthropic" = "Anthropic";
 "ai.vendor.openai" = "OpenAI";

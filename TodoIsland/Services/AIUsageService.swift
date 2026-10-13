@@ -16,3 +16,16 @@ struct SampleAIUsageProvider: AIUsageProvider {
     AIUsageSample.makeSnapshot(now: now)
   }
 }
+
+/// The default chain: real Codex usage when `~/.codex` has sessions, the
+/// sample snapshot otherwise — so machines without Codex still get a
+/// populated panel and the sample badge clears itself the moment real
+/// data appears.
+struct DefaultAIUsageProvider: AIUsageProvider {
+  func fetchUsage() async throws -> AIUsageSnapshot {
+    if let real = try? await CodexAIUsageProvider().fetchUsage() {
+      return real
+    }
+    return try await SampleAIUsageProvider().fetchUsage()
+  }
+}
