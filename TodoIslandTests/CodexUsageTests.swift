@@ -48,6 +48,7 @@ final class CodexUsageTests: XCTestCase {
     XCTAssertEqual(parsed?.usage.output, 21_918)
     XCTAssertEqual(parsed?.rateWindow?.usedPercent, 34.0)
     XCTAssertEqual(parsed?.rateWindow?.resetsAt, Date(timeIntervalSince1970: 1_790_573_343))
+    XCTAssertEqual(parsed?.rateWindow?.observedAt, ISO8601DateFormatter().date(from: "2026-10-13T02:02:00Z"))
     // No token_count at all.
     XCTAssertNil(CodexUsageParser.lastTokenCount(in: Data("{}".utf8)))
   }
@@ -112,6 +113,33 @@ final class CodexUsageTests: XCTestCase {
       CodexRateWindow(usedPercent: 10, windowMinutes: 10_083, resetsAt: Date()).lane, .weekly)
     XCTAssertEqual(
       CodexRateWindow(usedPercent: 10, windowMinutes: 720, resetsAt: Date()).lane, .unknown)
+  }
+
+  func testNewestRolloutWinsWhenWeeklyResetTimeIsUnchanged() {
+    let reset = fixedNow().addingTimeInterval(5 * 24 * 3600)
+    let older = CodexRateWindow(usedPercent: 8, windowMinutes: 10_080, resetsAt: reset)
+    let newer = CodexRateWindow(usedPercent: 22, windowMinutes: 10_080, resetsAt: reset)
+    let snapshot = CodexUsageParser.buildSnapshot(
+      sessions: [
+        (date: fixedNow().addingTimeInterval(-3600), usage: CodexTokenUsage(input: 1, cached: 0, cacheWrite: 0, output: 1), rateWindow: older),
+        (date: fixedNow(), usage: CodexTokenUsage(input: 1, cached: 0, cacheWrite: 0, output: 1), rateWindow: newer),
+      ],
+      now: fixedNow(), calendar: calendar)
+    XCTAssertEqual(snapshot.subscriptions.first?.quota.used, 22)
+  }
+
+  func testNewestRateObservationWinsEvenFromOlderSession() {
+    let reset = fixedNow().addingTimeInterval(5 * 24 * 3600)
+    let active = CodexRateWindow(usedPercent: 22, windowMinutes: 10_080,
+                                 resetsAt: reset, observedAt: fixedNow())
+    let idle = CodexRateWindow(usedPercent: 9, windowMinutes: 10_080,
+                               resetsAt: reset, observedAt: fixedNow().addingTimeInterval(-1800))
+    let usage = CodexTokenUsage(input: 1, cached: 0, cacheWrite: 0, output: 1)
+    let snapshot = CodexUsageParser.buildSnapshot(sessions: [
+      (date: fixedNow().addingTimeInterval(-86400), usage: usage, rateWindow: active),
+      (date: fixedNow().addingTimeInterval(-3600), usage: usage, rateWindow: idle),
+    ], now: fixedNow(), calendar: calendar)
+    XCTAssertEqual(snapshot.subscriptions.first?.quota.used, 22)
   }
 
   func testLiveWindowsProduceBothCardsAndWeeklyCapsSession() {

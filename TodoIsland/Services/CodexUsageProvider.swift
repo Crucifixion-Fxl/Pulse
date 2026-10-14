@@ -22,8 +22,9 @@ struct CodexRateWindow: Equatable, Sendable {
   var usedPercent: Double
   var windowMinutes: Int
   var resetsAt: Date
+  var observedAt: Date?
 
-  init(usedPercent: Double, windowMinutes: Int, resetsAt: Date) {
+  init(usedPercent: Double, windowMinutes: Int, resetsAt: Date, observedAt: Date? = nil) {
     self.usedPercent = usedPercent
     // Canonicalize the jitter providers report (295...305, 10070...10090).
     switch windowMinutes {
@@ -32,6 +33,7 @@ struct CodexRateWindow: Equatable, Sendable {
     default: self.windowMinutes = windowMinutes
     }
     self.resetsAt = resetsAt
+    self.observedAt = observedAt
   }
 
   var lane: Lane {
@@ -73,6 +75,7 @@ enum CodexUsageParser {
   }
 
   private struct TokenCountEvent: Decodable {
+    let timestamp: String?
     struct Payload: Decodable {
       struct Info: Decodable {
         struct Usage: Decodable {
@@ -124,10 +127,13 @@ enum CodexUsageParser {
         cacheWrite: usage.cache_write_input_tokens ?? 0,
         output: usage.output_tokens ?? 0)
       let window = event.payload?.rate_limits?.primary.flatMap { raw in
-        CodexRateWindow(
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return CodexRateWindow(
           usedPercent: raw.used_percent ?? 0,
           windowMinutes: raw.window_minutes ?? 0,
-          resetsAt: raw.resets_at.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? now)
+          resetsAt: raw.resets_at.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? now,
+          observedAt: event.timestamp.flatMap { formatter.date(from: $0) })
       }
       return (tokens, window)
     }
@@ -149,6 +155,7 @@ enum CodexUsageParser {
     var days: [AIUsageDay] = []
     var byDay: [Date: (input: Int, output: Int, cache: Int)] = [:]
     var newestSessionWindow: CodexRateWindow?
+    var newestWindowObservation: Date?
 
     for session in sessions {
       let key = calendar.startOfDay(for: session.date)
@@ -159,9 +166,10 @@ enum CodexUsageParser {
         entry.cache + session.usage.cached + session.usage.cacheWrite
       )
       if let window = session.rateWindow,
-        newestSessionWindow == nil || window.resetsAt > newestSessionWindow!.resetsAt
-      {
+        newestWindowObservation == nil
+          || (window.observedAt ?? session.date) > newestWindowObservation! {
         newestSessionWindow = window
+        newestWindowObservation = window.observedAt ?? session.date
       }
     }
 
