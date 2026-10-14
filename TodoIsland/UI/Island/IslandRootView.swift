@@ -360,6 +360,14 @@ struct IslandRootView: View {
       .onHover { hovering in
         model.setIslandHovered(hovering, on: displayID)
       }
+      .onChange(of: agentStore.hasPending) { _, pending in
+        guard pending, model.editingReminderID == nil else { return }
+        // A pending approval opens its own prompt surface: jump to the
+        // agents panel and expand the island, so the angry face always has
+        // its approval card one glance away. Never yanks an open editor.
+        selectSidebar(.agents)
+        if model.islandState != .pinned { model.pinIsland() }
+      }
       .onTapGesture {
         // Only a hover preview becomes pinned from a surface tap. This keeps
         // controls inside a pinned surface, including the setup close button,
