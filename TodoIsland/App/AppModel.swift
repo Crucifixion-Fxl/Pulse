@@ -718,6 +718,27 @@ final class AppModel: ObservableObject {
     editingFocusRequestID = UUID()
   }
 
+  /// True while the island was auto-opened for a pending approval: the
+  /// request usually lands while the pointer is elsewhere, so pointer-exit
+  /// suspension is on hold — the panel stays until the queue clears or the
+  /// user closes it.
+  private(set) var isHeldForApproval = false
+
+  /// Auto-open for a pending approval: pin and hold, regardless of where
+  /// the pointer is.
+  func pinIslandForApproval() {
+    isHeldForApproval = true
+    if islandState != .pinned { pinIsland() }
+  }
+
+  /// The approval was answered — hand the panel back to normal pinned
+  /// semantics (it politely closes if the pointer never arrived).
+  func releaseApprovalHold() {
+    guard isHeldForApproval else { return }
+    isHeldForApproval = false
+    schedulePointerExitCollapseIfNeeded()
+  }
+
   /// The panel just became the key window. Focus set earlier in the pin
   /// transition could not land in a non-key window; now it can.
   func notePanelDidBecomeKey() {
@@ -727,6 +748,7 @@ final class AppModel: ObservableObject {
 
   func collapseIsland() {
     hoverTask?.cancel()
+    isHeldForApproval = false
     suspendedEditingFocus = nil
     isPointerInsideIsland = false
     if editingReminderID == nil
@@ -1016,7 +1038,7 @@ final class AppModel: ObservableObject {
     case .preview:
       delay = .milliseconds(500)
     case .pinned:
-      guard canUseActiveList else { return }
+      guard canUseActiveList, !isHeldForApproval else { return }
       delay = .milliseconds(200)
     }
 
@@ -1035,7 +1057,7 @@ final class AppModel: ObservableObject {
       case .preview:
         collapseIsland()
       case .pinned:
-        guard canUseActiveList else { return }
+        guard canUseActiveList, !isHeldForApproval else { return }
         suspendPinnedIsland()
       }
     }

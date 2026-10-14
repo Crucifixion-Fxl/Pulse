@@ -215,6 +215,48 @@ final class IslandStateTests: XCTestCase {
   }
 
   @MainActor
+  func testApprovalHeldPinSurvivesPointerLeavingUntilReleased() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let model = AppModel(store: ListSelectionTestReminderStore(), defaults: defaults)
+    await model.start()
+    model.pinIslandForApproval()
+    model.setIslandHovered(true)
+    model.setIslandHovered(false)
+
+    // Past the normal 200 ms pinned suspend — the approval hold keeps the
+    // panel up while the user is still elsewhere.
+    try await Task.sleep(for: .milliseconds(450))
+    XCTAssertEqual(model.islandState, .pinned)
+
+    // Answered → hold released → the pointer is already gone, so the panel
+    // closes on the normal 200 ms clock.
+    model.releaseApprovalHold()
+    try await Task.sleep(for: .milliseconds(120))
+    XCTAssertEqual(model.islandState, .pinned)
+    try await Task.sleep(for: .milliseconds(160))
+    XCTAssertEqual(model.islandState, .collapsed)
+  }
+
+  @MainActor
+  func testApprovalHoldClearsWhenUserCollapses() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let model = AppModel(store: ListSelectionTestReminderStore(), defaults: defaults)
+    await model.start()
+    model.pinIslandForApproval()
+    XCTAssertTrue(model.isHeldForApproval)
+
+    model.collapseIsland()
+    XCTAssertFalse(model.isHeldForApproval)
+    XCTAssertEqual(model.islandState, .collapsed)
+  }
+
+  @MainActor
   func testReminderDraftSurvivesAutoCollapseAndResumesWhenPointerReturns() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)

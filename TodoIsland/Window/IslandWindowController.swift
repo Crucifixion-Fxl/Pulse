@@ -108,7 +108,11 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       MainActor.assumeIsolated {
         guard
           self?.model.islandState == .pinned,
-          self?.model.isRequestingAccess == false
+          self?.model.isRequestingAccess == false,
+          // An approval-held panel outlives focus fights: the request
+          // lands while the user is in another app, and the key-window
+          // steal-and-return would otherwise collapse it instantly.
+          self?.model.isHeldForApproval != true
         else { return }
         self?.model.collapseIsland()
       }

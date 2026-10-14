@@ -88,16 +88,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   }
 
   /// A queued approval or question auto-expands the island onto the agents
-  /// pane (CodeIsland's default autoExpandOnPermission behavior).
+  /// pane (CodeIsland's default autoExpandOnPermission behavior) — pinned
+  /// WITH the approval hold: the request usually lands while the user is in
+  /// another app with the pointer elsewhere, and a plain pin is torn right
+  /// back down by the pointer-exit suspend and the deactivation collapse.
+  /// Emptying the queues releases the hold, handing the panel back to
+  /// normal pinned semantics.
   private func wireAgentAutoExpansion() {
     Publishers.CombineLatest(agentStore.$permissionQueue, agentStore.$questionQueue)
       .receive(on: DispatchQueue.main)
       .sink { [weak self] permissions, questions in
         guard let self else { return }
-        guard !(permissions.isEmpty && questions.isEmpty) else { return }
-        guard self.model.islandState == .collapsed else { return }
+        if permissions.isEmpty && questions.isEmpty {
+          self.model.releaseApprovalHold()
+          return
+        }
+        guard self.model.editingReminderID == nil else { return }
         self.model.requestSidebarItem(.agents)
-        self.model.pinIsland()
+        self.model.pinIslandForApproval()
       }
       .store(in: &agentCancellables)
   }
