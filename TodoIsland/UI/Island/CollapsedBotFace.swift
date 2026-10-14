@@ -99,13 +99,16 @@ enum CollapsedBotFace {
     return min(1, max(0, engaging ? eased : 1 - eased))
   }
 
-  /// Blends an expression toward the scowl by `a` (0 = untouched): eyes
-  /// narrow and tilt outward (\ /), the sway and glances quiet, and the
-  /// beat bounce fades — the scowl holds still while it wants something.
+  /// Blends an expression toward the scowl by `a` (0 = untouched): the
+  /// eyes widen into a glare and tilt outward (\ /), the sway and glances
+  /// quiet, and the beat bounce fades — the scowl holds still while it
+  /// wants something.
   static func applyAlert(_ a: CGFloat, to e: Expression) -> Expression {
     guard a > 0 else { return e }
     var e = e
-    e.eyeOpen *= 1 - 0.30 * a
+    // Glare: +25% eye height at full anger, clamped so hover's 1.25 widen
+    // stacking on top can't overflow the face.
+    e.eyeOpen = min(1.45, e.eyeOpen * (1 + 0.25 * a))
     e.angryTilt = alertEyeTilt * a
     e.glanceX *= 1 - 0.8 * a
     e.eyeTilt *= 1 - 0.5 * a
