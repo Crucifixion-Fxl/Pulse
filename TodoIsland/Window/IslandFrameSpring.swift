@@ -88,6 +88,18 @@ final class IslandFrameSpring {
     // the next dt.
     if timestamp - lastTimestamp < 1 / 75 { return }
     let dt = min(1 / 30, max(0, timestamp - lastTimestamp))
+    // Frame-gap probe: a dt past ~1.5 frames means the main thread stalled
+    // between display-link ticks — the visible jank signature. Logged to the
+    // agents activity log for cold-start/expansion profiling.
+    if dt > 0.025 {
+      let line = "[\(ISO8601DateFormatter().string(from: Date()))] spring frame gap: \(Int(dt * 1000))ms\n"
+      let path = "/tmp/doisland-agents-activity.log"
+      if let handle = FileHandle(forWritingAtPath: path) {
+        handle.seekToEndOfFile()
+        handle.write(Data(line.utf8))
+        handle.closeFile()
+      }
+    }
     lastTimestamp = timestamp
 
     advance(&width, &widthVelocity, toward: target.width, dt: dt)

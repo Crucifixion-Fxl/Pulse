@@ -203,6 +203,8 @@ struct IslandRootView: View {
   @State private var reminderPendingDeletion: ReminderSnapshot?
   @State private var selectedSidebarItem: IslandSidebarItem = .reminders
   @State private var hoveredSidebarItem: IslandSidebarItem?
+  /// True only inside the launch-time pane prewarm window.
+  @State private var isPrewarmingPanes = false
   @State private var hoveredReminderID: String?
   @State private var newTaskTitle = ""
   /// nil means the Active List; the picker in the Task Input overrides it.
@@ -248,6 +250,15 @@ struct IslandRootView: View {
       )
 
       ZStack(alignment: .top) {
+        if effectiveState == .collapsed, isPrewarmingPanes {
+          // Hidden pane copy (see the .task prewarm above). Fixed at real
+          // expanded dimensions so the layout pass it warms matches the
+          // one the first real expansion will run.
+          prewarmPanes
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         if effectiveState == .collapsed {
           collapsedContent
             .transition(
@@ -335,13 +346,6 @@ struct IslandRootView: View {
               syncMusicPanelActivity()
             }
             .onChange(of: selectedSidebarItem) { _, _ in updateExpandedContentHeight() }
-      .onChange(of: model.requestedSidebarItem) { _, item in
-        guard let item, item != selectedSidebarItem else { return }
-        // selectSidebar (not a bare assignment) so auto-expansion flows get
-        // the pane's side effects too — the agents pane's quota refresh,
-        // the music pane's activity sync.
-        selectSidebar(item)
-      }
             .onChange(of: model.islandState) { _, _ in syncMusicPanelActivity() }
             // Height must track exactly what expandedFeatureContent branches on.
             // canUseActiveList (not lists.count) is the real gate: it also flips
@@ -362,6 +366,19 @@ struct IslandRootView: View {
       .contentShape(Rectangle())
       .onHover { hovering in
         model.setIslandHovered(hovering, on: displayID)
+      }
+      .onAppear { syncRequestedSidebarItem() }
+      .onChange(of: model.requestedSidebarItem) { _, _ in syncRequestedSidebarItem() }
+      .task {
+        // Prewarm the panes once, invisibly, shortly after launch: the
+        // first real expansion otherwise pays the whole cold SwiftUI cost
+        // (type resolution, first layout, first CA commit) inside the pop
+        // animation — the "first expansion is janky" complaint. The hidden
+        // copy is removed after a beat so nothing keeps ticking.
+        try? await Task.sleep(for: .seconds(0.8))
+        isPrewarmingPanes = true
+        try? await Task.sleep(for: .seconds(1.2))
+        isPrewarmingPanes = false
       }
       .onTapGesture {
         // Only a hover preview becomes pinned from a surface tap. This keeps
@@ -463,6 +480,18 @@ struct IslandRootView: View {
     }
   }
 
+  /// The prewarm copy: both pane sets the first expansion may need — the
+  /// selected pane's content (reminders at launch) and the agents pane the
+  /// approval auto-expansion routes to.
+  private var prewarmPanes: some View {
+    ZStack {
+      expandedFeatureContent
+      AgentsPanelView()
+    }
+    .frame(width: 760, height: 380, alignment: .top)
+    .clipped()
+  }
+
   private var expandedContent: some View {
     HStack(spacing: 0) {
       expandedSidebar
@@ -526,6 +555,19 @@ struct IslandRootView: View {
     .padding(.top, 4)
     .padding(.bottom, 2)
     .padding(.horizontal, 0)
+  }
+
+  /// Applies a pending pane request from an auto-expansion flow. Lives at
+  /// the always-mounted surface level (plus an onAppear catch-up): a
+  /// listener on the expanded-only branch misses requests that land while
+  /// collapsed — exactly the first approval's situation — so the panel
+  /// would open on whatever pane was last selected.
+  private func syncRequestedSidebarItem() {
+    guard let item = model.requestedSidebarItem, item != selectedSidebarItem else { return }
+    // selectSidebar (not a bare assignment) so auto-expansion flows get the
+    // pane's side effects too — the agents pane's quota refresh, the music
+    // pane's activity sync.
+    selectSidebar(item)
   }
 
   /// Switches the active sidebar feature with the liquid transition.
