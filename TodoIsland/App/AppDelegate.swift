@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private let model = AppModel()
   private let agentStore = AgentSessionStore()
   private var agentServer: AgentHookServer?
+  private var aiUsageTimer: Timer?
   private var agentCancellables: Set<AnyCancellable> = []
   private var islandController: IslandWindowController?
   private var statusItem: NSStatusItem?
@@ -81,10 +82,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
       model.refreshAIUsage()
       islandController?.show()
     }
+    aiUsageTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.model.refreshAIUsage()
+      }
+    }
   }
 
   func applicationDidBecomeActive(_ notification: Notification) {
     model.markApplicationActive()
+  }
+
+  func applicationWillTerminate(_ notification: Notification) {
+    aiUsageTimer?.invalidate()
   }
 
   /// A queued approval or question auto-expands the island onto the agents
