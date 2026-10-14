@@ -153,4 +153,96 @@ final class CollapsedBotFaceTests: XCTestCase {
       XCTAssertEqual(e.eyeTilt, 0.06)
     }
   }
+
+  // MARK: - Alert flood
+
+  func testAlertEnvelopeEndpointsAndMonotonicity() {
+    // Engaging: 0 at the flip, 1 once the rise has settled.
+    XCTAssertEqual(CollapsedBotFace.alertUnit(elapsed: 0, engaging: true), 0)
+    XCTAssertEqual(CollapsedBotFace.alertUnit(elapsed: 99, engaging: true), 1)
+    // Draining: starts full, ends clean.
+    XCTAssertEqual(CollapsedBotFace.alertUnit(elapsed: 0, engaging: false), 1)
+    XCTAssertEqual(CollapsedBotFace.alertUnit(elapsed: 99, engaging: false), 0)
+    // Negative elapsed (anchor fractionally after the timeline tick) clamps.
+    XCTAssertEqual(CollapsedBotFace.alertUnit(elapsed: -0.4, engaging: true), 0)
+    XCTAssertEqual(CollapsedBotFace.alertUnit(elapsed: -0.4, engaging: false), 1)
+
+    var prev: CGFloat = -1
+    // Sweeps run past the duration: float step accumulation can skip the
+    // exact endpoint, and clamped values past it keep the monotonicity
+    // claim honest.
+    for t in stride(from: 0.0, through: CollapsedBotFace.alertRiseDuration + 0.2, by: 0.04) {
+      let u = CollapsedBotFace.alertUnit(elapsed: t, engaging: true)
+      XCTAssertTrue((0...1).contains(u), "rise \(t): \(u)")
+      XCTAssertGreaterThanOrEqual(u, prev)
+      prev = u
+    }
+    XCTAssertEqual(prev, 1, accuracy: 0.001, "rise must complete")
+
+    prev = 2
+    for t in stride(from: 0.0, through: CollapsedBotFace.alertFallDuration + 0.2, by: 0.04) {
+      let u = CollapsedBotFace.alertUnit(elapsed: t, engaging: false)
+      XCTAssertTrue((0...1).contains(u), "drain \(t): \(u)")
+      XCTAssertLessThanOrEqual(u, prev)
+      prev = u
+    }
+    XCTAssertEqual(prev, 0, accuracy: 0.001, "drain must complete")
+  }
+
+  func testFullAlertScowlsNarrowsAndSettles() {
+    let mad = CollapsedBotFace.Inputs(isPlaying: true, isHovered: false, alertUnit: 1)
+    sweep(inputs: mad) { _, e in
+      XCTAssertEqual(e.angryTilt, CollapsedBotFace.alertEyeTilt)
+      // Narrowed to 70% of the calm eyes (blink slit included), scowl
+      // tilt dominates the sway, and the beat bounce is damped out.
+      XCTAssertTrue((0.027...0.72).contains(e.eyeOpen), "eyeOpen \(e.eyeOpen)")
+      XCTAssertTrue(
+        abs(e.eyeTilt) <= 0.16 * 0.5 + 0.001, "sway not quieted: \(e.eyeTilt)")
+      XCTAssertTrue((0.9965...1.014).contains(e.faceScale), "faceScale \(e.faceScale)")
+    }
+  }
+
+  func testAlertBlendsSmoothlyFromCalm() {
+    // At every blend level the scowl stays bounded; halfway the eyes are
+    // already leaning and narrowing.
+    let calm = CollapsedBotFace.Inputs(isPlaying: false, isHovered: false)
+    let half = CollapsedBotFace.Inputs(isPlaying: false, isHovered: false, alertUnit: 0.5)
+    var calmMaxOpen: CGFloat = 0
+    sweep(inputs: calm) { _, e in calmMaxOpen = Swift.max(calmMaxOpen, e.eyeOpen) }
+    var halfMaxOpen: CGFloat = 0
+    var halfMaxTilt: CGFloat = 0
+    sweep(inputs: half) { _, e in
+      halfMaxOpen = Swift.max(halfMaxOpen, e.eyeOpen)
+      halfMaxTilt = Swift.max(halfMaxTilt, e.angryTilt)
+    }
+    XCTAssertEqual(halfMaxOpen, calmMaxOpen * 0.85, accuracy: 1e-9)
+    XCTAssertEqual(halfMaxTilt, CollapsedBotFace.alertEyeTilt * 0.5, accuracy: 1e-9)
+  }
+
+  func testZeroAlertLeavesExpressionUntouched() {
+    // The blend must be the identity at 0 — the calm face is byte-for-byte
+    // what it was before the alert state existed.
+    for t in stride(from: 0.0, to: 20, by: 0.317) {
+      XCTAssertEqual(
+        CollapsedBotFace.expression(
+          at: t, inputs: CollapsedBotFace.Inputs(isPlaying: true, isHovered: false, alertUnit: 0)),
+        CollapsedBotFace.expression(
+          at: t, inputs: CollapsedBotFace.Inputs(isPlaying: true, isHovered: false)))
+      XCTAssertEqual(
+        CollapsedBotFace.expression(
+          at: t, inputs: CollapsedBotFace.Inputs(isPlaying: false, isHovered: true, alertUnit: 0)),
+        CollapsedBotFace.expression(
+          at: t, inputs: CollapsedBotFace.Inputs(isPlaying: false, isHovered: true)))
+    }
+  }
+
+  func testStaticAlertFrameScowlsFully() {
+    let e = CollapsedBotFace.staticExpression(isPlaying: false, alert: true)
+    XCTAssertEqual(e.angryTilt, CollapsedBotFace.alertEyeTilt)
+    XCTAssertEqual(e.eyeOpen, 0.7, accuracy: 1e-9)
+    XCTAssertEqual(e.eyeTilt, 0.06 * 0.5, accuracy: 1e-9)
+    // Without alert the static frame is exactly the legacy one.
+    XCTAssertEqual(
+      CollapsedBotFace.staticExpression(isPlaying: false, alert: false).angryTilt, 0)
+  }
 }

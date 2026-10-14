@@ -35,9 +35,6 @@ enum AgentsPanelPalette {
   static let subagentTag = Color(red: 0.65, green: 0.55, blue: 0.95)  // #A68CF2
   static let yoloTag = Color(red: 1.0, green: 0.35, blue: 0.35)  // #FF5959
 
-  // Collapsed-bar bell
-  static let bell = Color(red: 1.0, green: 0.7, blue: 0.28)  // #FFB347
-
   // Tool-status colors (compact bar / live tool chip).
   static func toolStatus(_ tool: String) -> Color {
     let t = tool.lowercased()
