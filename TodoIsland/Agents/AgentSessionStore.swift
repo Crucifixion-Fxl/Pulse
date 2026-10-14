@@ -282,16 +282,17 @@ final class AgentSessionStore: ObservableObject {
 
         switch Self.routeKind(for: event) {
         case .permission:
-            // Codex fires PermissionRequest BEFORE its own approval routing,
-            // and its payload cannot tell "approve for me" (automatic
+            // Codex fires PermissionRequest BEFORE its approval routing, and
+            // the payload itself cannot tell "approve for me" (automatic
             // review) from a real ask — permission_mode stays "default"
-            // either way. A blocking queue would break approve-for-me by
-            // re-asking what the auto-reviewer already handles, so for
-            // Codex the island always defers: its native flow decides
-            // (automatic review, or the TUI prompt the user is already
-            // watching). Questions still surface — those are for the user.
-            if (event.rawJSON["_source"] as? String)?.lowercased() == "codex" {
-                Self.logPermissionRoute(event, outcome: "deferred-to-codex")
+            // either way. The session transcript CAN: its path rides in the
+            // payload, and every turn context records `approvals_reviewer`.
+            // Automatic review defers to Codex (a blocking queue would
+            // re-ask what the reviewer already handles); a human ask queues
+            // on the island like Claude's do.
+            if (event.rawJSON["_source"] as? String)?.lowercased() == "codex",
+               Self.codexUsesAutoReview(transcriptPath: event.rawJSON["transcript_path"] as? String) {
+                Self.logPermissionRoute(event, outcome: "deferred-to-codex (auto review)")
                 return Data("{}".utf8)
             }
 
@@ -695,14 +696,38 @@ final class AgentSessionStore: ObservableObject {
 
     // MARK: - Response builders
 
+    /// Whether the Codex session that sent this request answers approvals
+    /// with automatic review ("approve for me"). The LAST
+    /// `approvals_reviewer` value in the transcript wins — the reviewer
+    /// can be toggled mid-session. Unreadable/missing transcript assumes
+    /// automatic review: defer (stay quiet) rather than re-ask what the
+    /// reviewer may already be handling.
+    nonisolated private static func codexUsesAutoReview(transcriptPath: String?) -> Bool {
+        guard let path = transcriptPath, !path.isEmpty,
+              let text = try? String(contentsOfFile: path, encoding: .utf8)
+        else { return true }
+        // Plain escaped needle, not a raw literal: `#""…":"#` eats its
+        // trailing quote as the closing delimiter and silently searches for
+        // the wrong string.
+        guard let range = text.range(of: "\"approvals_reviewer\":\"", options: .backwards) else {
+            return false  // no reviewer configured → a genuine human ask
+        }
+        return text[range.upperBound...].hasPrefix("auto_review")
+    }
+
     /// One line per incoming PermissionRequest — tool, mode, routing
     /// outcome — so "why did the island ask" is answerable from
     /// /tmp/doisland-agents-activity.log. Deliberately no tool_input: the
-    /// log must stay safe to paste (commands can carry secrets).
+    /// log must stay safe to paste (commands can carry secrets). The full
+    /// payload (minus tool_input) rides along so undocumented fields —
+    /// the only place an approval policy could hide — are visible.
     nonisolated private static func logPermissionRoute(_ event: HookEvent, outcome: String) {
-        let mode = (event.rawJSON["permission_mode"] as? String).map { "\"\($0)\"" } ?? "nil"
-        let source = (event.rawJSON["_source"] as? String) ?? "claude"
-        let line = "[\(ISO8601DateFormatter().string(from: Date()))] PermissionRequest source=\(source) tool=\(event.toolName ?? "?") mode=\(mode) → \(outcome)\n"
+        var payload = event.rawJSON
+        payload.removeValue(forKey: "tool_input")
+        payload.removeValue(forKey: "tool_response")
+        let detail = (try? Self.serializeSafely(payload))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        let line = "[\(ISO8601DateFormatter().string(from: Date()))] PermissionRequest → \(outcome)\n  payload: \(detail)\n"
         let path = "/tmp/doisland-agents-activity.log"
         if let handle = FileHandle(forWritingAtPath: path) {
             handle.seekToEndOfFile()
@@ -711,6 +736,15 @@ final class AgentSessionStore: ObservableObject {
         } else {
             FileManager.default.createFile(atPath: path, contents: Data(line.utf8))
         }
+    }
+
+    /// JSONSerialization minus the crash-prone edge cases: values that
+    /// snuck in non-property-list types drop out instead of killing the
+    /// logger.
+    nonisolated private static func serializeSafely(_ object: [String: Any]) throws -> Data {
+        let filtered = object.filter { JSONSerialization.isValidJSONObject([$0.value]) }
+        return try JSONSerialization.data(
+            withJSONObject: filtered, options: [.sortedKeys, .withoutEscapingSlashes])
     }
 
     /// `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"…"}}}`
