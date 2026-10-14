@@ -468,7 +468,7 @@ final class AgentSessionStore: ObservableObject {
 
         let responseData: Data
         if always {
-            responseData = Self.alwaysAllowResponseData(toolName: pending.event.toolName)
+            responseData = Self.alwaysAllowResponseData(event: pending.event)
         } else {
             responseData = Self.permissionDecisionData(behavior: "allow")
         }
@@ -686,25 +686,45 @@ final class AgentSessionStore: ObservableObject {
         )
     }
 
-    /// "Always allow" — allow plus a session-scoped rule. MCP tools take the
-    /// bare tool name (`mcp__server__tool(*)` never matches; upstream #224).
-    nonisolated private static func alwaysAllowResponseData(toolName: String?) -> Data {
-        let name = toolName ?? ""
-        var rule: [String: Any] = ["toolName": name]
-        if !name.hasPrefix("mcp__") {
-            rule["ruleContent"] = "*"
+    /// "Always allow" — allow plus a permission update so the CLI stops
+    /// asking for this tool.
+    ///
+    /// Codex reserves `updatedPermissions` (its docs: fails closed), so
+    /// codex requests degrade to a plain allow. Claude Code: echo the
+    /// `permission_suggestions` entry Claude itself attached — exactly the
+    /// rule its native dialog would write, destination included. Without a
+    /// suggestion, add a whole-tool allow rule with `ruleContent` OMITTED
+    /// (the docs' spelling for matching the whole tool — `"*"` is invalid
+    /// rule content and Claude rejects the entire update as "unsupported
+    /// updatedPermissions"), written where the native "don't ask again"
+    /// lands: project-local settings.
+    nonisolated private static func alwaysAllowResponseData(event: HookEvent) -> Data {
+        if (event.rawJSON["_source"] as? String)?.lowercased() == "codex" {
+            return permissionDecisionData(behavior: "allow")
         }
+
+        var update: [String: Any]
+        if let suggestions = event.rawJSON["permission_suggestions"] as? [[String: Any]],
+           let echoed = suggestions.first,
+           JSONSerialization.isValidJSONObject([echoed]) {
+            update = echoed
+        } else if let toolName = event.toolName, !toolName.isEmpty {
+            update = [
+                "type": "addRules",
+                "rules": [["toolName": toolName] as [String: Any]],
+                "behavior": "allow",
+                "destination": "localSettings",
+            ]
+        } else {
+            return permissionDecisionData(behavior: "allow")
+        }
+
         let obj: [String: Any] = [
             "hookSpecificOutput": [
                 "hookEventName": "PermissionRequest",
                 "decision": [
                     "behavior": "allow",
-                    "updatedPermissions": [[
-                        "type": "addRules",
-                        "rules": [rule],
-                        "behavior": "allow",
-                        "destination": "session",
-                    ] as [String: Any]],
+                    "updatedPermissions": [update],
                 ] as [String: Any],
             ] as [String: Any],
         ]
