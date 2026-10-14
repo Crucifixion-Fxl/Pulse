@@ -282,6 +282,19 @@ final class AgentSessionStore: ObservableObject {
 
         switch Self.routeKind(for: event) {
         case .permission:
+            // Codex fires PermissionRequest BEFORE its own approval routing,
+            // and its payload cannot tell "approve for me" (automatic
+            // review) from a real ask — permission_mode stays "default"
+            // either way. A blocking queue would break approve-for-me by
+            // re-asking what the auto-reviewer already handles, so for
+            // Codex the island always defers: its native flow decides
+            // (automatic review, or the TUI prompt the user is already
+            // watching). Questions still surface — those are for the user.
+            if (event.rawJSON["_source"] as? String)?.lowercased() == "codex" {
+                Self.logPermissionRoute(event, outcome: "deferred-to-codex")
+                return Data("{}".utf8)
+            }
+
             // Safe internal tools never need the user.
             if let toolName = event.toolName, Self.autoApproveTools.contains(toolName) {
                 Self.logPermissionRoute(event, outcome: "auto-approved-tool")
@@ -709,22 +722,17 @@ final class AgentSessionStore: ObservableObject {
     }
 
     /// "Always allow" — allow plus a permission update so the CLI stops
-    /// asking for this tool.
+    /// asking for this tool. Claude Code only: codex requests never queue
+    /// (they defer at the routing gate above).
     ///
-    /// Codex reserves `updatedPermissions` (its docs: fails closed), so
-    /// codex requests degrade to a plain allow. Claude Code: echo the
-    /// `permission_suggestions` entry Claude itself attached — exactly the
-    /// rule its native dialog would write, destination included. Without a
-    /// suggestion, add a whole-tool allow rule with `ruleContent` OMITTED
-    /// (the docs' spelling for matching the whole tool — `"*"` is invalid
-    /// rule content and Claude rejects the entire update as "unsupported
-    /// updatedPermissions"), written where the native "don't ask again"
-    /// lands: project-local settings.
+    /// Echo the `permission_suggestions` entry Claude itself attached —
+    /// exactly the rule its native dialog would write, destination
+    /// included. Without a suggestion, add a whole-tool allow rule with
+    /// `ruleContent` OMITTED (the docs' spelling for matching the whole
+    /// tool — `"*"` is invalid rule content and Claude rejects the entire
+    /// update as "unsupported updatedPermissions"), written where the
+    /// native "don't ask again" lands: project-local settings.
     nonisolated private static func alwaysAllowResponseData(event: HookEvent) -> Data {
-        if (event.rawJSON["_source"] as? String)?.lowercased() == "codex" {
-            return permissionDecisionData(behavior: "allow")
-        }
-
         var update: [String: Any]
         if let suggestions = event.rawJSON["permission_suggestions"] as? [[String: Any]],
            let echoed = suggestions.first,
