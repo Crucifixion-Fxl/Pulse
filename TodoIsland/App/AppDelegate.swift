@@ -94,6 +94,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   /// back down by the pointer-exit suspend and the deactivation collapse.
   /// Emptying the queues releases the hold, handing the panel back to
   /// normal pinned semantics.
+  ///
+  /// No editing guard: a suspended editor (island collapsed mid-edit) would
+  /// otherwise silently swallow every approval — invisible prompts are
+  /// worse than a pane switch, and the editor's draft survives it.
   private func wireAgentAutoExpansion() {
     Publishers.CombineLatest(agentStore.$permissionQueue, agentStore.$questionQueue)
       .receive(on: DispatchQueue.main)
@@ -103,15 +107,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
           self.model.releaseApprovalHold()
           return
         }
-        guard self.model.editingReminderID == nil else { return }
         self.model.requestSidebarItem(.agents)
         self.model.pinIslandForApproval()
+        Self.logExpansion(
+          "sink fired: pending=\(permissions.count)p/\(questions.count)q "
+            + "pinned=\(self.model.islandState == .pinned) hold=\(self.model.isHeldForApproval) "
+            + "host=\(self.model.hostDisplayID ?? "nil")")
       }
       .store(in: &agentCancellables)
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     false
+  }
+
+  /// Companion to the store's routing log — one line per auto-expansion so
+  /// panel-lifecycle questions are answerable from the same file.
+  nonisolated private static func logExpansion(_ message: String) {
+    let line = "[\(ISO8601DateFormatter().string(from: Date()))] auto-expand: \(message)\n"
+    let path = "/tmp/doisland-agents-activity.log"
+    if let handle = FileHandle(forWritingAtPath: path) {
+      handle.seekToEndOfFile()
+      handle.write(Data(line.utf8))
+      handle.closeFile()
+    } else {
+      FileManager.default.createFile(atPath: path, contents: Data(line.utf8))
+    }
   }
 
   func menuWillOpen(_ menu: NSMenu) {
