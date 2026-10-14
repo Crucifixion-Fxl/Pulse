@@ -491,6 +491,7 @@ final class AgentSessionStore: ObservableObject {
             responseData = Self.permissionDecisionData(behavior: "allow")
         }
         pending.continuation.resume(returning: responseData)
+        reconcileWaitingStatus(sessionId: pending.sessionId, fallback: .processing)
     }
 
     func denyPermission(_ id: UUID) {
@@ -498,6 +499,7 @@ final class AgentSessionStore: ObservableObject {
         let pending = permissionQueue.remove(at: index)
         requestOrigins.removeValue(forKey: pending.id)
         pending.continuation.resume(returning: Self.permissionDecisionData(behavior: "deny"))
+        reconcileWaitingStatus(sessionId: pending.sessionId, fallback: .processing)
     }
 
     /// Hide the request but keep it queued and the CLI blocked — the user can
@@ -546,6 +548,7 @@ final class AgentSessionStore: ObservableObject {
             responseData = Data(#"{"hookSpecificOutput":{"hookEventName":"Notification"}}"#.utf8)
         }
         pending.continuation.resume(returning: responseData)
+        reconcileWaitingStatus(sessionId: pending.sessionId, fallback: .processing)
     }
 
     private func resolveQuestion(at index: Int, answers: [QuestionAnswer]) {
@@ -585,6 +588,7 @@ final class AgentSessionStore: ObservableObject {
             responseData = (try? JSONSerialization.data(withJSONObject: obj)) ?? Data("{}".utf8)
         }
         pending.continuation.resume(returning: responseData)
+        reconcileWaitingStatus(sessionId: pending.sessionId, fallback: .processing)
     }
 
     // MARK: - Bulk release (peer drop, session end, teardown)
@@ -595,6 +599,7 @@ final class AgentSessionStore: ObservableObject {
     func denyAllForSession(sessionId: String) {
         drainPermissions(sessionId: sessionId, agentId: nil)
         drainQuestions(sessionId: sessionId, agentId: nil)
+        reconcileWaitingStatus(sessionId: sessionId, fallback: .idle)
     }
 
     /// Release everything parked on a connection whose peer (the bridge
@@ -606,18 +611,41 @@ final class AgentSessionStore: ObservableObject {
     /// Same release keyed by a connection identity captured at accept time.
     func denyAll(origin: ObjectIdentifier) {
         let denyPermissionData = Self.permissionDecisionData(behavior: "deny")
+        var affectedSessions = Set<String>()
         permissionQueue.removeAll { request in
             guard requestOrigins.removeValue(forKey: request.id) == origin else { return false }
+            affectedSessions.insert(request.sessionId)
             request.continuation.resume(returning: denyPermissionData)
             return true
         }
         questionQueue.removeAll { request in
             guard requestOrigins.removeValue(forKey: request.id) == origin else { return false }
+            affectedSessions.insert(request.sessionId)
             let data = request.isFromPermission
                 ? denyPermissionData
                 : Data("{}".utf8)
             request.continuation.resume(returning: data)
             return true
+        }
+        for sessionId in affectedSessions {
+            reconcileWaitingStatus(sessionId: sessionId, fallback: .idle)
+        }
+    }
+
+    /// A waiting badge is actionable only while this store still has a request
+    /// for the session. Observe-only notifications have no queue and age out
+    /// through performCleanup instead.
+    private func reconcileWaitingStatus(sessionId: String, fallback: AgentStatus) {
+        guard sessions[sessionId]?.status == .waitingApproval
+                || sessions[sessionId]?.status == .waitingQuestion else { return }
+        if permissionQueue.contains(where: { $0.sessionId == sessionId }) {
+            sessions[sessionId]?.status = .waitingApproval
+        } else if questionQueue.contains(where: { $0.sessionId == sessionId }) {
+            sessions[sessionId]?.status = .waitingQuestion
+        } else {
+            sessions[sessionId]?.status = fallback
+            sessions[sessionId]?.currentTool = nil
+            sessions[sessionId]?.toolDescription = nil
         }
     }
 
