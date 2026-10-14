@@ -269,7 +269,7 @@ final class CollapsedBotFaceTests: XCTestCase {
       XCTAssertGreaterThanOrEqual(e.w, prevW - 1e-9)
       prevW = e.w
     }
-    // The cleaver is wider than tall — the elliptical bowl, not a pill.
-    XCTAssertGreaterThan(e1.w, e1.h * 1.5)
+    // Still wider than tall — a cleaver, not a pill or a square lid.
+    XCTAssertGreaterThan(e1.w, e1.h)
   }
 }

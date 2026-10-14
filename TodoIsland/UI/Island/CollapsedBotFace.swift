@@ -47,12 +47,14 @@ enum CollapsedBotFace {
   static let alertEyeTilt: CGFloat = 0.34
   /// Cleaver-eye (菜刀眼) target proportions as fractions of the face size:
   /// each eye flattens to a cleaver — a straight lid line across the top
-  /// (the knife's back) over an elliptical bowl (the blade).
-  static let cleaverW: CGFloat = 0.38
-  static let cleaverH: CGFloat = 0.21
+  /// (the knife's back) over an elliptical bowl (the blade). This pair is
+  /// near the face's packing limit: two 0.44-wide eyes + center gap ≈ the
+  /// circle's width at eye height.
+  static let cleaverW: CGFloat = 0.44
+  static let cleaverH: CGFloat = 0.32
   /// How far each eye's center shifts outward with the alert blend — the
   /// big cleavers need the room so their inner corners never collide.
-  static let cleaverSpread: CGFloat = 0.05
+  static let cleaverSpread: CGFloat = 0.065
 
   static func expression(at t: TimeInterval, inputs: Inputs) -> Expression {
     let glance = glanceUnit(at: t)
