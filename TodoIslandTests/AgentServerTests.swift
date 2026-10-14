@@ -350,19 +350,51 @@ final class AgentServerTests: XCTestCase {
         XCTAssertNil(mcpRules[0]["ruleContent"], "mcp rules must not carry a ruleContent")
     }
 
-    func testCodexPermissionRequestsAlwaysDefer() async throws {
-        // Codex's payload cannot distinguish "approve for me" (automatic
-        // review) from a real ask — permission_mode stays "default" — so
-        // the island must never queue one: deferring lets Codex's own flow
-        // (auto review, or its native prompt) decide.
+    func testCodexAutoReviewDefersAndHumanAskQueues() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("codex-transcripts-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // approve-for-me: the transcript's turn contexts record
+        // approvals_reviewer "auto_review" (discovered in real rollouts —
+        // the hook payload itself carries no such field).
+        let autoReview = dir.appendingPathComponent("auto.jsonl")
+        try #"{"turn":1,"approvals_reviewer":"auto_review"}"#
+            .write(to: autoReview, atomically: true, encoding: .utf8)
+        let autoPayload = """
+        {"hook_event_name":"PermissionRequest","_source":"codex","session_id":"tcr1","permission_mode":"default","tool_name":"Bash","transcript_path":"\(autoReview.path)","tool_input":{"command":"ls"},"cwd":"/tmp"}
+        """
+        let autoResponse = await store.handleConnection(payload: Data(autoPayload.utf8))
+        XCTAssertEqual(autoResponse, Data("{}".utf8))
+        XCTAssertTrue(store.permissionQueue.isEmpty, "auto review must defer")
+        XCTAssertFalse(store.hasPending)
+
+        // Human ask: no reviewer configured → queue on the island.
+        let human = dir.appendingPathComponent("human.jsonl")
+        try #"{"turn":1}"#.write(to: human, atomically: true, encoding: .utf8)
+        let humanPayload = """
+        {"hook_event_name":"PermissionRequest","_source":"codex","session_id":"tcr2","permission_mode":"default","tool_name":"Bash","transcript_path":"\(human.path)","tool_input":{"command":"ls"},"cwd":"/tmp"}
+        """
+        let humanTask = Task { [self] in
+            await store.handleConnection(payload: Data(humanPayload.utf8))
+        }
+        let request = await waitForFirstPermission()
+        let permission = try XCTUnwrap(request, "human ask should queue")
+        store.approvePermission(permission.id)
+        let humanResponse = try jsonDictionary(try await humanTask.value)
+        let decision = try XCTUnwrap(
+            (humanResponse["hookSpecificOutput"] as? [String: Any])?["decision"] as? [String: Any])
+        XCTAssertEqual(decision["behavior"] as? String, "allow")
+    }
+
+  func testCodexUnreadableTranscriptDefersConservatively() async throws {
         let payload = """
-        {"hook_event_name":"PermissionRequest","_source":"codex","session_id":"tcd","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/tmp"}
+        {"hook_event_name":"PermissionRequest","_source":"codex","session_id":"tcr3","tool_name":"Bash","transcript_path":"/nonexistent/doisland-test.jsonl","tool_input":{"command":"ls"},"cwd":"/tmp"}
         """
         let response = await store.handleConnection(payload: Data(payload.utf8))
         XCTAssertEqual(response, Data("{}".utf8))
-        XCTAssertTrue(store.permissionQueue.isEmpty, "codex must not queue")
-        XCTAssertFalse(store.hasPending)
-        XCTAssertNil(store.sessions["tcd"], "deferred requests surface no UI state")
+        XCTAssertTrue(store.permissionQueue.isEmpty, "unreadable → assume auto review → defer")
     }
 
     func testDenyPermissionReturnsExactDenyJSON() async throws {
