@@ -284,9 +284,31 @@ final class AgentServerTests: XCTestCase {
         XCTAssertTrue(store.questionQueue.isEmpty)
     }
 
-    func testAlwaysAllowInjectsSessionRuleAndOmitsRuleContentForMCPTools() async throws {
+    func testAlwaysAllowEchoesSuggestionOrOmitsRuleContent() async throws {
+        // With a permission_suggestions entry: echo it verbatim — the exact
+        // rule Claude's own dialog would write.
+        let suggested = """
+        {"hook_event_name":"PermissionRequest","session_id":"t5","tool_name":"Bash","tool_input":{"command":"cargo build"},"cwd":"/tmp","permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"cargo build"}],"behavior":"allow","destination":"localSettings"}]}
+        """
+        let suggestedTask = Task { [self] in
+            await store.handleConnection(payload: Data(suggested.utf8))
+        }
+        let suggestedRequest = await waitForFirstPermission()
+        store.approvePermission(try XCTUnwrap(suggestedRequest, "should queue").id, always: true)
+        let suggestedResponse = try jsonDictionary(try await suggestedTask.value)
+        let echoedDecision = try XCTUnwrap(
+            (suggestedResponse["hookSpecificOutput"] as? [String: Any])?["decision"] as? [String: Any])
+        XCTAssertEqual(echoedDecision["behavior"] as? String, "allow")
+        let echoed = try XCTUnwrap(echoedDecision["updatedPermissions"] as? [[String: Any]])
+        XCTAssertEqual(echoed[0]["destination"] as? String, "localSettings")
+        let echoedRules = try XCTUnwrap(echoed[0]["rules"] as? [[String: Any]])
+        XCTAssertEqual(echoedRules[0]["ruleContent"] as? String, "cargo build")
+
+        // Without a suggestion: whole-tool rule, ruleContent OMITTED
+        // ("*" is invalid rule content — Claude rejects the whole update),
+        // persisted where the native "don't ask again" lands.
         let bash = """
-        {"hook_event_name":"PermissionRequest","session_id":"t5","tool_name":"Bash","tool_input":{"command":"cargo build"},"cwd":"/tmp"}
+        {"hook_event_name":"PermissionRequest","session_id":"t5b","tool_name":"Bash","tool_input":{"command":"cargo build"},"cwd":"/tmp"}
         """
         let bashTask = Task { [self] in
             await store.handleConnection(payload: Data(bash.utf8))
@@ -303,14 +325,14 @@ final class AgentServerTests: XCTestCase {
         XCTAssertEqual(bashPermissions.count, 1)
         XCTAssertEqual(bashPermissions[0]["type"] as? String, "addRules")
         XCTAssertEqual(bashPermissions[0]["behavior"] as? String, "allow")
-        XCTAssertEqual(bashPermissions[0]["destination"] as? String, "session")
+        XCTAssertEqual(bashPermissions[0]["destination"] as? String, "localSettings")
         let bashRules = try XCTUnwrap(bashPermissions[0]["rules"] as? [[String: Any]])
         XCTAssertEqual(bashRules[0]["toolName"] as? String, "Bash")
-        XCTAssertEqual(bashRules[0]["ruleContent"] as? String, "*")
+        XCTAssertNil(bashRules[0]["ruleContent"], "whole-tool rules must omit ruleContent")
 
-        // mcp__ tools: bare tool name only.
+        // mcp__ tools: same whole-tool spelling (bare name).
         let mcp = """
-        {"hook_event_name":"PermissionRequest","session_id":"t5","tool_name":"mcp__github__create_issue","tool_input":{},"cwd":"/tmp"}
+        {"hook_event_name":"PermissionRequest","session_id":"t5c","tool_name":"mcp__github__create_issue","tool_input":{},"cwd":"/tmp"}
         """
         let mcpTask = Task { [self] in
             await store.handleConnection(payload: Data(mcp.utf8))
@@ -326,6 +348,24 @@ final class AgentServerTests: XCTestCase {
         let mcpRules = try XCTUnwrap(mcpPermissions[0]["rules"] as? [[String: Any]])
         XCTAssertEqual(mcpRules[0]["toolName"] as? String, "mcp__github__create_issue")
         XCTAssertNil(mcpRules[0]["ruleContent"], "mcp rules must not carry a ruleContent")
+    }
+
+    func testAlwaysAllowDegradesToPlainAllowForCodex() async throws {
+        // Codex reserves updatedPermissions (fails closed) — the island must
+        // not send one.
+        let payload = """
+        {"hook_event_name":"PermissionRequest","_source":"codex","session_id":"t5d","tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/tmp"}
+        """
+        let responseTask = Task { [self] in
+            await store.handleConnection(payload: Data(payload.utf8))
+        }
+        let request = await waitForFirstPermission()
+        store.approvePermission(try XCTUnwrap(request).id, always: true)
+        let response = try jsonDictionary(try await responseTask.value)
+        let decision = try XCTUnwrap(
+            (response["hookSpecificOutput"] as? [String: Any])?["decision"] as? [String: Any])
+        XCTAssertEqual(decision["behavior"] as? String, "allow")
+        XCTAssertNil(decision["updatedPermissions"], "codex must not receive updatedPermissions")
     }
 
     func testDenyPermissionReturnsExactDenyJSON() async throws {
