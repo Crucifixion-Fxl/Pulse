@@ -606,5 +606,28 @@ final class AgentServerTests: XCTestCase {
         store.performCleanup(now: Date().addingTimeInterval(400))
         XCTAssertTrue(store.permissionQueue.isEmpty, "stale wait is released with a deny")
         try assertEqualJSON(try await permissionTask.value, Self.denyJSON)
+        XCTAssertNotEqual(store.sessions["t12"]?.status, .waitingApproval,
+                          "a released request must not leave a Needs You card")
+    }
+
+    func testResolvedPermissionAndUnqueuedNotificationDoNotLeaveNeedsYouCards() async throws {
+        let permissionTask = Task { [self] in
+            await store.handleConnection(payload: Data(
+                #"{"hook_event_name":"PermissionRequest","session_id":"resolved","tool_name":"Bash","cwd":"/tmp"}"#.utf8
+            ))
+        }
+        let queued = await waitForFirstPermission()
+        let permission = try XCTUnwrap(queued)
+        store.approvePermission(permission.id)
+        try assertEqualJSON(try await permissionTask.value, Self.allowJSON)
+        XCTAssertNotEqual(store.sessions["resolved"]?.status, .waitingApproval,
+                          "approving a request must clear its Needs You card")
+
+        try applyPayload(#"{"hook_event_name":"Notification","session_id":"observed","message":"Permission needed","notification_type":"permission_prompt","cwd":"/tmp"}"#)
+        XCTAssertEqual(store.sessions["observed"]?.status, .waitingApproval)
+        XCTAssertTrue(store.permissionQueue.isEmpty)
+        store.performCleanup(now: Date().addingTimeInterval(301))
+        XCTAssertNotEqual(store.sessions["observed"]?.status, .waitingApproval,
+                          "an unqueued notification must age out of Needs You")
     }
 }
