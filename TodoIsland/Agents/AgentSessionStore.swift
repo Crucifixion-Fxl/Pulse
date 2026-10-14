@@ -140,6 +140,16 @@ final class AgentSessionStore: ObservableObject {
         "TodoRead", "TodoWrite", "EnterPlanMode", "ExitPlanMode",
     ]
 
+    /// Permission modes where the user told the CLI to decide for itself
+    /// (`permission_mode` on PermissionRequest payloads, both Claude Code
+    /// and Codex). A blocking queue here would re-ask what auto mode
+    /// already answers — and out-rank its safety classifier — so requests
+    /// in these modes get no decision and the CLI's own flow runs. AskUser
+    /// Question is exempt: questions are for the user in every mode.
+    nonisolated static let selfApprovingModes: Set<String> = [
+        "auto", "dontAsk", "bypassPermissions",
+    ]
+
     /// Upstream `SettingsDefaults.maxToolHistory` (no settings UI in this port).
     private let maxHistory = 20
 
@@ -311,6 +321,15 @@ final class AgentSessionStore: ObservableObject {
                 return await withCheckedContinuation { continuation in
                     enqueueAskUserQuestion(event, continuation: continuation, origin: origin)
                 }
+            }
+
+            // Self-approving modes (auto / dontAsk / bypassPermissions):
+            // answer nothing and step aside — the CLI decides, including
+            // its denials. Queuing would put the island between the user
+            // and a mode they explicitly switched on.
+            if let mode = event.rawJSON["permission_mode"] as? String,
+               Self.selfApprovingModes.contains(mode) {
+                return Data("{}".utf8)
             }
 
             return await withCheckedContinuation { continuation in
