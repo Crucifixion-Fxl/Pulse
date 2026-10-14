@@ -46,12 +46,10 @@ enum CollapsedBotFace {
   /// Full-scowl eye tilt per side, radians (~19.5°).
   static let alertEyeTilt: CGFloat = 0.34
   /// Cleaver-eye (菜刀眼) target proportions as fractions of the face size:
-  /// the left eye flattens to a tilted stroke, the right to a lid-pressed
-  /// half ellipse (flat top, rounded bottom).
-  static let cleaverLineW: CGFloat = 0.20
-  static let cleaverLineH: CGFloat = 0.05
-  static let cleaverDomeW: CGFloat = 0.22
-  static let cleaverDomeH: CGFloat = 0.11
+  /// each eye flattens to a cleaver — a straight lid line across the top
+  /// (the knife's back) over an elliptical bowl (the blade).
+  static let cleaverW: CGFloat = 0.23
+  static let cleaverH: CGFloat = 0.10
 
   static func expression(at t: TimeInterval, inputs: Inputs) -> Expression {
     let glance = glanceUnit(at: t)
@@ -123,20 +121,12 @@ enum CollapsedBotFace {
     return e
   }
 
-  /// Left cleaver eye — the slit: a lerp from the calm 3:1 capsule (Metrics
-  /// eyeWidth/eyeHeight) to a long thin stroke. Pure so the morph is
-  /// unit-testable.
-  static func cleaverLineEye(size: CGFloat, a: CGFloat, open: CGFloat) -> (w: CGFloat, h: CGFloat) {
-    let w0 = size * 0.14, w1 = size * cleaverLineW
-    let h0 = size * 0.346 * open, h1 = size * cleaverLineH
-    return (w0 + (w1 - w0) * a, h0 + (h1 - h0) * a)
-  }
-
-  /// Right cleaver eye — the half ellipse: same capsule start, morphing to
-  /// a squat flat-topped dome.
-  static func cleaverDomeEye(size: CGFloat, a: CGFloat, open: CGFloat) -> (w: CGFloat, h: CGFloat) {
-    let w0 = size * 0.14, w1 = size * cleaverDomeW
-    let h0 = size * 0.346 * open, h1 = size * cleaverDomeH
+  /// Cleaver-eye geometry at blend `a`: a lerp from the calm 3:1 capsule
+  /// (Metrics eyeWidth/eyeHeight) to the cleaver proportions. Pure so the
+  /// morph is unit-testable.
+  static func cleaverEye(size: CGFloat, a: CGFloat, open: CGFloat) -> (w: CGFloat, h: CGFloat) {
+    let w0 = size * 0.14, w1 = size * cleaverW
+    let h0 = size * 0.346 * open, h1 = size * cleaverH
     return (w0 + (w1 - w0) * a, h0 + (h1 - h0) * a)
   }
 
@@ -212,8 +202,8 @@ enum CollapsedBotFace {
 /// mouth, no brows, no sleep mode, flat coloring. The tilt is the life of
 /// it: perfectly upright eyes read as vacant, swaying ones read as curious.
 /// While an agent request waits the face floods red and the eyes morph
-/// into cleaver eyes (菜刀眼): the left a tilted stroke, the right a
-/// lid-pressed half ellipse.
+/// into cleaver eyes (菜刀眼): each a straight lid line across the top
+/// over an elliptical bowl, tilted \ / like pressed-down angry brows.
 struct CollapsedBotFaceView: View {
   /// Face diameter in points; the caller derives it from the bar height.
   let size: CGFloat
@@ -300,40 +290,28 @@ struct CollapsedBotFaceView: View {
   }
 
   /// The cleaver-eye morph: `alert` 0 renders the calm capsules; 1 renders
-  /// the left eye as a tilted stroke and the right as a lid-pressed half
-  /// ellipse (flat top, rounded bottom — the top corner radii flatten with
-  /// the blend). Between the two, every parameter lerps.
-  @ViewBuilder
+  /// the cleaver — a straight lid line across the top over an elliptical
+  /// bowl. The top corner radii flatten with the blend; between the two,
+  /// every parameter lerps. Both eyes get the same shape, tilted \ / by
+  /// the angry tilt.
   private func eye(
     _ e: CollapsedBotFace.Expression, side: CGFloat, m: Metrics, alert: CGFloat
   ) -> some View {
-    // The squat dome leans a touch less than the stroke so its flat lid
-    // still reads horizontal-ish.
-    let tilt = e.eyeTilt + side * e.angryTilt * (side > 0 ? 0.75 : 1)
-    let x = size / 2 + side * m.eyeCenterX + e.glanceX * m.glanceShift
-    let y = m.eyeCenterY + e.lookY * m.lookLift
-    if side < 0 {
-      let g = CollapsedBotFace.cleaverLineEye(size: size, a: alert, open: e.eyeOpen)
-      Capsule(style: .continuous)
-        .fill(Self.eyeColor)
-        .frame(width: g.w, height: max(1, g.h))
-        .rotationEffect(.radians(tilt))
-        .position(x: x, y: y)
-    } else {
-      let g = CollapsedBotFace.cleaverDomeEye(size: size, a: alert, open: e.eyeOpen)
-      let r = g.w / 2
-      UnevenRoundedRectangle(
-        topLeadingRadius: (1 - alert) * r,
-        bottomLeadingRadius: r,
-        bottomTrailingRadius: r,
-        topTrailingRadius: (1 - alert) * r,
-        style: .continuous
-      )
-      .fill(Self.eyeColor)
-      .frame(width: g.w, height: max(1, g.h))
-      .rotationEffect(.radians(tilt))
-      .position(x: x, y: y)
-    }
+    let g = CollapsedBotFace.cleaverEye(size: size, a: alert, open: e.eyeOpen)
+    let r = g.w / 2
+    return UnevenRoundedRectangle(
+      topLeadingRadius: (1 - alert) * r,
+      bottomLeadingRadius: r,
+      bottomTrailingRadius: r,
+      topTrailingRadius: (1 - alert) * r,
+      style: .continuous
+    )
+    .fill(Self.eyeColor)
+    .frame(width: g.w, height: max(1, g.h))
+    .rotationEffect(.radians(e.eyeTilt + side * e.angryTilt))
+    .position(
+      x: size / 2 + side * m.eyeCenterX + e.glanceX * m.glanceShift,
+      y: m.eyeCenterY + e.lookY * m.lookLift)
   }
 
   /// All geometry as fractions of the face size, so one constant set works

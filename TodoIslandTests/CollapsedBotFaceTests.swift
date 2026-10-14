@@ -250,33 +250,26 @@ final class CollapsedBotFaceTests: XCTestCase {
 
   func testCleaverEyesMorphFromCapsuleToTargets() {
     let s: CGFloat = 26
-    let line0 = CollapsedBotFace.cleaverLineEye(size: s, a: 0, open: 1)
-    let dome0 = CollapsedBotFace.cleaverDomeEye(size: s, a: 0, open: 1)
+    let e0 = CollapsedBotFace.cleaverEye(size: s, a: 0, open: 1)
     // a = 0 is exactly the calm capsule geometry (Metrics eyeWidth/eyeHeight).
-    XCTAssertEqual(line0.w, s * 0.14, accuracy: 1e-9)
-    XCTAssertEqual(line0.h, s * 0.346, accuracy: 1e-9)
-    XCTAssertEqual(dome0.w, s * 0.14, accuracy: 1e-9)
-    XCTAssertEqual(dome0.h, s * 0.346, accuracy: 1e-9)
+    XCTAssertEqual(e0.w, s * 0.14, accuracy: 1e-9)
+    XCTAssertEqual(e0.h, s * 0.346, accuracy: 1e-9)
 
-    let line1 = CollapsedBotFace.cleaverLineEye(size: s, a: 1, open: 0.5)
-    let dome1 = CollapsedBotFace.cleaverDomeEye(size: s, a: 1, open: 0.5)
+    let e1 = CollapsedBotFace.cleaverEye(size: s, a: 1, open: 0.5)
     // a = 1 lands on the cleaver targets regardless of the blink/glare open
     // factor — the angry shape holds through blinks.
-    XCTAssertEqual(line1.w, s * CollapsedBotFace.cleaverLineW, accuracy: 1e-9)
-    XCTAssertEqual(line1.h, s * CollapsedBotFace.cleaverLineH, accuracy: 1e-9)
-    XCTAssertEqual(dome1.w, s * CollapsedBotFace.cleaverDomeW, accuracy: 1e-9)
-    XCTAssertEqual(dome1.h, s * CollapsedBotFace.cleaverDomeH, accuracy: 1e-9)
+    XCTAssertEqual(e1.w, s * CollapsedBotFace.cleaverW, accuracy: 1e-9)
+    XCTAssertEqual(e1.h, s * CollapsedBotFace.cleaverH, accuracy: 1e-9)
 
-    // Monotone morph; the dome eye is the wider one once the morph starts.
+    // Monotone morph: widens and squats toward the cleaver.
+    var prevW: CGFloat = 0
     for a in stride(from: 0.0, through: 1.0, by: 0.1) {
-      let l = CollapsedBotFace.cleaverLineEye(size: s, a: a, open: 1)
-      let d = CollapsedBotFace.cleaverDomeEye(size: s, a: a, open: 1)
-      XCTAssertLessThan(l.h, s * 0.346 + 1e-9)
-      if a > 0.01 {
-        XCTAssertGreaterThan(d.w, l.w)
-      } else {
-        XCTAssertEqual(d.w, l.w, accuracy: 1e-9)
-      }
+      let e = CollapsedBotFace.cleaverEye(size: s, a: a, open: 1)
+      XCTAssertLessThan(e.h, s * 0.346 + 1e-9)
+      XCTAssertGreaterThanOrEqual(e.w, prevW - 1e-9)
+      prevW = e.w
     }
+    // The cleaver is wider than tall — the elliptical bowl, not a pill.
+    XCTAssertGreaterThan(e1.w, e1.h * 1.5)
   }
 }
