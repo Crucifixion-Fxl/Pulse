@@ -189,13 +189,13 @@ final class CollapsedBotFaceTests: XCTestCase {
     XCTAssertEqual(prev, 0, accuracy: 0.001, "drain must complete")
   }
 
-  func testFullAlertScowlsNarrowsAndSettles() {
+  func testFullAlertScowlsGlaresAndSettles() {
     let mad = CollapsedBotFace.Inputs(isPlaying: true, isHovered: false, alertUnit: 1)
     sweep(inputs: mad) { _, e in
       XCTAssertEqual(e.angryTilt, CollapsedBotFace.alertEyeTilt)
-      // Narrowed to 70% of the calm eyes (blink slit included), scowl
-      // tilt dominates the sway, and the beat bounce is damped out.
-      XCTAssertTrue((0.027...0.72).contains(e.eyeOpen), "eyeOpen \(e.eyeOpen)")
+      // Glaring 1.25× eyes (blink slit included), scowl tilt dominates the
+      // sway, and the beat bounce is damped out.
+      XCTAssertTrue((0.049...1.251).contains(e.eyeOpen), "eyeOpen \(e.eyeOpen)")
       XCTAssertTrue(
         abs(e.eyeTilt) <= 0.16 * 0.5 + 0.001, "sway not quieted: \(e.eyeTilt)")
       XCTAssertTrue((0.9965...1.014).contains(e.faceScale), "faceScale \(e.faceScale)")
@@ -215,7 +215,7 @@ final class CollapsedBotFaceTests: XCTestCase {
       halfMaxOpen = Swift.max(halfMaxOpen, e.eyeOpen)
       halfMaxTilt = Swift.max(halfMaxTilt, e.angryTilt)
     }
-    XCTAssertEqual(halfMaxOpen, calmMaxOpen * 0.85, accuracy: 1e-9)
+    XCTAssertEqual(halfMaxOpen, calmMaxOpen * 1.125, accuracy: 1e-9)
     XCTAssertEqual(halfMaxTilt, CollapsedBotFace.alertEyeTilt * 0.5, accuracy: 1e-9)
   }
 
@@ -239,7 +239,7 @@ final class CollapsedBotFaceTests: XCTestCase {
   func testStaticAlertFrameScowlsFully() {
     let e = CollapsedBotFace.staticExpression(isPlaying: false, alert: true)
     XCTAssertEqual(e.angryTilt, CollapsedBotFace.alertEyeTilt)
-    XCTAssertEqual(e.eyeOpen, 0.7, accuracy: 1e-9)
+    XCTAssertEqual(e.eyeOpen, 1.25, accuracy: 1e-9)
     XCTAssertEqual(e.eyeTilt, 0.06 * 0.5, accuracy: 1e-9)
     // Without alert the static frame is exactly the legacy one.
     XCTAssertEqual(
