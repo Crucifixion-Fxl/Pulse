@@ -337,7 +337,10 @@ struct IslandRootView: View {
             .onChange(of: selectedSidebarItem) { _, _ in updateExpandedContentHeight() }
       .onChange(of: model.requestedSidebarItem) { _, item in
         guard let item, item != selectedSidebarItem else { return }
-        selectedSidebarItem = item
+        // selectSidebar (not a bare assignment) so auto-expansion flows get
+        // the pane's side effects too — the agents pane's quota refresh,
+        // the music pane's activity sync.
+        selectSidebar(item)
       }
             .onChange(of: model.islandState) { _, _ in syncMusicPanelActivity() }
             // Height must track exactly what expandedFeatureContent branches on.
@@ -360,19 +363,14 @@ struct IslandRootView: View {
       .onHover { hovering in
         model.setIslandHovered(hovering, on: displayID)
       }
-      .onChange(of: agentStore.hasPending) { _, pending in
-        guard pending, model.editingReminderID == nil else { return }
-        // A pending approval opens its own prompt surface: jump to the
-        // agents panel and expand the island, so the angry face always has
-        // its approval card one glance away. Never yanks an open editor.
-        selectSidebar(.agents)
-        if model.islandState != .pinned { model.pinIsland() }
-      }
       .onTapGesture {
         // Only a hover preview becomes pinned from a surface tap. This keeps
         // controls inside a pinned surface, including the setup close button,
         // from being re-pinned by the parent gesture after they act.
-        if model.islandState == .preview { model.pinIsland() }
+        // Tapping the collapsed bar opens directly too — no hover wait.
+        if model.islandState == .preview || model.islandState == .collapsed {
+          model.pinIsland()
+        }
       }
       .animation(surfaceAnimation, value: effectiveState)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
