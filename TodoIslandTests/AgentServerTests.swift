@@ -350,22 +350,19 @@ final class AgentServerTests: XCTestCase {
         XCTAssertNil(mcpRules[0]["ruleContent"], "mcp rules must not carry a ruleContent")
     }
 
-    func testAlwaysAllowDegradesToPlainAllowForCodex() async throws {
-        // Codex reserves updatedPermissions (fails closed) — the island must
-        // not send one.
+    func testCodexPermissionRequestsAlwaysDefer() async throws {
+        // Codex's payload cannot distinguish "approve for me" (automatic
+        // review) from a real ask — permission_mode stays "default" — so
+        // the island must never queue one: deferring lets Codex's own flow
+        // (auto review, or its native prompt) decide.
         let payload = """
-        {"hook_event_name":"PermissionRequest","_source":"codex","session_id":"t5d","tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/tmp"}
+        {"hook_event_name":"PermissionRequest","_source":"codex","session_id":"tcd","permission_mode":"default","tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/tmp"}
         """
-        let responseTask = Task { [self] in
-            await store.handleConnection(payload: Data(payload.utf8))
-        }
-        let request = await waitForFirstPermission()
-        store.approvePermission(try XCTUnwrap(request).id, always: true)
-        let response = try jsonDictionary(try await responseTask.value)
-        let decision = try XCTUnwrap(
-            (response["hookSpecificOutput"] as? [String: Any])?["decision"] as? [String: Any])
-        XCTAssertEqual(decision["behavior"] as? String, "allow")
-        XCTAssertNil(decision["updatedPermissions"], "codex must not receive updatedPermissions")
+        let response = await store.handleConnection(payload: Data(payload.utf8))
+        XCTAssertEqual(response, Data("{}".utf8))
+        XCTAssertTrue(store.permissionQueue.isEmpty, "codex must not queue")
+        XCTAssertFalse(store.hasPending)
+        XCTAssertNil(store.sessions["tcd"], "deferred requests surface no UI state")
     }
 
     func testDenyPermissionReturnsExactDenyJSON() async throws {
