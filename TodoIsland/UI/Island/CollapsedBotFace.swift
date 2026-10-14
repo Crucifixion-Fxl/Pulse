@@ -48,8 +48,11 @@ enum CollapsedBotFace {
   /// Cleaver-eye (菜刀眼) target proportions as fractions of the face size:
   /// each eye flattens to a cleaver — a straight lid line across the top
   /// (the knife's back) over an elliptical bowl (the blade).
-  static let cleaverW: CGFloat = 0.26
-  static let cleaverH: CGFloat = 0.13
+  static let cleaverW: CGFloat = 0.38
+  static let cleaverH: CGFloat = 0.21
+  /// How far each eye's center shifts outward with the alert blend — the
+  /// big cleavers need the room so their inner corners never collide.
+  static let cleaverSpread: CGFloat = 0.05
 
   static func expression(at t: TimeInterval, inputs: Inputs) -> Expression {
     let glance = glanceUnit(at: t)
@@ -313,7 +316,9 @@ struct CollapsedBotFaceView: View {
     // worried 八 the un-negated sign renders.
     .rotationEffect(.radians(e.eyeTilt - side * e.angryTilt))
     .position(
-      x: size / 2 + side * m.eyeCenterX + e.glanceX * m.glanceShift,
+      x: size / 2
+        + side * (m.eyeCenterX + alert * size * CollapsedBotFace.cleaverSpread)
+        + e.glanceX * m.glanceShift,
       y: m.eyeCenterY + e.lookY * m.lookLift)
   }
 
