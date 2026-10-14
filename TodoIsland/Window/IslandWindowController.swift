@@ -200,6 +200,20 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   /// Routes the global state to every window: non-active windows first,
   /// then the active one (so the test mirrors describe the expanded
   /// surface deterministically), then the single key-window handoff.
+  /// Companion to the store's routing log — pane/window lifecycle lines so
+  /// expansion timing is answerable from the same file.
+  nonisolated private static func logLifecycle(_ message: String) {
+    let line = "[\(ISO8601DateFormatter().string(from: Date()))] \(message)\n"
+    let path = "/tmp/doisland-agents-activity.log"
+    if let handle = FileHandle(forWritingAtPath: path) {
+      handle.seekToEndOfFile()
+      handle.write(Data(line.utf8))
+      handle.closeFile()
+    } else {
+      FileManager.default.createFile(atPath: path, contents: Data(line.utf8))
+    }
+  }
+
   private func applyAll(
     state: IslandPresentationState,
     activeDisplayID: String?,
@@ -233,6 +247,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     // app and makes the active panel key; leaving pin resigns whichever
     // island panel holds key (at most one) once, globally.
     if state == .pinned, let activeID, let window = windows[activeID] {
+      Self.logLifecycle("expand begin (active=\(activeID))")
       NSApp.activate(ignoringOtherApps: true)
       window.panel.makeKeyAndOrderFront(nil)
     } else if state != .pinned {
