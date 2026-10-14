@@ -96,16 +96,19 @@ final class CollapsedIslandVisibilityTests: XCTestCase {
   }
 
   @MainActor
-  func testPreviewExitTransitionsDirectlyToHiddenCollapsedState() async throws {
+  func testHoverRevealExitsBackToHiddenCollapsedState() async throws {
     let defaults = makeDefaults(visibility: .autoHide)
     defer { clear(defaults) }
 
     let model = AppModel(store: VisibilityTestReminderStore(), defaults: defaults)
     await model.start()
 
+    // Hover reveals the bar (never expands it), and leaving returns the
+    // autoHide bar to its hidden collapsed state.
     model.setIslandHovered(true)
     try await Task.sleep(for: .milliseconds(250))
-    XCTAssertEqual(model.islandState, .preview)
+    XCTAssertEqual(model.islandState, .collapsed)
+    XCTAssertTrue(model.isCollapsedIslandVisible)
 
     model.setIslandHovered(false)
     try await Task.sleep(for: .milliseconds(560))

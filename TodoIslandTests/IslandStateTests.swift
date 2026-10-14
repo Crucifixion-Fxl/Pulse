@@ -131,7 +131,7 @@ final class IslandStateTests: XCTestCase {
   }
 
   @MainActor
-  func testLeavingBeforePreviewDelayKeepsIslandCollapsed() async throws {
+  func testBriefHoverNeverExpandsTheIsland() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)
     defaults.set(
@@ -150,7 +150,7 @@ final class IslandStateTests: XCTestCase {
   }
 
   @MainActor
-  func testPreviewCollapsesHalfSecondAfterPointerLeaves() async throws {
+  func testHoverNeverExpandsTheIsland() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)
     defaults.set(
@@ -161,15 +161,16 @@ final class IslandStateTests: XCTestCase {
 
     let model = AppModel(store: HoverTestReminderStore(), defaults: defaults)
     model.setIslandHovered(true)
-    try await Task.sleep(for: .milliseconds(250))
-    XCTAssertEqual(model.islandState, .preview)
-
-    model.setIslandHovered(false)
-    try await Task.sleep(for: .milliseconds(400))
-    XCTAssertEqual(model.islandState, .preview)
-
-    try await Task.sleep(for: .milliseconds(200))
+    // However long the pointer rests on the bar, hover never expands —
+    // the island opens on click (pinIsland), never on hover.
+    try await Task.sleep(for: .milliseconds(700))
     XCTAssertEqual(model.islandState, .collapsed)
+    XCTAssertTrue(model.isCollapsedIslandVisible, "hover still reveals the bar")
+
+    // Click opens it, and it stays open while the pointer is inside.
+    model.pinIsland()
+    try await Task.sleep(for: .milliseconds(300))
+    XCTAssertEqual(model.islandState, .pinned)
   }
 
   @MainActor

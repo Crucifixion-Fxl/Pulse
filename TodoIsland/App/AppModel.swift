@@ -684,25 +684,17 @@ final class AppModel: ObservableObject {
 
     if hovering {
       // With one island per display, hover names the display whose island
-      // should expand; hostDisplayID is the routing key the controller and
-      // the per-display views agree on.
+      // is active; hostDisplayID is the routing key the controller and the
+      // per-display views agree on.
       if let displayID, displayID != hostDisplayID {
         setHostDisplayID(displayID)
       }
       guard islandState == .collapsed else { return }
+      // Hover only reveals the (possibly auto-hidden) bar and resumes a
+      // suspended editor — it never expands. The island opens on click.
       showCollapsedIsland()
       if suspendedEditingFocus != nil {
         pinIsland()
-        return
-      }
-      hoverTask = Task {
-        try? await Task.sleep(for: .milliseconds(200))
-        guard
-          !Task.isCancelled,
-          isPointerInsideIsland,
-          islandState == .collapsed
-        else { return }
-        islandState = .preview
       }
     } else {
       schedulePointerExitCollapseIfNeeded()
