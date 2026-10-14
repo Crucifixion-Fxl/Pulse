@@ -240,6 +240,50 @@ final class AgentServerTests: XCTestCase {
         XCTAssertFalse(store.hasPending)
     }
 
+    func testSelfApprovingModesReturnNoDecisionWithoutQueueing() async throws {
+        for mode in ["auto", "dontAsk", "bypassPermissions"] {
+            let payload = """
+            {"hook_event_name":"PermissionRequest","session_id":"tm","permission_mode":"\(mode)","tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/tmp"}
+            """
+            let response = await store.handleConnection(payload: Data(payload.utf8))
+            // No decision: the CLI's own flow (classifier / bypass / auto-deny)
+            // decides — not an island "allow", which would out-rank it.
+            XCTAssertEqual(response, Data("{}".utf8), "mode \(mode)")
+            XCTAssertTrue(store.permissionQueue.isEmpty, "mode \(mode) must not queue")
+            XCTAssertFalse(store.hasPending, "mode \(mode)")
+        }
+    }
+
+    func testPromptingModesStillQueue() async throws {
+        for mode in ["default", "acceptEdits", "plan"] {
+            let payload = """
+            {"hook_event_name":"PermissionRequest","session_id":"tp","permission_mode":"\(mode)","tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/tmp"}
+            """
+            let responseTask = Task { [self] in
+                await store.handleConnection(payload: Data(payload.utf8))
+            }
+            let request = await waitForFirstPermission()
+            let permission = try XCTUnwrap(request, "mode \(mode) should queue")
+            store.denyPermission(permission.id)
+            _ = try await responseTask.value
+        }
+        XCTAssertTrue(store.permissionQueue.isEmpty)
+    }
+
+    func testAskUserQuestionStillQueuesInSelfApprovingMode() async throws {
+        let payload = """
+        {"hook_event_name":"PermissionRequest","session_id":"tq","permission_mode":"auto","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Pick one","key":"q1","options":[{"label":"A"},{"label":"B"}]}]},"cwd":"/tmp"}
+        """
+        let responseTask = Task { [self] in
+            await store.handleConnection(payload: Data(payload.utf8))
+        }
+        let request = await waitForFirstQuestion()
+        let question = try XCTUnwrap(request, "questions are for the user in every mode")
+        store.skipQuestion(question.id)
+        _ = try await responseTask.value
+        XCTAssertTrue(store.questionQueue.isEmpty)
+    }
+
     func testAlwaysAllowInjectsSessionRuleAndOmitsRuleContentForMCPTools() async throws {
         let bash = """
         {"hook_event_name":"PermissionRequest","session_id":"t5","tool_name":"Bash","tool_input":{"command":"cargo build"},"cwd":"/tmp"}
