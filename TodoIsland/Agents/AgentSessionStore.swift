@@ -284,6 +284,7 @@ final class AgentSessionStore: ObservableObject {
         case .permission:
             // Safe internal tools never need the user.
             if let toolName = event.toolName, Self.autoApproveTools.contains(toolName) {
+                Self.logPermissionRoute(event, outcome: "auto-approved-tool")
                 return Self.permissionDecisionData(behavior: "allow")
             }
 
@@ -329,8 +330,11 @@ final class AgentSessionStore: ObservableObject {
             // and a mode they explicitly switched on.
             if let mode = event.rawJSON["permission_mode"] as? String,
                Self.selfApprovingModes.contains(mode) {
+                Self.logPermissionRoute(event, outcome: "stepped-aside mode=\(mode)")
                 return Data("{}".utf8)
             }
+
+            Self.logPermissionRoute(event, outcome: "queued")
 
             return await withCheckedContinuation { continuation in
                 enqueuePermissionRequest(event, continuation: continuation, origin: origin)
@@ -677,6 +681,24 @@ final class AgentSessionStore: ObservableObject {
     }
 
     // MARK: - Response builders
+
+    /// One line per incoming PermissionRequest — tool, mode, routing
+    /// outcome — so "why did the island ask" is answerable from
+    /// /tmp/doisland-agents-activity.log. Deliberately no tool_input: the
+    /// log must stay safe to paste (commands can carry secrets).
+    nonisolated private static func logPermissionRoute(_ event: HookEvent, outcome: String) {
+        let mode = (event.rawJSON["permission_mode"] as? String).map { "\"\($0)\"" } ?? "nil"
+        let source = (event.rawJSON["_source"] as? String) ?? "claude"
+        let line = "[\(ISO8601DateFormatter().string(from: Date()))] PermissionRequest source=\(source) tool=\(event.toolName ?? "?") mode=\(mode) → \(outcome)\n"
+        let path = "/tmp/doisland-agents-activity.log"
+        if let handle = FileHandle(forWritingAtPath: path) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            handle.closeFile()
+        } else {
+            FileManager.default.createFile(atPath: path, contents: Data(line.utf8))
+        }
+    }
 
     /// `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"…"}}}`
     nonisolated private static func permissionDecisionData(behavior: String) -> Data {
