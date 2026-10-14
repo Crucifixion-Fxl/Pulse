@@ -413,15 +413,10 @@ struct IslandRootView: View {
         Color.clear.frame(width: hostPhysicalNotchWidth)
 
         if model.canUseActiveList {
-          if agentStore.hasPending {
-            Image(systemName: "bell.fill")
-              .font(.system(size: 9, weight: .bold))
-              .foregroundStyle(AgentsPanelPalette.bell)
-              .symbolEffect(.pulse, options: .repeating)
-          }
           // The bot character sits at the island's right end. The 12pt
           // trailing inset keeps it clear of the rounded corner cap so it
-          // never crosses the surface outline.
+          // never crosses the surface outline. Pending agent requests turn
+          // it red and angry (see CollapsedBotFaceView.isAlert) — no bell.
           collapsedBotFace
             .padding(.trailing, 12)
             .frame(width: collapsedSideWidth, alignment: .trailing)
@@ -453,12 +448,6 @@ struct IslandRootView: View {
         collapsedQuotaChip
           .padding(.leading, 12)
         Spacer(minLength: 0)
-        if agentStore.hasPending {
-          Image(systemName: "bell.fill")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(AgentsPanelPalette.bell)
-            .symbolEffect(.pulse, options: .repeating)
-        }
         collapsedBotFace
           .padding(.trailing, 12)
       }
@@ -1737,6 +1726,7 @@ struct IslandRootView: View {
       faceColor: model.collapsedQuotaVendor.accent,
       isPlaying: model.nowPlaying?.isPlaying == true,
       isHovered: model.isPointerInsideIsland,
+      isAlert: agentStore.hasPending,
       isAnimated: collapsedFaceIsAnimated)
   }
 

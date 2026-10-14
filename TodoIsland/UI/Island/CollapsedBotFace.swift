@@ -10,6 +10,8 @@ enum CollapsedBotFace {
   struct Inputs: Equatable, Sendable {
     var isPlaying: Bool
     var isHovered: Bool
+    /// 0...1 scowl blend — how far the red alert flood has climbed the face.
+    var alertUnit: CGFloat = 0
   }
 
   struct Expression: Equatable, Sendable {
@@ -27,6 +29,9 @@ enum CollapsedBotFace {
     var faceScale: CGFloat
     /// Vertical bob as a fraction of the face size.
     var faceOffsetYFraction: CGFloat
+    /// Per-eye scowl rotation in radians, applied mirrored (`side * tilt`)
+    /// so the eye tops lean outward into an angry \ / — 0 when calm.
+    var angryTilt: CGFloat = 0
   }
 
   // Timing, in seconds.
@@ -34,36 +39,78 @@ enum CollapsedBotFace {
   static let blinkDuration = 0.22
   static let glanceCycle = 5.3
   static let beatBPM = 118.0
+  /// Red flood climbing the face when an approval lands, and draining when
+  /// the queue clears.
+  static let alertRiseDuration: TimeInterval = 0.8
+  static let alertFallDuration: TimeInterval = 0.5
+  /// Full-scowl eye tilt per side, radians (~19.5°).
+  static let alertEyeTilt: CGFloat = 0.34
 
   static func expression(at t: TimeInterval, inputs: Inputs) -> Expression {
     let glance = glanceUnit(at: t)
+    let base: Expression
     if inputs.isHovered {
-      return Expression(
+      base = Expression(
         eyeOpen: 1.25, glanceX: 0, eyeTilt: 0, lookY: -0.8, faceScale: 1,
         faceOffsetYFraction: 0)
+    } else {
+      // No sleep mode: the face stays awake whether or not music plays —
+      // playback only adds the beat bounce. The eyes never change size
+      // except for the momentary blink envelope.
+      let beat = inputs.isPlaying ? beatPulse(at: t) : 0
+      let breath = CGFloat(sin(2 * .pi * t / 3.9))
+      // Grok Bot motion language: a slow tilt sway plus a lean into the
+      // current glance is what reads as "curious and alive".
+      let tilt = 0.10 * CGFloat(sin(2 * .pi * t / 5.7)) + 0.05 * glance
+      base = Expression(
+        eyeOpen: blinkOpenFraction(at: t),
+        glanceX: glance,
+        eyeTilt: tilt,
+        lookY: 0,
+        faceScale: 1 + 0.03 * beat + 0.012 * breath,
+        faceOffsetYFraction: 0.012 * breath)
     }
-    // No sleep mode: the face stays awake whether or not music plays —
-    // playback only adds the beat bounce. The eyes never change size
-    // except for the momentary blink envelope.
-    let beat = inputs.isPlaying ? beatPulse(at: t) : 0
-    let breath = CGFloat(sin(2 * .pi * t / 3.9))
-    // Grok Bot motion language: a slow tilt sway plus a lean into the
-    // current glance is what reads as "curious and alive".
-    let tilt = 0.10 * CGFloat(sin(2 * .pi * t / 5.7)) + 0.05 * glance
-    return Expression(
-      eyeOpen: blinkOpenFraction(at: t),
-      glanceX: glance,
-      eyeTilt: tilt,
-      lookY: 0,
-      faceScale: 1 + 0.03 * beat + 0.012 * breath,
-      faceOffsetYFraction: 0.012 * breath)
+    return applyAlert(inputs.alertUnit, to: base)
   }
 
   /// The single frame rendered under Reduce Motion or on a hidden surface.
-  static func staticExpression(isPlaying: Bool) -> Expression {
-    Expression(
-      eyeOpen: 1, glanceX: 0, eyeTilt: 0.06, lookY: 0, faceScale: 1,
-      faceOffsetYFraction: 0)
+  static func staticExpression(isPlaying: Bool, alert: Bool = false) -> Expression {
+    applyAlert(
+      alert ? 1 : 0,
+      to: Expression(
+        eyeOpen: 1, glanceX: 0, eyeTilt: 0.06, lookY: 0, faceScale: 1,
+        faceOffsetYFraction: 0))
+  }
+
+  /// Alert-flood envelope: 0 → 1 as the red rises from the chin when a
+  /// request lands (ease-out — fills promptly, then settles at the crown),
+  /// 1 → 0 as it drains when the queue clears. Pure in elapsed time since
+  /// the state flip, so the climb is frame-stable and unit-testable.
+  static func alertUnit(elapsed: TimeInterval, engaging: Bool) -> CGFloat {
+    let duration = engaging ? alertRiseDuration : alertFallDuration
+    let p = CGFloat(max(0, elapsed) / duration)
+    let eased: CGFloat
+    if engaging {
+      eased = 1 - pow(1 - min(p, 1), 3)
+    } else {
+      let q = min(p, 1)
+      eased = q * q * (3 - 2 * q)  // smoothstep drain
+    }
+    return min(1, max(0, engaging ? eased : 1 - eased))
+  }
+
+  /// Blends an expression toward the scowl by `a` (0 = untouched): eyes
+  /// narrow and tilt outward (\ /), the sway and glances quiet, and the
+  /// beat bounce fades — the scowl holds still while it wants something.
+  static func applyAlert(_ a: CGFloat, to e: Expression) -> Expression {
+    guard a > 0 else { return e }
+    var e = e
+    e.eyeOpen *= 1 - 0.30 * a
+    e.angryTilt = alertEyeTilt * a
+    e.glanceX *= 1 - 0.8 * a
+    e.eyeTilt *= 1 - 0.5 * a
+    e.faceScale = 1 + (e.faceScale - 1) * (1 - 0.7 * a)
+    return e
   }
 
   /// Deterministic 0..<1 noise: the same index always maps to the same
@@ -145,32 +192,58 @@ struct CollapsedBotFaceView: View {
   var faceColor: Color = .white
   let isPlaying: Bool
   let isHovered: Bool
+  /// True while an agent approval/question is pending: the face floods red
+  /// from the chin and the eyes scowl until the queue clears.
+  var isAlert: Bool = false
   /// false under Reduce Motion or while the surface is hidden — renders one
   /// static frame instead of subscribing to the 30 Hz timeline.
   let isAnimated: Bool
 
   static let eyeColor = Color(red: 0.090, green: 0.090, blue: 0.100)
+  /// The alert flood that climbs the face while a request waits.
+  static let alertRed = Color(red: 1.0, green: 0.30, blue: 0.25)  // #FF4D40
+
+  /// Reference-date time of the last isAlert flip, anchoring the flood's
+  /// rise/drain. nil = no transition seen yet (an alert already pending at
+  /// first appearance renders fully red, without replaying the climb).
+  @State private var alertAnchor: Double?
 
   var body: some View {
     Group {
       if isAnimated {
         TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
-          face(CollapsedBotFace.expression(
-            at: timeline.date.timeIntervalSinceReferenceDate,
-            inputs: CollapsedBotFace.Inputs(isPlaying: isPlaying, isHovered: isHovered)))
+          let t = timeline.date.timeIntervalSinceReferenceDate
+          let flood = alertUnit(now: t)
+          face(
+            CollapsedBotFace.expression(
+              at: t,
+              inputs: CollapsedBotFace.Inputs(
+                isPlaying: isPlaying, isHovered: isHovered, alertUnit: flood)),
+            flood: flood)
         }
       } else {
-        face(CollapsedBotFace.staticExpression(isPlaying: isPlaying))
+        face(
+          CollapsedBotFace.staticExpression(isPlaying: isPlaying, alert: isAlert),
+          flood: isAlert ? 1 : 0)
       }
     }
     .frame(width: size, height: size)
     .accessibilityHidden(true)  // decorative; the container keeps its label
+    .onChange(of: isAlert) { _, _ in
+      alertAnchor = Date().timeIntervalSinceReferenceDate
+    }
   }
 
-  private func face(_ e: CollapsedBotFace.Expression) -> some View {
+  private func alertUnit(now: Double) -> CGFloat {
+    guard let anchor = alertAnchor else { return isAlert ? 1 : 0 }
+    return CollapsedBotFace.alertUnit(elapsed: now - anchor, engaging: isAlert)
+  }
+
+  private func face(_ e: CollapsedBotFace.Expression, flood: CGFloat) -> some View {
     let m = Metrics(size: size)
     return ZStack {
       Circle().fill(faceColor)
+      alertFlood(flood)
       eye(e, side: -1, m: m)
       eye(e, side: 1, m: m)
     }
@@ -178,11 +251,29 @@ struct CollapsedBotFaceView: View {
     .offset(y: e.faceOffsetYFraction * size)
   }
 
+  /// Red rising from the chin: a bottom-anchored mask over a red circle.
+  /// The melt line is a short gradient that only exists mid-climb — it
+  /// seals shut at full coverage and vanishes at rest, so neither end
+  /// state shows a seam.
+  private func alertFlood(_ unit: CGFloat) -> some View {
+    let melt = size * 0.16 * 4 * unit * (1 - unit)
+    return Circle()
+      .fill(Self.alertRed)
+      .mask(
+        VStack(spacing: 0) {
+          LinearGradient(colors: [.black, .clear], startPoint: .bottom, endPoint: .top)
+            .frame(height: melt)
+          Color.black.frame(height: size * unit)
+        }
+        .frame(maxHeight: .infinity, alignment: .bottom)
+      )
+  }
+
   private func eye(_ e: CollapsedBotFace.Expression, side: CGFloat, m: Metrics) -> some View {
     Capsule(style: .continuous)
       .fill(Self.eyeColor)
       .frame(width: m.eyeWidth, height: max(1, m.eyeHeight * e.eyeOpen))
-      .rotationEffect(.radians(e.eyeTilt))
+      .rotationEffect(.radians(e.eyeTilt + side * e.angryTilt))
       .position(
         x: size / 2 + side * m.eyeCenterX + e.glanceX * m.glanceShift,
         y: m.eyeCenterY + e.lookY * m.lookLift)
