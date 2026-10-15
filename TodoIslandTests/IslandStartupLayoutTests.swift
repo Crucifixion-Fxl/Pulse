@@ -1,0 +1,64 @@
+import AppKit
+import SwiftUI
+import XCTest
+@testable import TodoIsland
+
+@MainActor
+final class IslandStartupLayoutTests: XCTestCase {
+  func testBotRemainsAtRightEdgeThroughoutColdLayoutAndPrewarm() async throws {
+    let suite = "StartupLayout-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(store: StartupLayoutStore(), defaults: defaults)
+    await model.reload()
+    let host = NSHostingView(rootView: IslandRootView()
+      .environmentObject(model).environmentObject(AgentSessionStore()))
+    host.sizingOptions = []
+    let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 340, height: 30),
+      styleMask: .borderless, backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    defer { window.close() }
+    window.orderFront(nil)
+    var centers: [CGFloat] = []
+    for _ in 0..<28 {
+      try await Task.sleep(for: .milliseconds(100))
+      host.layoutSubtreeIfNeeded()
+      let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+      host.cacheDisplay(in: host.bounds, to: bitmap)
+      var xs: [Int] = []
+      for y in 0..<bitmap.pixelsHigh {
+        for x in 0..<bitmap.pixelsWide {
+          guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
+          if color.redComponent > 0.8 && color.greenComponent > 0.8 && color.blueComponent > 0.8 {
+            xs.append(x)
+          }
+        }
+      }
+      let center = xs.isEmpty ? -1 : CGFloat(xs.reduce(0,+)) / CGFloat(xs.count) / CGFloat(bitmap.pixelsWide)
+      centers.append(center)
+    }
+    print("Startup bot normalized centers: \(centers)")
+    XCTAssertTrue(centers.allSatisfy { (0.88...0.96).contains($0) },
+      "Bot must remain at the trailing edge before, during, and after hidden pane prewarm: \(centers)")
+  }
+}
+
+@MainActor
+private final class StartupLayoutStore: ReminderStore {
+  var onStoreChanged: (() -> Void)?
+  func authorizationStatus() -> ReminderAuthorization { .fullAccess }
+  func requestFullAccess() async throws -> Bool { true }
+  func fetchLists() async throws -> [ReminderListSnapshot] {
+    [ReminderListSnapshot(id: "startup", title: "Startup", accent: .fallback)]
+  }
+  func fetchPendingReminders(in listID: String) async throws -> [ReminderSnapshot] { [] }
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] { [] }
+  func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] { [] }
+  func fetchCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] { [] }
+  func createReminder(title: String, in listID: String, dueComponents: DateComponents?) async throws {}
+  func updateReminder(id: String, from draft: ReminderDraft) async throws {}
+  func setCompleted(_ completed: Bool, reminderID: String) async throws {}
+  func deleteReminder(id: String) async throws {}
+}
