@@ -290,7 +290,7 @@ struct MusicPanelView: View {
       case .loaded(let lyrics):
         lyricList(lyrics: lyrics, track: track)
       case .notFound:
-        lyricsNotFound
+        lyricsNotFound(track)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -524,34 +524,11 @@ struct MusicPanelView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  /// Soft waveform bars pulsing with playback — fills the space when no
-  /// lyrics exist. Paused bars settle to a calm low profile.
-  private var lyricsNotFound: some View {
-    VStack(spacing: 14) {
-      AudioVisualizer(isPlaying: model.nowPlaying?.isPlaying == true)
-        .frame(maxHeight: .infinity)
-
-      if let track = model.nowPlaying {
-        VStack(spacing: 3) {
-          Text(track.title)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-          Text(track.artist)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(ReUITheme.muted)
-            .lineLimit(1)
-        }
-        .padding(.bottom, 20)
-      } else {
-        Text("music.lyrics.not-found")
-          .font(.system(size: 11, weight: .medium))
-          .foregroundStyle(ReUITheme.muted)
-          .padding(.bottom, 20)
-      }
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  private func lyricsNotFound(_ track: NowPlayingTrack) -> some View {
+    VinylRecordView(isPlaying: track.isPlaying)
+      .id(track.lyricsIdentity)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .accessibilityLabel(Text("music.lyrics.not-found"))
   }
 
   // MARK: Empty states

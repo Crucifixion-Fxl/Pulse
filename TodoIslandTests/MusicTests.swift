@@ -70,6 +70,16 @@ final class MusicTests: XCTestCase {
     XCTAssertNil(LyricsParse.lyrics(original: "", translation: nil))
   }
 
+  func testInstrumentalNoticesUseNoLyricsPresentation() {
+    for notice in ["纯音乐，请欣赏", "純音樂，請欣賞。", "Instrumental"] {
+      XCTAssertNil(LyricsParse.lyrics(original: "[00:00.00]" + notice, translation: nil))
+    }
+    XCTAssertNotNil(LyricsParse.lyrics(
+      original: "[00:00.00]纯音乐，请欣赏\n[00:10.00]A real lyric", translation: nil))
+    XCTAssertNotNil(LyricsParse.lyrics(
+      original: "[00:00.00]This is instrumental to my heart", translation: nil))
+  }
+
   func testCurrentLineIndexBoundaries() {
     let lyrics = LyricsParse.lyrics(original: "[00:10.00]a\n[00:20.00]b", translation: nil)!
     let lines = lyrics.lines
