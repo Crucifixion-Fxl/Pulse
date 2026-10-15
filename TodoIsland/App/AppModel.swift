@@ -36,6 +36,23 @@ final class AppModel: ObservableObject {
   @Published private(set) var isRequestingAccess = false
   @Published private(set) var isEditingDraftValidated = true
   @Published private(set) var completingReminderIDs: Set<String> = []
+  @Published private(set) var completionUndoItems: [CompletionUndoItem] = []
+  @Published private(set) var isUndoingCompletion = false
+  /// Only intentional keyboard navigation scrolls the schedule. Completing
+  /// a selected row must not recenter the list under the pointer.
+  @Published private(set) var selectionScrollRequestID = UUID()
+
+  struct CompletionUndoItem: Identifiable {
+    let id: UUID
+    let reminder: ReminderSnapshot
+    let order: Int
+  }
+
+  private var completionOperations: [String: UUID] = [:]
+  private var completionOrder = 0
+  private var completionUndoExpiry: Task<Void, Never>?
+  private let completionFeedbackDuration: Duration
+  private let completionUndoDuration: Duration
   @Published private(set) var hostDisplayID: String?
   /// Sidebar pane the UI should switch to — bumped by features that
   /// auto-expand the island (e.g. an agent approval request routing to the
@@ -145,9 +162,13 @@ final class AppModel: ObservableObject {
     defaults: UserDefaults = .standard,
     aiUsageProvider: AIUsageProvider = DefaultAIUsageProvider(),
     lyricsService: LyricsService = LyricsService(),
-    nowPlayingController: any NowPlayingControlling = NowPlayingController.shared
+    nowPlayingController: any NowPlayingControlling = NowPlayingController.shared,
+    completionFeedbackDuration: Duration = .milliseconds(750),
+    completionUndoDuration: Duration = .seconds(8)
   ) {
     self.store = store
+    self.completionFeedbackDuration = completionFeedbackDuration
+    self.completionUndoDuration = completionUndoDuration
     self.defaults = defaults
     self.aiUsageProvider = aiUsageProvider
     self.lyricsService = lyricsService
@@ -348,7 +369,12 @@ final class AppModel: ObservableObject {
       }
 
       let fetched = try await store.fetchPendingReminders(in: activeListID)
-      reminders = ReminderSorter.sorted(fetched)
+      let fetchedIDs = Set(fetched.map(\.id))
+      let held = reminders.filter {
+        $0.listID == activeListID && completingReminderIDs.contains($0.id)
+          && !fetchedIDs.contains($0.id)
+      }
+      reminders = ReminderSorter.sorted(fetched + held)
       let navigable = keyboardNavigableReminders
       if !navigable.contains(where: { $0.id == selectedReminderID }) {
         selectedReminderID = navigable.first?.id
@@ -433,8 +459,8 @@ final class AppModel: ObservableObject {
             byAdding: .day, value: -180, to: calendar.startOfDay(for: Date())
           ) ?? Date())) ?? []
       guard !Task.isCancelled else { return }
-      // Rows mid-celebration stay visible: the backend already marked them
-      // completed, but their confetti is still playing.
+      // Hold completed rows in place until their checkmark feedback finishes,
+      // even when a store notification reloads the schedule in the meantime.
       let celebrating = completingReminderIDs
       if !celebrating.isEmpty {
         func keepPending(_ reminders: [ReminderSnapshot]) -> [ReminderSnapshot] {
@@ -515,29 +541,72 @@ final class AppModel: ObservableObject {
     }
   }
 
-  func complete(_ reminder: ReminderSnapshot) {
+  func complete(_ reminder: ReminderSnapshot, reduceMotion: Bool = false) {
     guard
+      !reminder.isCompleted,
       canAccess(source: reminder.source),
       isKnownReminder(reminder),
       completingReminderIDs.insert(reminder.id).inserted
     else { return }
 
-    if editingReminderID == reminder.id {
-      cancelEditing()
-    }
+    if editingReminderID == reminder.id { cancelEditing() }
+    let operation = UUID()
+    completionOperations[reminder.id] = operation
+    completionOrder += 1
+    let order = completionOrder
 
     Task {
       do {
         try await store.setCompleted(true, reminderID: reminder.id)
-        // Hold the row until the confetti finishes, then let it fade while
-        // the rows below slide up.
-        try await Task.sleep(for: .milliseconds(750))
+        completionUndoItems.append(CompletionUndoItem(id: operation, reminder: reminder, order: order))
+        // Save callbacks may finish out of order; undo follows the click order.
+        completionUndoItems.sort { $0.order < $1.order }
+        scheduleCompletionUndoExpiry()
+        try await Task.sleep(for: reduceMotion ? .milliseconds(120) : completionFeedbackDuration)
+        // Undo can happen during the feedback hold. Its successful write
+        // must never be overwritten by an older animation's finalizer.
+        guard completionOperations[reminder.id] == operation else { return }
+        completionOperations.removeValue(forKey: reminder.id)
         removeCompletedReminder(id: reminder.id)
         await reload()
       } catch {
+        guard completionOperations[reminder.id] == operation else { return }
+        completionOperations.removeValue(forKey: reminder.id)
         completingReminderIDs.remove(reminder.id)
         present(error)
       }
+    }
+  }
+
+  func undoLastCompletion() async {
+    guard !isUndoingCompletion, let item = completionUndoItems.last else { return }
+    isUndoingCompletion = true
+    completionUndoExpiry?.cancel()
+    completionOperations.removeValue(forKey: item.reminder.id)
+    do {
+      try await store.setCompleted(false, reminderID: item.reminder.id)
+      completingReminderIDs.remove(item.reminder.id)
+      completionUndoItems.removeAll { $0.id == item.id }
+      await reload()
+    } catch {
+      // The store still holds a completed item. End its visual hold, but
+      // retain this undo entry so the user can retry rather than lose it.
+      removeCompletedReminder(id: item.reminder.id)
+      present(error)
+      await reload()
+    }
+    isUndoingCompletion = false
+    scheduleCompletionUndoExpiry()
+  }
+
+  private func scheduleCompletionUndoExpiry() {
+    completionUndoExpiry?.cancel()
+    guard !completionUndoItems.isEmpty else { return }
+    let duration = completionUndoDuration
+    completionUndoExpiry = Task { [weak self] in
+      do { try await Task.sleep(for: duration) } catch { return }
+      guard let self, !self.isUndoingCompletion else { return }
+      self.completionUndoItems = []
     }
   }
 
@@ -675,6 +744,7 @@ final class AppModel: ObservableObject {
     let currentIndex = navigable.firstIndex { $0.id == selectedReminderID } ?? 0
     let nextIndex = min(max(currentIndex + delta, 0), navigable.count - 1)
     selectedReminderID = navigable[nextIndex].id
+    selectionScrollRequestID = UUID()
   }
 
   func setIslandHovered(_ hovering: Bool, on displayID: String? = nil) {
@@ -1107,20 +1177,22 @@ final class AppModel: ObservableObject {
   }
 
   private func removeCompletedReminder(id: String) {
-    let removedIndex = reminders.firstIndex { $0.id == id }
+    let removedIndex = keyboardNavigableReminders.firstIndex { $0.id == id }
     reminders.removeAll { $0.id == id }
     if let index = monthReminders.firstIndex(where: { $0.id == id }) {
       monthReminders[index].isCompleted = true
     }
     undatedReminders.removeAll { $0.id == id }
+    overdueReminders.removeAll { $0.id == id }
     completingReminderIDs.remove(id)
 
     guard selectedReminderID == id else { return }
-    guard let removedIndex, !reminders.isEmpty else {
+    let remaining = keyboardNavigableReminders
+    guard let removedIndex, !remaining.isEmpty else {
       selectedReminderID = nil
       return
     }
-    selectedReminderID = reminders[min(removedIndex, reminders.count - 1)].id
+    selectedReminderID = remaining[min(removedIndex, remaining.count - 1)].id
   }
 
   private func present(_ error: Error) {

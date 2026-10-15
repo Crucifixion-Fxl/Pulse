@@ -134,12 +134,6 @@ private struct HeatmapCellPosition: Equatable {
   let row: Int
 }
 
-/// One scheduled confetti burst, anchored in the schedule pane's space.
-private struct ScheduledConfetti: Identifiable {
-  let id = UUID()
-  let center: CGPoint
-}
-
 struct IslandRootView: View {
   @EnvironmentObject private var model: AppModel
   @EnvironmentObject private var agentStore: AgentSessionStore
@@ -161,10 +155,6 @@ struct IslandRootView: View {
   @Namespace private var sidebarNS
   /// Heatmap cell (grid column, weekday row) currently under the pointer.
   @State private var heatmapHoverCell: HeatmapCellPosition?
-  /// Day-row frames in the schedule pane space, keyed by Reminder id —
-  /// used to anchor the completion confetti at the clicked check.
-  @State private var rowFrames: [String: CGRect] = [:]
-  @State private var confettiBursts: [ScheduledConfetti] = []
   @FocusState private var newTaskFocused: Bool
 
   private var isPinned: Bool { model.islandState == .pinned }
@@ -862,17 +852,6 @@ struct IslandRootView: View {
     return isInMonth ? .white.opacity(0.85) : .white.opacity(0.3)
   }
 
-  /// Fires a confetti burst at the row's checkmark when a Reminder is
-  /// completed. Skipped under Reduce Motion.
-  private func triggerConfetti(for reminderID: String, glyphSize: CGFloat) {
-    guard !reduceMotion, let frame = rowFrames[reminderID] else { return }
-    confettiBursts.append(
-      ScheduledConfetti(
-        center: CGPoint(x: frame.minX + glyphSize / 2, y: frame.midY)
-      )
-    )
-  }
-
   /// Per-List dot colours for one day: one accent dot per List that has
   /// pending items there, ordered like the Lists themselves. Overdue items
   /// count toward today, matching the Day Schedule.
@@ -1102,43 +1081,35 @@ struct IslandRootView: View {
     undated: [ReminderSnapshot],
     metrics: ScheduleMetrics
   ) -> some View {
-    // The Task Input is pinned to the pane's bottom corner; the schedule
-    // scrolls in the space above it. Completed Reminders are not listed —
-    // once checked, a row disappears.
     VStack(spacing: 6) {
-      if schedule.pending.isEmpty && undated.isEmpty {
-        emptyDaySchedule
-      } else {
-        // No day title or section headers: the calendar already shows the
-        // selected date, and undated rows carry their own tag.
-        ScrollViewReader { proxy in
+      // Keep the scroll container mounted through the final completion.
+      // The last row can finish its exit before the empty state fades in.
+      ScrollViewReader { proxy in
         ScrollView(.vertical, showsIndicators: false) {
           LazyVStack(spacing: 0) {
             ForEach(schedule.pending) { reminder in
               dayRowWithEditor(reminder, metrics: metrics)
             }
-
             ForEach(undated) { reminder in
               dayRowWithEditor(reminder, metrics: metrics)
                 .padding(.top, reminder.id == undated.first?.id ? 3 : 0)
             }
           }
-          // Reserve bands matching the top/bottom fade overlays, so the
-          // first and last rows sit outside them when the list is at rest.
           .padding(.top, 14)
           .padding(.bottom, 18)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .onChange(of: model.selectedReminderID) { _, id in
-          guard let id else { return }
+        .onChange(of: model.selectionScrollRequestID) { _, _ in
+          guard let id = model.selectedReminderID else { return }
           withAnimation(reduceMotion ? nil : .smooth(duration: 0.22, extraBounce: 0)) {
             proxy.scrollTo(id, anchor: .center)
           }
         }
-        .animation(
-          reduceMotion ? nil : .smooth(duration: 0.26, extraBounce: 0),
-          value: model.visibleScheduleReminders.map(\.id)
-        )
+        .onChange(of: model.selectedDay) { _, _ in
+          if let id = model.visibleScheduleReminders.first?.id {
+            proxy.scrollTo(id, anchor: .top)
+          }
+        }
       }
       .clipped()
       .overlay(alignment: .top) {
@@ -1146,26 +1117,66 @@ struct IslandRootView: View {
           .frame(height: 14)
           .allowsHitTesting(false)
       }
-        .overlay(alignment: .bottom) {
-          LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-            .frame(height: 18)
-            .allowsHitTesting(false)
+      .overlay(alignment: .bottom) {
+        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+          .frame(height: 18)
+          .allowsHitTesting(false)
+      }
+      .overlay {
+        if schedule.pending.isEmpty && undated.isEmpty {
+          emptyDaySchedule
+            .transition(.opacity)
         }
       }
-
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        if let item = model.completionUndoItems.last {
+          completionUndoFeedback(item)
+            .padding(.bottom, 3)
+            .transition(.opacity)
+        }
+      }
+      .animation(
+        reduceMotion ? nil : .smooth(duration: 0.3, extraBounce: 0),
+        value: model.visibleScheduleReminders.map(\.id)
+      )
+      .animation(
+        reduceMotion ? nil : .easeOut(duration: 0.16),
+        value: model.completionUndoItems.isEmpty
+      )
       newTaskInput
     }
-    .coordinateSpace(name: "daySchedule")
-    .overlay {
-      ForEach(confettiBursts) { burst in
-        ConfettiBurstView(center: burst.center)
-          .allowsHitTesting(false)
-          .task {
-            try? await Task.sleep(for: .seconds(1))
-            confettiBursts.removeAll { $0.id == burst.id }
-          }
+  }
+
+  private func completionUndoFeedback(_ item: AppModel.CompletionUndoItem) -> some View {
+    HStack(spacing: 7) {
+      Image(systemName: "checkmark.circle.fill")
+        .foregroundStyle(.green)
+      Text(String(format: L10n.text("reminder.completed-feedback"), item.reminder.title))
+        .foregroundStyle(ReUITheme.muted)
+        .lineLimit(1)
+        .truncationMode(.middle)
+      Spacer(minLength: 4)
+      Button {
+        Task { await model.undoLastCompletion() }
+      } label: {
+        Text("reminder.undo-completion")
+          .fontWeight(.semibold)
+          .foregroundStyle(.white)
+          .padding(.horizontal, 8)
+          .padding(.vertical, 4)
+          .background(.white.opacity(0.08), in: Capsule())
       }
+      .buttonStyle(.plain)
+      .disabled(model.isUndoingCompletion)
+      .accessibilityLabel(Text(String(
+        format: L10n.text("reminder.undo-completion.accessibility"), item.reminder.title)))
+      .help(L10n.text("reminder.undo-completion.help"))
     }
+    .font(.system(size: 10.5, weight: .medium))
+    .padding(.leading, 9)
+    .padding(.trailing, 4)
+    .padding(.vertical, 4)
+    .background(ReUITheme.panel, in: RoundedRectangle(cornerRadius: 10))
   }
 
   @ViewBuilder
@@ -1176,7 +1187,7 @@ struct IslandRootView: View {
     dayRow(reminder, metrics: metrics)
       .frame(height: metrics.rowPitch)
       .id(reminder.id)
-      .transition(.opacity.combined(with: .move(edge: .top)))
+      .transition(.opacity)
 
     if model.editingReminderID == reminder.id, let draft = model.draft {
       reminderEditor(draft)
@@ -1213,25 +1224,13 @@ struct IslandRootView: View {
 
     return HStack(spacing: 5) {
       Button {
-        triggerConfetti(for: reminder.id, glyphSize: metrics.rowGlyphSize)
-        model.complete(reminder)
+        model.complete(reminder, reduceMotion: reduceMotion)
       } label: {
-        Image(systemName: isCompleting ? "checkmark.circle.fill" : "circle")
-          .font(.system(size: metrics.rowGlyphSize, weight: .medium))
-          .foregroundStyle(isCompleting ? Color.green : accentColor)
+        ReminderCompletionCheck(
+          isCompleted: isCompleting, size: metrics.rowGlyphSize, accent: accentColor)
       }
       .buttonStyle(.plain)
       .disabled(isCompleting)
-      .background(
-        GeometryReader { geo in
-          let frame = geo.frame(in: .named("daySchedule"))
-          Color.clear
-            .onAppear { rowFrames[reminder.id] = frame }
-            .onChange(of: frame) { _, newFrame in
-              rowFrames[reminder.id] = newFrame
-            }
-        }
-      )
       .accessibilityLabel(
         Text(String(
           format: L10n.text("reminder.complete"),
@@ -1241,6 +1240,9 @@ struct IslandRootView: View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
           Text(reminder.title)
             .font(.system(size: metrics.rowTitleSize, weight: .medium))
+            .strikethrough(isCompleting, color: .white.opacity(0.45))
+            .opacity(isCompleting ? 0.45 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: isCompleting)
             .lineLimit(1)
           if let overdue = overdueDateLabel(for: reminder) {
             Text(overdue)
@@ -1857,6 +1859,14 @@ struct IslandRootView: View {
       return true
     }
     if isEditingText { return false }
+    if event.modifierFlags.contains(.command),
+      !event.modifierFlags.contains(.shift),
+      event.charactersIgnoringModifiers?.lowercased() == "z",
+      !model.completionUndoItems.isEmpty
+    {
+      Task { await model.undoLastCompletion() }
+      return true
+    }
     if event.keyCode == 53 {
       model.collapseIsland()
       return true
@@ -1882,11 +1892,7 @@ struct IslandRootView: View {
       }
     case 49:
       if let selected = model.selectedReminder {
-        triggerConfetti(
-          for: selected.id,
-          glyphSize: ScheduleMetrics.regular.rowGlyphSize
-        )
-        model.complete(selected)
+        model.complete(selected, reduceMotion: reduceMotion)
         return true
       }
     case 51, 117:
@@ -1898,61 +1904,5 @@ struct IslandRootView: View {
       break
     }
     return false
-  }
-}
-
-/// A one-shot confetti burst: a handful of coloured paper scraps explode
-/// from `center`, spin while flying outward, and fade as they land.
-private struct ConfettiBurstView: View {
-  let center: CGPoint
-
-  @State private var launched = false
-
-  private let particles: [Particle]
-
-  init(center: CGPoint) {
-    self.center = center
-    let palette: [Color] = [.green, .cyan, .orange, .pink, .yellow, .white]
-    particles = (0..<18).map { _ in
-      Particle(
-        angle: Double.random(in: 0..<(2 * .pi)),
-        distance: CGFloat.random(in: 30...72),
-        size: CGSize(width: CGFloat.random(in: 3...5), height: CGFloat.random(in: 5...9)),
-        color: palette.randomElement() ?? .green,
-        spin: Double.random(in: -260...260)
-      )
-    }
-  }
-
-  var body: some View {
-    ZStack {
-      ForEach(particles) { particle in
-        RoundedRectangle(cornerRadius: 1)
-          .fill(particle.color)
-          .frame(width: particle.size.width, height: particle.size.height)
-          .rotationEffect(.degrees(launched ? particle.spin : 0))
-          .offset(
-            x: launched ? cos(particle.angle) * particle.distance : 0,
-            y: launched ? sin(particle.angle) * particle.distance : 0
-          )
-          .opacity(launched ? 0 : 1)
-      }
-    }
-    .position(center)
-    .allowsHitTesting(false)
-    .onAppear {
-      withAnimation(.easeOut(duration: 0.75)) {
-        launched = true
-      }
-    }
-  }
-
-  private struct Particle: Identifiable {
-    let id = UUID()
-    let angle: Double
-    let distance: CGFloat
-    let size: CGSize
-    let color: Color
-    let spin: Double
   }
 }

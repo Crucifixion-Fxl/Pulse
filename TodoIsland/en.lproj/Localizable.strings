@@ -181,3 +181,8 @@
 "agents.question.back" = "Back";
 "agents.question.skip" = "Skip";
 "agents.question.confirm" = "Confirm";
+
+"reminder.completed-feedback" = "Completed: %@";
+"reminder.undo-completion" = "Undo";
+"reminder.undo-completion.accessibility" = "Undo completion of %@";
+"reminder.undo-completion.help" = "Undo the last completion (⌘Z)";
