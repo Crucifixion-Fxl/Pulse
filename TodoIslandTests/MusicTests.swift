@@ -330,6 +330,23 @@ final class MusicTests: XCTestCase {
   }
 
   @MainActor
+  func testDurationRefinementKeepsTurntableWhileRefetching() async throws {
+    let provider = ScriptedProvider(outcome: .missing)
+    let model = makeModel(provider: provider)
+    model.nowPlayingDidChange(makeTrack(title: "Instrumental", artist: "Artist", duration: 0))
+    try await Task.sleep(for: .milliseconds(50))
+    XCTAssertEqual(model.lyricsState, .notFound)
+
+    model.nowPlayingDidChange(makeTrack(title: "Instrumental", artist: "Artist", duration: 247))
+    XCTAssertEqual(model.lyricsState, .notFound, "Duration updates must not flash loading")
+    try await Task.sleep(for: .milliseconds(50))
+    XCTAssertEqual(provider.fetchCount, 2, "Refined duration must still retry the lookup")
+
+    model.nowPlayingDidChange(makeTrack(title: "Another song", artist: "Artist", duration: 247))
+    XCTAssertEqual(model.lyricsState, .loading, "A new song must not inherit the old turntable")
+  }
+
+  @MainActor
   func testNilTrackResetsLyricsState() async throws {
     let model = makeModel(provider: ScriptedProvider(outcome: .found))
     model.nowPlayingDidChange(makeTrack(title: "x", artist: "y", duration: 100))

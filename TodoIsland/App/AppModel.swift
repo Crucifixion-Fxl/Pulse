@@ -826,18 +826,24 @@ final class AppModel: ObservableObject {
       return
     }
     guard track.lyricsIdentity != currentLyricsIdentity else { return }
+    let previousIdentity = currentLyricsIdentity
     currentLyricsIdentity = track.lyricsIdentity
-    fetchLyrics(for: track)
+    fetchLyrics(for: track, previousIdentity: previousIdentity)
   }
 
-  private func fetchLyrics(for track: NowPlayingTrack) {
+  private func fetchLyrics(for track: NowPlayingTrack, previousIdentity: LyricsIdentity?) {
     lyricsTask?.cancel()
     guard !track.title.isEmpty else {
       lyricsState = .idle
       return
     }
-    lyricsState = .loading
     let identity = track.lyricsIdentity
+    // A duration refinement still deserves a new lookup, but must not tear
+    // down a running turntable for the same song while the request is pending.
+    let preservesTurntable = lyricsState == .notFound
+      && previousIdentity?.title == identity.title
+      && previousIdentity?.artist == identity.artist
+    if !preservesTurntable { lyricsState = .loading }
     lyricsTask = Task { @MainActor in
       let found = await lyricsService.lyrics(
         title: track.title, artist: track.artist, duration: track.duration
@@ -990,8 +996,9 @@ final class AppModel: ObservableObject {
       // Route through the same lyrics-fetch path as external tracks;
       // bypassing it left the previous song's lyrics on screen.
       guard snapshot.lyricsIdentity != currentLyricsIdentity else { return }
+      let previousIdentity = currentLyricsIdentity
       currentLyricsIdentity = snapshot.lyricsIdentity
-      fetchLyrics(for: snapshot)
+      fetchLyrics(for: snapshot, previousIdentity: previousIdentity)
     }
   }
 
