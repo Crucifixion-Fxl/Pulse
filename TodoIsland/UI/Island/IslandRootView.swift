@@ -187,15 +187,6 @@ struct IslandRootView: View {
       )
 
       ZStack(alignment: .top) {
-        if effectiveState == .collapsed, isPrewarmingPanes {
-          // Hidden pane copy (see the .task prewarm above). Fixed at real
-          // expanded dimensions so the layout pass it warms matches the
-          // one the first real expansion will run.
-          prewarmPanes
-            .opacity(0)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
         if effectiveState == .collapsed {
           collapsedContent
             .transition(
@@ -325,6 +316,16 @@ struct IslandRootView: View {
         }
       }
       .frame(width: surfaceSize.width, height: surfaceSize.height, alignment: .top)
+      .background(alignment: .top) {
+        if effectiveState == .collapsed, isPrewarmingPanes {
+          // A background does not contribute its 760pt ideal width to the
+          // collapsed bar. A ZStack sibling pushes the live bot offscreen.
+          prewarmPanes
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+      }
       .background(.black)
       .clipShape(islandShape)
       .contentShape(Rectangle())
