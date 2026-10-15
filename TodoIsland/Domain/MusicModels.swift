@@ -221,6 +221,17 @@ enum LyricsParse {
   static func lyrics(original: String, translation: String?) -> Lyrics? {
     let originalLines = timedLines(original)
     guard !originalLines.isEmpty else { return nil }
+    // Providers sometimes encode an instrumental notice as a timed lyric.
+    // Match whole notices only: a real lyric mentioning these words stays intact.
+    let notices: Set<String> = ["纯音乐请欣赏", "純音樂請欣賞", "纯音乐", "純音樂", "instrumental"]
+    let onlyNotices = originalLines.allSatisfy { line in
+      let normalized = line.text.lowercased().unicodeScalars.filter {
+        !CharacterSet.punctuationCharacters.contains($0)
+          && !CharacterSet.whitespacesAndNewlines.contains($0)
+      }
+      return notices.contains(String(String.UnicodeScalarView(normalized)))
+    }
+    guard !onlyNotices else { return nil }
 
     let translationLines = translation.map { timedLines($0) } ?? []
     let lines = originalLines.enumerated().map { index, line -> LyricLine in
