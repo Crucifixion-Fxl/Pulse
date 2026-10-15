@@ -23,6 +23,9 @@ struct ReminderCompletionCheck: View {
         .padding(size * 0.24)
     }
     .frame(width: size, height: size)
+    // The unfilled state only draws a ring. Plain buttons otherwise hit
+    // that stroke, letting clicks in the empty center fall through to the row.
+    .contentShape(Rectangle())
     .accessibilityHidden(true)
     .onChange(of: isCompleted, initial: true) { _, completed in
       withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
