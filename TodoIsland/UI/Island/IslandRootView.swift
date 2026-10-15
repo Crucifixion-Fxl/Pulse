@@ -285,12 +285,13 @@ struct IslandRootView: View {
               // click that pinned the Island is still in flight, the panel has
               // not become key yet and this request cannot land — the
               // taskInputFocusRequestID handler below re-issues it when it can.
-              if state == .pinned, model.editingReminderID == nil {
+              if state == .pinned, selectedSidebarItem == .reminders, model.editingReminderID == nil {
                 newTaskFocused = true
               }
             }
             .onChange(of: model.taskInputFocusRequestID) { _, _ in
-              guard model.islandState == .pinned, model.editingReminderID == nil else { return }
+              guard model.islandState == .pinned, selectedSidebarItem == .reminders,
+                model.editingReminderID == nil else { return }
               // Pass through false first: the pin already left the state true,
               // and re-asserting true alone would not re-issue the focus request.
               newTaskFocused = false
@@ -445,13 +446,13 @@ struct IslandRootView: View {
     }
   }
 
-  /// The prewarm copy: both pane sets the first expansion may need — the
-  /// selected pane's content (reminders at launch) and the agents pane the
-  /// approval auto-expansion routes to.
+  /// Warm the default reminders pane and the agents approval destination.
+  /// The expanded session retains its own pair; this launch copy is temporary.
   private var prewarmPanes: some View {
     ZStack {
-      expandedFeatureContent
+      remindersFeatureContent
       AgentsPanelView()
+        .environment(\.agentPanelActive, false)
     }
     .frame(width: 760, height: 380, alignment: .top)
     .clipped()
@@ -520,6 +521,8 @@ struct IslandRootView: View {
     .padding(.top, 4)
     .padding(.bottom, 2)
     .padding(.horizontal, 0)
+    .animation(reduceMotion ? nil : .bouncy(duration: 0.35, extraBounce: 0.2),
+      value: selectedSidebarItem)
   }
 
   /// Applies a pending pane request from an auto-expansion flow. Lives at
@@ -537,9 +540,9 @@ struct IslandRootView: View {
 
   /// Switches the active sidebar feature with the liquid transition.
   private func selectSidebar(_ item: IslandSidebarItem) {
-    withAnimation(reduceMotion ? nil : .bouncy(duration: 0.35, extraBounce: 0.2)) {
-      selectedSidebarItem = item
-    }
+    guard selectedSidebarItem != item else { return }
+    selectedSidebarItem = item
+    if item != .reminders { newTaskFocused = false }
     if item == .agents {
       model.refreshAIUsage()
     }
@@ -559,18 +562,36 @@ struct IslandRootView: View {
 
   @ViewBuilder
   private var expandedFeatureContent: some View {
-    switch selectedSidebarItem {
-    case .reminders:
-      remindersFeatureContent.transition(.opacity)
-    case .agents:
-      AgentsPanelView().transition(.opacity)
-    case .music:
-      MusicPanelView().transition(.opacity)
-    case .clipboard:
-      ClipboardPanelView().transition(.opacity)
-    case .placeholder4, .placeholder5, .placeholder6, .placeholder7:
-      placeholderFeatureContent.transition(.opacity)
+    Group {
+      switch selectedSidebarItem {
+      case .reminders, .agents:
+        // Both destinations keep their controls and scroll position mounted.
+        // Other features keep their own natural size and lifecycle.
+        ZStack(alignment: .top) {
+          remindersFeatureContent
+            .transaction { $0.animation = nil }
+            .opacity(selectedSidebarItem == .reminders ? 1 : 0)
+            .allowsHitTesting(selectedSidebarItem == .reminders)
+            .accessibilityElement(children: .contain)
+            .accessibilityHidden(selectedSidebarItem != .reminders)
+          AgentsPanelView()
+            .environment(\.agentPanelActive, selectedSidebarItem == .agents)
+            .transaction { $0.animation = nil }
+            .opacity(selectedSidebarItem == .agents ? 1 : 0)
+            .allowsHitTesting(selectedSidebarItem == .agents)
+            .accessibilityElement(children: .contain)
+            .accessibilityHidden(selectedSidebarItem != .agents)
+        }
+      case .music:
+        MusicPanelView().transition(.opacity)
+      case .clipboard:
+        ClipboardPanelView().transition(.opacity)
+      case .placeholder4, .placeholder5, .placeholder6, .placeholder7:
+        placeholderFeatureContent.transition(.opacity)
+      }
     }
+    // Only the indicator springs; content opacity settles without overshoot.
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selectedSidebarItem)
   }
 
   @ViewBuilder
@@ -1009,13 +1030,15 @@ struct IslandRootView: View {
   private func updateExpandedContentHeight() {
     let contentHeight: CGFloat
     switch selectedSidebarItem {
-    case .agents, .music, .clipboard, .placeholder4,
+    case .agents:
+      contentHeight = model.canUseActiveList
+        ? sharedPrimaryPaneHeight : AgentsPanelView.Metrics.contentHeight
+    case .music, .clipboard, .placeholder4,
       .placeholder5, .placeholder6, .placeholder7:
       contentHeight = selectedSidebarItem.preferredContentHeight
     case .reminders:
       if model.canUseActiveList {
-        let measured = calendarPaneIdealHeight
-        contentHeight = measured > 0 ? measured : IslandSidebarItem.reminders.preferredContentHeight
+        contentHeight = sharedPrimaryPaneHeight
       } else if model.authorization == .fullAccess {
         contentHeight = 185
       } else {
@@ -1023,6 +1046,14 @@ struct IslandRootView: View {
       }
     }
     model.updateExpandedContentHeight(contentHeight)
+  }
+
+  /// A few points of font-metric rounding (321 vs 324 on macOS) must not
+  /// launch a second, snapshot-based window transition during a tab fade.
+  private var sharedPrimaryPaneHeight: CGFloat {
+    max(calendarPaneIdealHeight > 0
+      ? calendarPaneIdealHeight : IslandSidebarItem.reminders.preferredContentHeight,
+      AgentsPanelView.Metrics.contentHeight)
   }
 
   /// GitHub-style contribution grid: one square per day, tinted by how many
@@ -1844,6 +1875,15 @@ struct IslandRootView: View {
   }
 
   private func handleKeyEvent(_ event: NSEvent) -> Bool {
+    // A retained, invisible reminder pane must not consume typing or list
+    // shortcuts while the user interacts with another destination.
+    guard selectedSidebarItem == .reminders else {
+      if event.keyCode == 53 {
+        model.collapseIsland()
+        return true
+      }
+      return false
+    }
     // Typing while the hover preview shows pins the island and routes the
     // caret into the Task Input — the preview surface can't take keys.
     if model.islandState == .preview, event.type == .keyDown,

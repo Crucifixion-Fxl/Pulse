@@ -278,7 +278,7 @@ final class AgentMascotAnimationGate: ObservableObject {
 
 /// Shared frame driver for every pixel mascot.
 ///
-/// Wraps `TimelineView(.periodic)` with the motion-gate plumbing, so mascots
+/// Wraps `TimelineView(.animation)` with the motion-gate plumbing, so mascots
 /// hold a single static frame instead of looping while Reduce Motion or Low
 /// Power Mode is on, and re-anchor their schedules on resume:
 ///
@@ -300,6 +300,7 @@ struct AgentMascotTimeline<Content: View>: View {
     @ViewBuilder let content: (Double) -> Content
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.agentPanelActive) private var panelActive
     @ObservedObject private var gate = AgentMascotAnimationGate.shared
 
     private var animationsActive: Bool {
@@ -310,7 +311,7 @@ struct AgentMascotTimeline<Content: View>: View {
     var body: some View {
         Group {
             if animationsActive {
-                TimelineView(.periodic(from: .now, by: max(interval, Self.minInterval))) { ctx in
+                TimelineView(.animation(minimumInterval: max(interval, Self.minInterval), paused: !panelActive)) { ctx in
                     content(ctx.date.timeIntervalSinceReferenceDate)
                 }
                 .id(gate.epoch)
@@ -362,6 +363,7 @@ struct AgentMascotSceneShell<Sleep: View, Work: View, AlertContent: View>: View 
 
     @State private var alive = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.agentPanelActive) private var panelActive
     @ObservedObject private var gate = AgentMascotAnimationGate.shared
 
     var body: some View {
@@ -393,14 +395,14 @@ struct AgentMascotSceneShell<Sleep: View, Work: View, AlertContent: View>: View 
     }
 
     private var alertGlowCircle: some View {
-        let glowActive = gatesGlowOnMotionSettings ? (alive && animationsActive) : alive
+        let glowActive = panelActive && (gatesGlowOnMotionSettings ? (alive && animationsActive) : alive)
         let pulse = Animation.easeInOut(duration: 0.5).repeatForever(autoreverses: true)
         return Circle()
             .fill(alertGlow.opacity(glowActive ? 0.12 : 0))
             .frame(width: size * 0.8)
             .blur(radius: size * 0.05)
             .animation(
-                gatesGlowOnMotionSettings && !animationsActive ? .default : pulse,
+                !panelActive || (gatesGlowOnMotionSettings && !animationsActive) ? nil : pulse,
                 value: glowActive)
             .id(gate.epoch)
     }
