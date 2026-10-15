@@ -258,7 +258,7 @@ final class IslandStateTests: XCTestCase {
   }
 
   @MainActor
-  func testReminderDraftSurvivesAutoCollapseAndResumesWhenPointerReturns() async throws {
+  func testReminderEditorStaysOpenWhenPointerLeaves() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)
     defer { defaults.removePersistentDomain(forName: #function) }
@@ -269,13 +269,12 @@ final class IslandStateTests: XCTestCase {
     model.pinIsland()
     model.beginEditing(reminder)
     model.draft?.title = "Continue editing"
-    let focusRequestBeforeCollapse = model.editingFocusRequestID
     model.setIslandHovered(true)
     model.setIslandHovered(false)
 
     try await Task.sleep(for: .milliseconds(260))
 
-    XCTAssertEqual(model.islandState, .collapsed)
+    XCTAssertEqual(model.islandState, .pinned)
     XCTAssertEqual(model.editingReminderID, reminder.id)
     XCTAssertEqual(model.draft?.title, "Continue editing")
 
@@ -284,7 +283,10 @@ final class IslandStateTests: XCTestCase {
     XCTAssertEqual(model.islandState, .pinned)
     XCTAssertEqual(model.editingReminderID, reminder.id)
     XCTAssertEqual(model.draft?.title, "Continue editing")
-    XCTAssertNotEqual(model.editingFocusRequestID, focusRequestBeforeCollapse)
+    model.cancelEditing()
+    model.setIslandHovered(false)
+    try await Task.sleep(for: .milliseconds(260))
+    XCTAssertEqual(model.islandState, .collapsed)
   }
 
   @MainActor
