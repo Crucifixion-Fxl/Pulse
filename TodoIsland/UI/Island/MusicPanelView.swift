@@ -526,7 +526,9 @@ struct MusicPanelView: View {
 
   private func lyricsNotFound(_ track: NowPlayingTrack) -> some View {
     VinylRecordView(isPlaying: track.isPlaying)
-      .id(track.lyricsIdentity)
+      // Duration may arrive after playback starts; only a song change
+      // should replay the entrance.
+      .id([track.lyricsIdentity.title, track.lyricsIdentity.artist])
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .accessibilityLabel(Text("music.lyrics.not-found"))
   }
