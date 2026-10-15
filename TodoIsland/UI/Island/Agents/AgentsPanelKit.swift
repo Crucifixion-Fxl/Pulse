@@ -74,6 +74,18 @@ struct AgentTypography {
   var icon: CGFloat { base + 2 }
 }
 
+/// Retained sidebar panes pause their frame drivers while hidden.
+private struct AgentPanelActiveKey: EnvironmentKey {
+  static let defaultValue = true
+}
+
+extension EnvironmentValues {
+  var agentPanelActive: Bool {
+    get { self[AgentPanelActiveKey.self] }
+    set { self[AgentPanelActiveKey.self] = newValue }
+  }
+}
+
 // MARK: - Typing indicator
 // Monospaced text with a sweeping gradient band masked to the glyphs
 // (base opacity 0.35, band peak 0.5, easeInOut 2.5s repeat).
@@ -82,12 +94,13 @@ struct TypingIndicatorText: View {
   let text: String
   var bright = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.agentPanelActive) private var panelActive
 
   var body: some View {
     if reduceMotion {
       plain
     } else {
-      TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+      TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !panelActive)) { timeline in
         let phase =
           (timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.5))
           / 2.5
