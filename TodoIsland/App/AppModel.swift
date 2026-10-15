@@ -258,7 +258,7 @@ final class AppModel: ObservableObject {
     guard
       isEditingDraftValidated,
       let editingReminderID,
-      draft != nil
+      let draft, !draft.normalizedTitle.isEmpty
     else { return false }
     if let reminder = reminders.first(where: { $0.id == editingReminderID }) {
       return canAccess(source: reminder.source)
@@ -501,6 +501,7 @@ final class AppModel: ObservableObject {
   func beginEditing(_ reminder: ReminderSnapshot) {
     guard canAccess(source: reminder.source) else { return }
     selectedReminderID = reminder.id
+    hoverTask?.cancel()
     editingReminderID = reminder.id
     draft = ReminderDraft(reminder: reminder)
     isEditingDraftValidated = true
@@ -1107,7 +1108,7 @@ final class AppModel: ObservableObject {
     case .preview:
       delay = .milliseconds(500)
     case .pinned:
-      guard canUseActiveList, !isHeldForApproval else { return }
+      guard canUseActiveList, !isHeldForApproval, editingReminderID == nil else { return }
       delay = .milliseconds(200)
     }
 
@@ -1126,7 +1127,7 @@ final class AppModel: ObservableObject {
       case .preview:
         collapseIsland()
       case .pinned:
-        guard canUseActiveList, !isHeldForApproval else { return }
+        guard canUseActiveList, !isHeldForApproval, editingReminderID == nil else { return }
         suspendPinnedIsland()
       }
     }

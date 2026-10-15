@@ -210,6 +210,30 @@ struct IslandRootView: View {
           // window hosting the expanded surface, so per-display windows
           // never multiply global monitors or fight over one alert.
           expandedContent
+            .allowsHitTesting(model.editingReminderID == nil)
+            .accessibilityHidden(model.editingReminderID != nil)
+            .overlay {
+              if let draft = model.draft, model.editingReminderID != nil {
+                ZStack {
+                  Color.black.opacity(0.48)
+                    .contentShape(Rectangle())
+                    .onTapGesture { }
+                    .accessibilityHidden(true)
+                  reminderEditor(draft)
+                    .frame(width: 400)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 24, y: 10)
+                    .task {
+                      newTaskFocused = false
+                      await Task.yield()
+                      editorTitleFocused = true
+                    }
+                }
+                .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.97)))
+              }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: model.editingReminderID)
             .transition(
               .opacity.combined(with: .scale(scale: 0.965, anchor: .top))
             )
@@ -250,7 +274,10 @@ struct IslandRootView: View {
               Text(model.errorMessage ?? "")
             }
             .onChange(of: model.editingReminderID) { _, id in
-              if id != nil { editorTitleFocused = true }
+              if id != nil {
+                newTaskFocused = false
+                editorTitleFocused = true
+              }
             }
             .onChange(of: model.editingFocusRequestID) { _, _ in
               Task { @MainActor in editorTitleFocused = true }
@@ -1088,10 +1115,10 @@ struct IslandRootView: View {
         ScrollView(.vertical, showsIndicators: false) {
           LazyVStack(spacing: 0) {
             ForEach(schedule.pending) { reminder in
-              dayRowWithEditor(reminder, metrics: metrics)
+              scheduleRow(reminder, metrics: metrics)
             }
             ForEach(undated) { reminder in
-              dayRowWithEditor(reminder, metrics: metrics)
+              scheduleRow(reminder, metrics: metrics)
                 .padding(.top, reminder.id == undated.first?.id ? 3 : 0)
             }
           }
@@ -1180,7 +1207,7 @@ struct IslandRootView: View {
   }
 
   @ViewBuilder
-  private func dayRowWithEditor(
+  private func scheduleRow(
     _ reminder: ReminderSnapshot,
     metrics: ScheduleMetrics
   ) -> some View {
@@ -1188,14 +1215,6 @@ struct IslandRootView: View {
       .frame(height: metrics.rowPitch)
       .id(reminder.id)
       .transition(.opacity)
-
-    if model.editingReminderID == reminder.id, let draft = model.draft {
-      reminderEditor(draft)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.bottom, 4)
-        .id("editor-\(reminder.id)")
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
   }
 
   private var emptyDaySchedule: some View {
@@ -1412,161 +1431,151 @@ struct IslandRootView: View {
   }
 
   private func reminderEditor(_ draft: ReminderDraft) -> some View {
-    VStack(alignment: .leading, spacing: 5.5) {
-      HStack(spacing: 4) {
-        ZStack {
-          Circle().fill(accentColor.opacity(0.18))
-          Image(systemName: "pencil")
-            .font(.system(size: 12.96, weight: .semibold))
-            .foregroundStyle(accentColor)
-        }
-        .frame(width: 14, height: 14)
-
+    VStack(alignment: .leading, spacing: 14) {
+      HStack(spacing: 10) {
+        Image(systemName: "square.and.pencil")
+          .font(.system(size: 15, weight: .medium))
+          .foregroundStyle(accentColor)
+          .frame(width: 30, height: 30)
+          .background(accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 9))
         Text("editor.edit-reminder")
-          .font(.system(size: 12.96).weight(.semibold))
-
+          .font(.system(size: 14, weight: .semibold))
         Spacer()
+        Button { model.cancelEditing() } label: {
+          Image(systemName: "xmark")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.5))
+            .frame(width: 24, height: 24)
+            .background(.white.opacity(0.045), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text("common.cancel"))
       }
 
-      HStack(spacing: 4.5) {
-        Image(systemName: "text.cursor")
-          .font(.system(size: 11.88))
-          .foregroundStyle(editorTitleFocused ? accentColor : .secondary)
-        TextField(
-          L10n.text("editor.title.placeholder"),
-          text: Binding(
-            get: { model.draft?.title ?? "" },
-            set: { model.draft?.title = $0 }
-          )
+      TextField(
+        L10n.text("editor.title.placeholder"),
+        text: Binding(
+          get: { model.draft?.title ?? "" },
+          set: { model.draft?.title = $0 }
         )
-        .textFieldStyle(.plain)
-        .focused($editorTitleFocused)
-        .onSubmit { model.saveEditing() }
-      }
-      .padding(.horizontal, 5.5)
-      .frame(height: 38)
-      .background {
-        RoundedRectangle(cornerRadius: 10)
-          .fill(.white.opacity(editorTitleFocused ? 0.09 : 0.06))
-      }
+      )
+      .font(.system(size: 16, weight: .medium))
+      .textFieldStyle(.plain)
+      .accessibilityLabel(L10n.text("editor.title.placeholder"))
+      .focused($editorTitleFocused)
+      .onSubmit { if model.canSaveEditingDraft { model.saveEditing() } }
+      .padding(.horizontal, 12)
+      .frame(height: 44)
+      .background(.black.opacity(0.2), in: RoundedRectangle(cornerRadius: 10))
       .overlay {
         RoundedRectangle(cornerRadius: 10)
-          .stroke(
-            editorTitleFocused ? accentColor.opacity(0.75) : .white.opacity(0.09),
-            lineWidth: editorTitleFocused ? 1.25 : 1
-          )
+          .strokeBorder(editorTitleFocused ? accentColor.opacity(0.6) : .white.opacity(0.08), lineWidth: 1)
       }
 
-      VStack(spacing: 4) {
-        HStack(spacing: 5) {
-          ZStack {
-            RoundedRectangle(cornerRadius: 8)
-              .fill(draft.hasDueDate ? accentColor.opacity(0.18) : .white.opacity(0.06))
-            Image(systemName: "calendar")
-              .font(.system(size: 14.04, weight: .medium))
-              .foregroundStyle(draft.hasDueDate ? accentColor : .secondary)
-          }
-          .frame(width: 30, height: 30)
-
-          Text("editor.due-date")
-            .font(.system(size: 12.96).weight(.medium))
-
+      VStack(spacing: 10) {
+        HStack(spacing: 8) {
+          Label(L10n.text("editor.due-date"), systemImage: "calendar")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.72))
           Spacer()
-
-          Toggle(
-            "",
-            isOn: Binding(
-              get: { model.draft?.hasDueDate ?? false },
-              set: { model.draft?.hasDueDate = $0 }
-            )
-          )
+          Toggle("", isOn: Binding(
+            get: { model.draft?.hasDueDate ?? false },
+            set: { model.draft?.hasDueDate = $0 }
+          ))
           .labelsHidden()
+          .accessibilityLabel(L10n.text("editor.due-date"))
           .toggleStyle(.switch)
-          .controlSize(.small)
+          .controlSize(.mini)
           .tint(accentColor)
         }
-
         if draft.hasDueDate {
-          Divider().overlay(.white.opacity(0.08))
-
-          HStack(spacing: 5) {
+          HStack(spacing: 8) {
             DatePicker(
-              "",
+              L10n.text("editor.due-date"),
               selection: Binding(
                 get: { model.draft?.dueDate ?? Date() },
                 set: { model.draft?.dueDate = $0 }
               ),
-              displayedComponents: draft.includesTime
-                ? [.date, .hourAndMinute] : [.date]
+              displayedComponents: draft.includesTime ? [.date, .hourAndMinute] : [.date]
             )
             .labelsHidden()
             .controlSize(.small)
-
-            Spacer()
-
-            Toggle(
-              L10n.text("editor.time"),
-              isOn: Binding(
-                get: { model.draft?.includesTime ?? false },
-                set: { model.draft?.includesTime = $0 }
-              )
-            )
+            Spacer(minLength: 0)
+            Toggle(L10n.text("editor.time"), isOn: Binding(
+              get: { model.draft?.includesTime ?? false },
+              set: { model.draft?.includesTime = $0 }
+            ))
             .toggleStyle(.checkbox)
             .controlSize(.small)
+            .font(.system(size: 11))
+            .foregroundStyle(.white.opacity(0.65))
           }
-          .transition(.opacity.combined(with: .move(edge: .top)))
+          .transition(.opacity)
         }
       }
-      .padding(.horizontal, 5)
-      .padding(.vertical, 4)
-      .background {
-        RoundedRectangle(cornerRadius: 11).fill(.white.opacity(0.04))
-      }
-      .overlay {
-        RoundedRectangle(cornerRadius: 11).stroke(.white.opacity(0.08), lineWidth: 1)
-      }
-      .animation(
-        reduceMotion ? nil : .smooth(duration: 0.22, extraBounce: 0),
-        value: draft.hasDueDate
-      )
+      .padding(12)
+      .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+      .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: draft.hasDueDate)
 
-      HStack(spacing: 4.5) {
+      HStack(spacing: 12) {
         Label(L10n.text("editor.priority"), systemImage: "flag")
-          .font(.system(size: 11.88).weight(.semibold))
-          .foregroundStyle(.secondary)
-
-        HStack(spacing: 5) {
-          ForEach(
-            [ReminderPriority.none, .low, .medium, .high],
-            id: \.self
-          ) { priority in
+          .font(.system(size: 12, weight: .medium))
+          .foregroundStyle(.white.opacity(0.6))
+        HStack(spacing: 3) {
+          ForEach([ReminderPriority.none, .low, .medium, .high], id: \.self) { priority in
             priorityOption(priority, selectedPriority: draft.priority)
           }
         }
+        .padding(3)
+        .background(.black.opacity(0.16), in: RoundedRectangle(cornerRadius: 9))
       }
 
-      HStack(spacing: 4.5) {
-        Spacer()
-        Button(L10n.text("common.cancel")) { model.cancelEditing() }
-          .buttonStyle(.bordered)
-          .controlSize(.regular)
+      Rectangle().fill(.white.opacity(0.07)).frame(height: 1)
 
-        Button(L10n.text("common.save")) { model.saveEditing() }
-          .buttonStyle(.borderedProminent)
-          .controlSize(.regular)
-          .tint(accentColor)
-          .keyboardShortcut(.defaultAction)
-          .disabled(!model.canSaveEditingDraft)
+      HStack(spacing: 8) {
+        Button { model.cancelEditing() } label: {
+          HStack(spacing: 6) {
+            Text("common.cancel")
+            Text("esc")
+              .font(.system(size: 9, weight: .medium, design: .monospaced))
+              .foregroundStyle(.white.opacity(0.3))
+          }
+          .font(.system(size: 12))
+          .foregroundStyle(.white.opacity(0.62))
+          .padding(.vertical, 7)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text("common.cancel"))
+        Spacer()
+        Button { model.saveEditing() } label: {
+          HStack(spacing: 10) {
+            Text("common.save")
+            Image(systemName: "return").font(.system(size: 10, weight: .medium))
+          }
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundStyle(.black.opacity(0.85))
+          .padding(.horizontal, 15)
+          .frame(height: 30)
+          .background(accentColor, in: RoundedRectangle(cornerRadius: 8))
+          .opacity(model.canSaveEditingDraft ? 1 : 0.4)
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(.defaultAction)
+        .disabled(!model.canSaveEditingDraft)
       }
     }
-    .padding(6.5)
+    .padding(20)
     .background {
-      RoundedRectangle(cornerRadius: 14)
-        .fill(ReUITheme.panel)
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .fill(LinearGradient(
+          colors: [Color(red: 0.11, green: 0.12, blue: 0.14), ReUITheme.panel],
+          startPoint: .topLeading, endPoint: .bottomTrailing))
     }
     .overlay {
-      RoundedRectangle(cornerRadius: 14)
-        .stroke(accentColor.opacity(0.34), lineWidth: 1)
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .strokeBorder(LinearGradient(
+          colors: [.white.opacity(0.16), .white.opacity(0.045)],
+          startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
     }
   }
 
@@ -1596,7 +1605,7 @@ struct IslandRootView: View {
       }
       .overlay {
         RoundedRectangle(cornerRadius: 8)
-          .stroke(isSelected ? color.opacity(0.65) : .white.opacity(0.07), lineWidth: 1)
+          .stroke(isSelected ? color.opacity(0.26) : .clear, lineWidth: 1)
       }
     }
     .buttonStyle(.plain)
@@ -1846,6 +1855,16 @@ struct IslandRootView: View {
 
     guard isPinned else { return false }
 
+    // While the editor is open, list navigation and quick-add shortcuts
+    // must not act on the dimmed content behind the card.
+    if model.editingReminderID != nil {
+      if event.keyCode == 53 {
+        model.cancelEditing()
+        return true
+      }
+      return false
+    }
+
     if event.modifierFlags.contains(.command),
       event.charactersIgnoringModifiers?.lowercased() == "n"
     {
@@ -1854,10 +1873,6 @@ struct IslandRootView: View {
     }
 
     let isEditingText = NSApp.keyWindow?.firstResponder is NSTextView
-    if event.keyCode == 53, model.editingReminderID != nil {
-      model.cancelEditing()
-      return true
-    }
     if isEditingText { return false }
     if event.modifierFlags.contains(.command),
       !event.modifierFlags.contains(.shift),
