@@ -181,3 +181,8 @@
 "agents.question.back" = "返回";
 "agents.question.skip" = "跳过";
 "agents.question.confirm" = "确认";
+
+"reminder.completed-feedback" = "已完成：%@";
+"reminder.undo-completion" = "撤销";
+"reminder.undo-completion.accessibility" = "撤销完成 %@";
+"reminder.undo-completion.help" = "撤销上一项完成（⌘Z）";

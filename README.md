@@ -15,7 +15,7 @@ xattr -cr /Applications/TodoIsland.app
 - **Dynamic Island surface** — a collapsed bar in the menu-bar/notch area, a hover preview, and a pinned expanded surface, following the display the pointer works on (notch-aware on built-in displays).
 - **Month calendar + completion heatmap** — a six-week grid with per-List accent dots under each date (one dot per List with pending items; gray means only completed ones remain) and a 24-week completion heatmap.
 - **Liquid interactions** — the date-selection bead slides between days, the sidebar indicator flows between icons, and switching happens on hover.
-- **Completion celebration** — checking a task bursts confetti at the checkmark; the row holds until it finishes, then fades while the rows below slide up.
+- **Completion feedback** — the circle fills and the checkmark draws in, the title fades, and the row closes smoothly without recentering the list. Successful completions can be undone in reverse order for eight seconds; text editing keeps its own undo.
 - **Day Schedule grouped by List** — same-List tasks stay together, ordered like the Lists themselves, with overdue items greeting today.
 - **Quick Add** — the Task Input creates a reminder on the selected day in any List; the first click on the hover preview pins the Island and puts the caret in the field.
 - **AI usage dashboard** — today's tokens with an input/output/cache split, a fifteen-day trend, and per-subscription weekly quota cards (sample data until real providers land).

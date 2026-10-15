@@ -236,7 +236,7 @@ The Island shell is an independent implementation informed by boring.notch's pub
 - Local list creation, renaming, deletion, first-use Default Local List creation, and stable automatic colors work without Reminders permission.
 - Local completion retains hidden Completed Reminders, and Local list deletion confirms both Pending and Completed counts.
 - A Local persistence failure leaves iCloud usable and never silently destroys the Local store.
-- Compact editing, 200-millisecond completion feedback, and confirmed deletion work.
+- Compact editing and confirmed deletion work. Completion fills the circle, draws the checkmark, and dims the title; the row holds for 750 milliseconds after a successful save, then fades as the remaining rows close the gap without automatic recentering. Reduce Motion uses static feedback with a 120-millisecond hold. Successful completions offer an eight-second Undo window, renewed by another completion or undo; repeated undo restores items in reverse click order. Command-Z undoes completion only outside text editing. Failed saves restore the pending appearance and do not offer undo.
 - External Reminders changes appear after EventKit change notifications.
 - Collapsed, Preview, and Pinned states follow the agreed focus behavior and shortcuts.
 - Initial Setup requires an explicit visibility choice, upgrade prompting preserves existing source state, and Settings can change the per-Mac choice.
