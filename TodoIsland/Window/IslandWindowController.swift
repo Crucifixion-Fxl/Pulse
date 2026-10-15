@@ -9,10 +9,10 @@ import SwiftUI
 /// Exactly one window ever owns key status — the active one, while pinned.
 @MainActor
 final class IslandWindowController: NSObject, NSWindowDelegate {
-  /// The per-display island: its panel, its content, and its own spring.
+  /// The per-display island: its panel, its content, and its compositor transition.
   @MainActor private struct DisplayWindow {
     let panel: IslandPanel
-    let spring = IslandFrameSpring()
+    let transition: IslandTransitionView
     var visibilityGeneration = 0
   }
 
@@ -168,20 +168,21 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       panel.delegate = self
       let hostingView = NSHostingView(
         rootView: AnyView(
-          IslandRootView(displayID: id)
+          IslandRootView(displayID: id, usesCompositorTransitions: true)
             .environmentObject(model)
             .environmentObject(agentStore))
       )
       hostingView.wantsLayer = true
-      // The panel frame is driven per-frame by the spring; skipping intrinsic
-      // size syncing keeps each resize pass cheap.
+      // Content is laid out at its destination once; the wrapper owns the
+      // temporary compositor animation and window envelope.
       hostingView.sizingOptions = []
       hostingView.layer?.backgroundColor = NSColor.clear.cgColor
-      panel.contentView = hostingView
+      let transition = IslandTransitionView(content: hostingView)
+      panel.contentView = transition
       let initiallyVisible = model.islandState != .collapsed || model.isCollapsedIslandVisible
       panel.alphaValue = initiallyVisible ? 1 : 0
       panel.ignoresMouseEvents = !initiallyVisible
-      windows[id] = DisplayWindow(panel: panel)
+      windows[id] = DisplayWindow(panel: panel, transition: transition)
     }
 
     guard !live.isEmpty else { return }
@@ -277,23 +278,10 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       origin: geometry.origin(for: state, in: metrics), size: geometry.size(for: state))
 
     panel.acceptsKeyInput = state == .pinned
-    if animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-      let motion = state.motionProfile
-      window.spring.animate(
-        on: panel,
-        from: panel.frame,
-        to: frame,
-        response: motion.response,
-        dampingFraction: motion.dampingFraction
-      ) { [panel] interpolated in
-        // Coalesce drawing into the normal vsync update instead of forcing a
-        // synchronous display inside the display-link tick.
-        panel.setFrame(interpolated, display: false)
-      }
-    } else {
-      window.spring.settle(at: frame)
-      panel.setFrame(frame, display: true)
-    }
+    window.transition.transition(
+      to: frame, state: state,
+      collapsedRadius: metrics.hasPhysicalNotch ? 14 : 18,
+      animated: animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
 
     if state != .pinned {
       panel.orderFrontRegardless()
@@ -362,9 +350,9 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     }
 
     // Watchdog: a collapsed island must sit exactly on the bar frame. If a
-    // spring was interrupted mid-flight by fast hover in/out, snap it back
+    // transition was interrupted mid-flight by fast hover in/out, snap it back
     // instead of leaving a stale wide surface on screen.
-    if state == .collapsed, !window.spring.isRunning {
+    if state == .collapsed, !window.transition.isRunning {
       let metrics = DisplaySupport.metrics(for: screen)
       let geometry = DisplayGeometryCalculator.geometry(
         for: metrics,
@@ -378,8 +366,9 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         || abs(panel.frame.height - frame.height) > 1
         || abs(panel.frame.midX - frame.midX) > 1
       {
-        window.spring.settle(at: frame)
-        panel.setFrame(frame, display: true)
+        window.transition.transition(
+          to: frame, state: .collapsed,
+          collapsedRadius: metrics.hasPhysicalNotch ? 14 : 18, animated: false)
       }
     }
 
@@ -453,7 +442,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     for (id, window) in windows where window.panel.isVisible {
       guard let screen = DisplaySupport.screen(id: id) else { continue }
       // The window may be mid-flight — much larger than the bar while the
-      // collapse spring settles. Gate the activation zone on the settled bar
+      // collapse transition settles. Gate the activation zone on the settled bar
       // frame, never the animating one.
       let metrics = DisplaySupport.metrics(for: screen)
       let geometry = DisplayGeometryCalculator.geometry(
