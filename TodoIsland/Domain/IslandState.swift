@@ -32,10 +32,10 @@ struct IslandMotionProfile: Equatable, Sendable {
   let response: Double
   let dampingFraction: Double
 
-  // Let the center-out expansion remain visible for roughly half a second,
-  // then settle with only a small overshoot. Click and hover openings share
-  // the same weight; pinning must not turn a direct click into a snap-open.
-  static let opening = IslandMotionProfile(response: 0.78, dampingFraction: 0.82)
+  // Speed up the entire opening by 1.3x while preserving its damping and
+  // the relative timing of the silhouette and content reveal.
+  static let openingSpeed = 1.3
+  static let opening = IslandMotionProfile(response: 0.78 / openingSpeed, dampingFraction: 0.82)
   static let pinning = opening
   static let closing = IslandMotionProfile(response: 0.24, dampingFraction: 1.0)
 }

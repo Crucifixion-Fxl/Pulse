@@ -29,7 +29,7 @@ final class IslandTransitionTests: XCTestCase {
     var samples: [(Double, CGFloat, Float)] = []
     let start = CACurrentMediaTime()
     for _ in 0..<14 {
-      try await Task.sleep(for: .milliseconds(50))
+      try await Task.sleep(for: .seconds(0.05 / 1.3))
       let bounds = try XCTUnwrap(transition.presentedSurfaceBounds)
       let progress = (bounds.width - collapsed.width) / (expanded.width - collapsed.width)
       samples.append((CACurrentMediaTime() - start, progress, transition.presentedContentOpacity))
@@ -39,14 +39,14 @@ final class IslandTransitionTests: XCTestCase {
       }
     }
     print("Opening time / width progress / content opacity: \(samples)")
-    let early = try XCTUnwrap(samples.first { $0.0 >= 0.09 })
+    let early = try XCTUnwrap(samples.first { $0.0 >= 0.09 / 1.3 })
     XCTAssertLessThan(early.2, 0.15, "The shape should open before the content appears")
-    let revealed = try XCTUnwrap(samples.first { $0.0 >= 0.45 })
+    let revealed = try XCTUnwrap(samples.first { $0.0 >= 0.45 / 1.3 })
     XCTAssertGreaterThan(revealed.2, 0.95, "Content must be ready before the spring settles")
-    let quarterSecond = try XCTUnwrap(samples.first { $0.0 >= 0.23 })
-    XCTAssertLessThan(quarterSecond.1, 0.85,
-      "Opening should still visibly unfold at 250ms, not already be full width")
-    XCTAssertGreaterThan(quarterSecond.1, 0.35, "Respond promptly without an artificial wait")
+    let midOpening = try XCTUnwrap(samples.first { $0.0 >= 0.23 / 1.3 })
+    XCTAssertLessThan(midOpening.1, 0.85,
+      "The 1.3x opening should retain its unfolding phase near 190ms")
+    XCTAssertGreaterThan(midOpening.1, 0.35, "Respond promptly without an artificial wait")
     XCTAssertLessThanOrEqual(samples.map(\.1).max() ?? 0, 1.035,
       "A content panel should settle with restrained overshoot")
     try await Task.sleep(for: .milliseconds(700))
