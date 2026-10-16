@@ -3,6 +3,69 @@ import XCTest
 @testable import TodoIsland
 
 final class LocalSourceAppModelTests: XCTestCase {
+  @MainActor
+  func testMonthNavigationCrossesYearsAndClampsShortMonths() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults)
+    await model.start()
+    let calendar = Calendar.current
+    func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+      calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    model.selectDay(date(2026, 10, 16))
+    model.shiftMonth(by: -1)
+    XCTAssertEqual(model.selectedDay, date(2026, 9, 16))
+    model.shiftMonth(by: 1)
+    model.shiftMonth(by: 1)
+    XCTAssertEqual(model.selectedDay, date(2026, 11, 16))
+
+    model.selectDay(date(2026, 12, 31))
+    model.shiftMonth(by: 1)
+    XCTAssertEqual(model.selectedDay, date(2027, 1, 31))
+    model.shiftMonth(by: -1)
+    XCTAssertEqual(model.selectedDay, date(2026, 12, 31))
+    model.shiftMonth(by: 2)
+    XCTAssertEqual(model.selectedDay, date(2027, 2, 28))
+    model.selectDay(date(2028, 3, 31))
+    model.shiftMonth(by: -1)
+    XCTAssertEqual(model.selectedDay, date(2028, 2, 29))
+  }
+
+  @MainActor
+  func testMonthNavigationLoadsTheNewMonthsReminders() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    let listID = try XCTUnwrap(model.activeListID)
+    let calendar = Calendar.current
+    let october = calendar.date(from: DateComponents(year: 2026, month: 10, day: 16))!
+    try await store.createReminder(
+      title: "November task", in: listID,
+      dueComponents: DateComponents(year: 2026, month: 11, day: 16)
+    )
+    model.selectDay(october)
+    await model.reload()
+    XCTAssertTrue(model.monthReminders.isEmpty)
+
+    model.shiftMonth(by: 1)
+    for _ in 0..<100 where model.monthReminders.isEmpty {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["November task"])
+    model.shiftMonth(by: -1)
+    for _ in 0..<100 where !model.monthReminders.isEmpty {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(model.selectedDay, october)
+    XCTAssertTrue(model.monthReminders.isEmpty)
+  }
+
   func testSwitchingListCreationSourcePreservesEnteredName() {
     XCTAssertFalse(
       ListCreationDraftPolicy.shouldResetName(

@@ -423,6 +423,13 @@ final class AppModel: ObservableObject {
     }
   }
 
+  func shiftMonth(by offset: Int) {
+    guard let day = Calendar.current.date(byAdding: .month, value: offset, to: selectedDay) else {
+      return
+    }
+    selectDay(day)
+  }
+
   func selectDay(_ day: Date) {
     let calendar = Calendar.current
     let newDay = calendar.startOfDay(for: day)
