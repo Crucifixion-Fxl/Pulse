@@ -747,11 +747,15 @@ struct IslandRootView: View {
 
     return VStack(alignment: .leading, spacing: 2) {
       VStack(spacing: 3) {
-      Text(grid.monthTitle)
-        .font(.system(size: metrics.titleSize, weight: .semibold))
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-        .frame(maxWidth: .infinity, alignment: .center)
+      HStack(spacing: 8) {
+        monthNavigationButton(offset: -1, metrics: metrics)
+        Text(grid.monthTitle)
+          .font(.system(size: metrics.titleSize, weight: .semibold))
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+          .frame(maxWidth: .infinity, alignment: .center)
+        monthNavigationButton(offset: 1, metrics: metrics)
+      }
         .padding(.bottom, metrics.headerBottomPadding)
         .padding(.top, metrics.paneTopPadding)
 
@@ -787,6 +791,21 @@ struct IslandRootView: View {
       // Keep completion history directly under the month grid.
       heatmapSection(metrics: metrics)
     }
+  }
+
+  private func monthNavigationButton(offset: Int, metrics: ScheduleMetrics) -> some View {
+    Button {
+      model.shiftMonth(by: offset)
+    } label: {
+      Image(systemName: offset < 0 ? "chevron.left" : "chevron.right")
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(ReUITheme.muted)
+        .frame(width: 28, height: metrics.titleSize * 1.4)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .help(offset < 0 ? "上个月" : "下个月")
+    .accessibilityLabel(offset < 0 ? "上个月" : "下个月")
   }
 
   private func calendarDayCell(
