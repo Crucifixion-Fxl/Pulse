@@ -23,6 +23,60 @@ final class AgentReducerTests: XCTestCase {
         try XCTUnwrap(sessions[sessionId], "session should exist: \(sessionId)")
     }
 
+    func testTaskTitleKeepsFirstPromptAndPrefersExplicitTitle() throws {
+        try reduce(["hook_event_name": "UserPromptSubmit", "session_id": "s1",
+                    "prompt": "  优化灵动岛\n展开动画  ", "cwd": "/work/TodoIsland"])
+        try reduce(["hook_event_name": "UserPromptSubmit", "session_id": "s1", "prompt": "同意"])
+        var snap = try snapshot("s1")
+        XCTAssertEqual(snap.displayTitle(sessionId: "s1"), "优化灵动岛 展开动画")
+        XCTAssertEqual(snap.lastUserPrompt, "同意")
+        XCTAssertEqual(snap.projectName, "TodoIsland")
+        snap.sessionTitle = "动画性能优化"
+        XCTAssertEqual(snap.displayTitle(sessionId: "s1"), "动画性能优化")
+        snap.sessionTitle = "s1"
+        XCTAssertEqual(snap.displayTitle(sessionId: "s1"), "优化灵动岛 展开动画")
+    }
+
+    func testMissingTaskMetadataNeverDisplaysSessionIDOrHomeDirectory() {
+        var snap = AgentSessionSnapshot()
+        snap.source = "codex"
+        snap.providerSessionId = "provider-id"
+        snap.cwd = FileManager.default.homeDirectoryForCurrentUser.path
+        XCTAssertNil(snap.projectName)
+        XCTAssertFalse(snap.displayTitle(sessionId: "internal-id").contains("internal-id"))
+        XCTAssertFalse(snap.displayTitle(sessionId: "internal-id").contains("provider-id"))
+        XCTAssertEqual(snap.displaySessionId(sessionId: "internal-id"), "provider-id")
+        snap.lastUserPrompt = "  \n"
+        snap.lastUserPrompt = String(repeating: "🧑🏽‍💻", count: 80)
+        XCTAssertEqual(snap.displayTitle(sessionId: "internal-id").count, 65)
+        XCTAssertTrue(snap.displayTitle(sessionId: "internal-id").hasSuffix("…"))
+    }
+
+    func testRecentActivityAgeUsesActivityTimeAndClampsFutureDates() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        XCTAssertEqual(agentActivityAge(now, from: now), L10n.text("agents.activity.now"))
+        XCTAssertEqual(agentActivityAge(now.addingTimeInterval(30), from: now), L10n.text("agents.activity.now"))
+        XCTAssertEqual(agentActivityAge(now.addingTimeInterval(-25), from: now),
+                       String(format: L10n.text("agents.activity.seconds"), 25))
+        XCTAssertEqual(agentActivityAge(now.addingTimeInterval(-120), from: now),
+                       String(format: L10n.text("agents.activity.minutes"), 2))
+    }
+
+    func testCodexTitleIndexSkipsMalformedRowsAndUsesNewestMatchingTitle() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("titles-\(UUID()).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let rows = [
+            "{\"id\":\"target\",\"thread_name\":\"旧标题\"}",
+            "{\"id\":\"other\",\"thread_name\":\"其他会话\"}",
+            "{\"id\":\"target\",\"thread_name\":\" 新标题 \"}",
+            "{\"id\":\"target\",\"thread_name\":\" \"}",
+            "{unfinished"
+        ]
+        try rows.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertEqual(AgentSessionStore.localCodexTitle(sessionId: "target", indexURL: url), "新标题")
+        XCTAssertNil(AgentSessionStore.localCodexTitle(sessionId: "missing", indexURL: url))
+    }
+
     // MARK: - Prompt / tool lifecycle
 
     func testUserPromptSubmitRecordsPromptAndClearsInterruptedAndFailure() throws {
