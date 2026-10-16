@@ -136,13 +136,10 @@ struct ApprovalCard: View {
   private var contextRow: some View {
     HStack(spacing: 6) {
       AgentMascotView(source: session?.source ?? "claude", status: .waitingApproval, size: type.icon)
-      Text(session?.displayTitle(sessionId: request.sessionId) ?? L10n.text("agents.task.pending"))
+      let title = session?.displayTitle(sessionId: request.sessionId) ?? L10n.text("agents.task.pending")
+      Text([session?.projectName, title].compactMap { $0 }.joined(separator: " "))
         .font(.system(size: type.body, weight: .bold, design: .monospaced))
         .foregroundStyle(.white.opacity(0.9))
-        .lineLimit(1)
-      Text(session?.projectName ?? "")
-        .font(.system(size: type.secondary, design: .monospaced))
-        .foregroundStyle(.white.opacity(0.5))
         .lineLimit(1)
       Spacer(minLength: 2)
       Text(queuePosition)
