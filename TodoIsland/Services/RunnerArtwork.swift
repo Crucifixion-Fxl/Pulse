@@ -2,56 +2,73 @@ import CryptoKit
 import Foundation
 import ImageIO
 
-/// Upstream artwork remains upstream; the app caches a pinned, verified sheet
-/// locally instead of redistributing artwork under the code's MIT license.
+/// Complete skeleton loops rendered at >=60 samples/second, including the
+/// upstream secondary motion. Playback needs neither a web view nor a network.
 enum RunnerArtwork {
-  static let revision = "85896750a3e4198c278e443efe77e58142aa9709"
-  static let digest = "0136013a773feeeca74e0fc4653c4892d1ae2ccec219649af6e62cb54072a252"
-  static let source = URL(string: "https://raw.githubusercontent.com/TonyNa-code/desktop-pet/\(revision)/assets/characters/default/preview.png")!
-  static let frameCount = 8
-  static let frameInterval: TimeInterval = 0.1
-
-  enum Failure: Error { case invalidArtwork, downloadFailed }
-
-  static var cacheURL: URL {
-    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("TodoIsland/CharacterAssets/\(digest).png")
+  struct Character: Decodable, Equatable, Sendable {
+    let id: String
+    let name: String
+    let animation: String
+    let duration: TimeInterval
+    let frameCount: Int
+    let frameWidth: Int
+    let frameHeight: Int
+    let columns: Int
+    let sha256: String
   }
 
-  static func load() async throws -> [CGImage] {
-    let file = cacheURL
-    if let data = try? Data(contentsOf: file), let frames = try? verifiedFrames(data) {
-      return frames
+  struct Clip: @unchecked Sendable {
+    let character: Character
+    let frames: [CGImage]
+  }
+
+  private struct Manifest: Decodable { let characters: [Character] }
+  enum Failure: Error { case invalidArtwork, missingArtwork }
+
+  static let characters: [Character] = {
+    guard let url = Bundle.main.url(forResource: "RunnerCharacters", withExtension: "json"),
+      let data = try? Data(contentsOf: url),
+      let manifest = try? JSONDecoder().decode(Manifest.self, from: data),
+      manifest.characters.count == 7 else { return [] }
+    return manifest.characters
+  }()
+
+  /// Calendar weekday is Sunday=1, while the manifest begins on Monday.
+  static func character(on date: Date, calendar: Calendar = .autoupdatingCurrent) -> Character? {
+    guard characters.count == 7 else { return nil }
+    return characters[(calendar.component(.weekday, from: date) + 5) % 7]
+  }
+
+  static func nextDay(after date: Date, calendar: Calendar = .autoupdatingCurrent) -> Date {
+    calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date))!
+  }
+
+  static func load(_ character: Character) throws -> Clip {
+    guard let url = Bundle.main.url(forResource: "runner-\(character.id)", withExtension: "png") else {
+      throw Failure.missingArtwork
     }
-    let request = URLRequest(url: source, timeoutInterval: 20)
-    let (data, response) = try await URLSession.shared.data(for: request)
-    guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.downloadFailed }
-    let frames = try verifiedFrames(data)
-    try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try data.write(to: file, options: .atomic)
-    return frames
+    return Clip(character: character, frames: try verifiedFrames(Data(contentsOf: url), character: character))
   }
 
-  static func verifiedFrames(_ data: Data) throws -> [CGImage] {
-    guard data.count < 2_000_000,
-      SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == digest,
+  static func verifiedFrames(_ data: Data, character: Character) throws -> [CGImage] {
+    guard data.count < 10_000_000,
+      character.frameCount > 1, character.frameCount <= 240,
+      character.duration > 0, character.duration <= 4,
+      character.frameWidth == 128, character.frameHeight == 128, character.columns == 8,
+      SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == character.sha256,
       let source = CGImageSourceCreateWithData(data as CFData, nil),
       let sheet = CGImageSourceCreateImageAtIndex(source, 0, nil),
-      sheet.width == 768, sheet.height == 832 else { throw Failure.invalidArtwork }
-    return try runningFrames(in: sheet)
-  }
-
-  /// The preview uses the same 8x8 atlas as sprite.png, at 1/8 resolution.
-  /// Its 96x104 frames still exceed the header's Retina rendering size.
-  static func runningFrames(in sheet: CGImage) throws -> [CGImage] {
-    guard sheet.width == 768, sheet.height == 832 else { throw Failure.invalidArtwork }
-    return try (0..<frameCount).map { column in
-      guard let frame = sheet.cropping(to: CGRect(x: column * 96, y: 104, width: 96, height: 104)),
-        let context = CGContext(data: nil, width: 96, height: 104, bitsPerComponent: 8,
-          bytesPerRow: 96 * 4, space: CGColorSpaceCreateDeviceRGB(),
+      sheet.width == character.columns * character.frameWidth,
+      sheet.height == ((character.frameCount + character.columns - 1) / character.columns) * character.frameHeight
+      else { throw Failure.invalidArtwork }
+    return try (0..<character.frameCount).map { index in
+      let width = character.frameWidth, height = character.frameHeight
+      guard let frame = sheet.cropping(to: CGRect(x: (index % character.columns) * width,
+        y: (index / character.columns) * height, width: width, height: height)),
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+          bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw Failure.invalidArtwork }
-      // Decode once off the main thread, not while the island is opening.
-      context.draw(frame, in: CGRect(x: 0, y: 0, width: 96, height: 104))
+      context.draw(frame, in: CGRect(x: 0, y: 0, width: width, height: height))
       guard let decoded = context.makeImage() else { throw Failure.invalidArtwork }
       return decoded
     }

@@ -1,0 +1,54 @@
+{
+  "revision": "4c4e667f87edd4fbba85ad26b781d82f757af537",
+  "characters": [
+    {
+      "id": "sigewinne",
+      "name": "希格雯",
+      "path": "Fontaine/Sigewinne/Chibi/xgw",
+      "animation": "run",
+      "skin": "default"
+    },
+    {
+      "id": "furina",
+      "name": "芙宁娜",
+      "path": "Fontaine/Furina/Chibi/funina",
+      "animation": "动作_走路",
+      "skin": "朝右"
+    },
+    {
+      "id": "navia",
+      "name": "娜维娅",
+      "path": "Fontaine/Navia/Chibi/nwyxr",
+      "animation": "walk",
+      "skin": "you"
+    },
+    {
+      "id": "nahida",
+      "name": "纳西妲",
+      "path": "Sumeru/Nahida/Chibi/naxitan_Q",
+      "animation": "R_walk",
+      "skin": "default"
+    },
+    {
+      "id": "clorinde",
+      "name": "克洛琳德",
+      "path": "Fontaine/Clorinde/Chibi/klld",
+      "animation": "walk",
+      "skin": "right"
+    },
+    {
+      "id": "emilie",
+      "name": "艾梅莉埃",
+      "path": "Fontaine/Emilie/Chibi/amla",
+      "animation": "walk",
+      "skin": "default"
+    },
+    {
+      "id": "chasca",
+      "name": "恰斯卡",
+      "path": "Natlan/Chasca/Chibi/qiasika",
+      "animation": "动作_跑",
+      "skin": "朝右"
+    }
+  ]
+}
