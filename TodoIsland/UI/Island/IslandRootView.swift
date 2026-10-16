@@ -381,9 +381,11 @@ struct IslandRootView: View {
         if model.canUseActiveList {
           // Mirrors the face on the right end: the Codex quota chip takes
           // the left end with the same 12pt corner-clearing inset.
-          collapsedQuotaChip
-            .padding(.leading, 12)
-            .frame(width: collapsedSideWidth, alignment: .leading)
+          Color.clear
+            .frame(width: collapsedSideWidth)
+            .overlay(alignment: .leading) {
+              collapsedQuotaChip.padding(.leading, 12)
+            }
         } else {
           HStack(spacing: 4) {
             Image(systemName: model.authorization == .fullAccess ? "list.bullet" : "lock.fill")

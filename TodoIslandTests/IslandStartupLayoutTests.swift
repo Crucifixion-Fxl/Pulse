@@ -11,10 +11,16 @@ final class IslandStartupLayoutTests: XCTestCase {
     defer { defaults.removePersistentDomain(forName: suite) }
     let model = AppModel(store: StartupLayoutStore(), defaults: defaults)
     await model.reload()
-    let host = NSHostingView(rootView: IslandRootView()
+    // Pin the display and use its actual bar geometry. A fixed 340×30
+    // fixture misplaces the surface on a notched display, and a nil id
+    // changes metrics whenever the pointer moves to another monitor.
+    let screen = try XCTUnwrap(NSScreen.screens.first)
+    let displayID = try XCTUnwrap(screen.todoIslandDisplayID)
+    let size = DisplayGeometryCalculator.geometry(for: DisplaySupport.metrics(for: screen)).collapsedSize
+    let host = NSHostingView(rootView: IslandRootView(displayID: displayID)
       .environmentObject(model).environmentObject(AgentSessionStore()))
     host.sizingOptions = []
-    let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 340, height: 30),
+    let window = NSWindow(contentRect: NSRect(origin: NSPoint(x: 100, y: 100), size: size),
       styleMask: .borderless, backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.contentView = host
@@ -28,7 +34,8 @@ final class IslandStartupLayoutTests: XCTestCase {
       host.cacheDisplay(in: host.bounds, to: bitmap)
       var xs: [Int] = []
       for y in 0..<bitmap.pixelsHigh {
-        for x in 0..<bitmap.pixelsWide {
+        // Ignore the quota chip; only the right-hand bot is under test.
+        for x in (bitmap.pixelsWide * 2 / 3)..<bitmap.pixelsWide {
           guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
           if color.redComponent > 0.8 && color.greenComponent > 0.8 && color.blueComponent > 0.8 {
             xs.append(x)
@@ -39,7 +46,9 @@ final class IslandStartupLayoutTests: XCTestCase {
       centers.append(center)
     }
     print("Startup bot normalized centers: \(centers)")
-    XCTAssertTrue(centers.allSatisfy { (0.88...0.96).contains($0) },
+    let faceSize = min(26, max(18, size.height - 6)).rounded()
+    let expected = (size.width - 12 - faceSize / 2) / size.width
+    XCTAssertTrue(centers.allSatisfy { abs($0 - expected) < 0.02 },
       "Bot must remain at the trailing edge before, during, and after hidden pane prewarm: \(centers)")
   }
 }
