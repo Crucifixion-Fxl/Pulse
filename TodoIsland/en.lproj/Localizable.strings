@@ -197,3 +197,5 @@
 "agents.activity.minutes" = "%dm ago";
 "agents.activity.hours" = "%dh ago";
 "agents.activity.days" = "%dd ago";
+
+"island.quota.demo" = "Demo";

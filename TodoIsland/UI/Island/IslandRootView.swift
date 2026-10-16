@@ -327,6 +327,8 @@ struct IslandRootView: View {
         if !usesCompositorTransitions, effectiveState != .collapsed, model.canUseActiveList {
           HStack(spacing: 0) {
             IslandStatusItemView(item: .quota, displayID: displayID).frame(width: 60)
+            IslandStatusItemView(item: .additionalQuotas, displayID: displayID)
+              .frame(width: 170).padding(.leading, 12)
             Spacer(minLength: 0)
             IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
           }

@@ -2,6 +2,7 @@ import SwiftUI
 
 enum IslandStatusItem: CaseIterable {
   case quota
+  case additionalQuotas
   case bot
 }
 
@@ -18,6 +19,11 @@ struct IslandStatusItemView: View {
       .map { DisplayGeometryCalculator.statusHeaderHeight(for: $0) } ?? 32
   }
 
+  private var isExpanded: Bool {
+    IslandRouting.effectiveState(global: model.islandState,
+      activeDisplayID: model.hostDisplayID, windowDisplayID: displayID) != .collapsed
+  }
+
   var body: some View {
     Group {
       if model.canUseActiveList {
@@ -28,6 +34,19 @@ struct IslandStatusItemView: View {
           }) {
             CollapsedQuotaChipView(subscription: subscription)
           }
+        case .additionalQuotas:
+          HStack(spacing: 16) {
+            ForEach([AIUsageVendor.openAI, .zhipuGLM, .anthropic]
+              .filter { $0 != model.collapsedQuotaVendor }, id: \.self) { vendor in
+              if let subscription = model.aiUsage?.subscriptions.first(where: { $0.vendor == vendor }) {
+                CollapsedQuotaChipView(subscription: subscription,
+                  label: vendor == .anthropic ? "Anthropic" : nil,
+                  showsSampleBadge: true)
+                  .fixedSize(horizontal: true, vertical: false)
+              }
+            }
+          }
+          .accessibilityHidden(!isExpanded)
         case .bot:
           CollapsedBotFaceView(
             size: min(26, max(18, barHeight - 6)).rounded(),
@@ -36,13 +55,11 @@ struct IslandStatusItemView: View {
             isHovered: model.isPointerInsideIsland,
             isAlert: agentStore.hasPending,
             activity: CollapsedBotState.activity(in: agentStore.sessions),
-            isAnimated: !reduceMotion && (model.isCollapsedIslandVisible
-              || IslandRouting.effectiveState(global: model.islandState,
-                activeDisplayID: model.hostDisplayID, windowDisplayID: displayID) != .collapsed))
+            isAnimated: !reduceMotion && (model.isCollapsedIslandVisible || isExpanded))
         }
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity,
-      alignment: item == .quota ? .leading : .center)
+      alignment: item == .bot ? .center : .leading)
   }
 }

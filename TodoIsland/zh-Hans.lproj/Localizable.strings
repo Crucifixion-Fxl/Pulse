@@ -197,3 +197,5 @@
 "agents.activity.minutes" = "%d 分钟前";
 "agents.activity.hours" = "%d 小时前";
 "agents.activity.days" = "%d 天前";
+
+"island.quota.demo" = "示例";
