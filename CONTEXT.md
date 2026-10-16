@@ -1,6 +1,6 @@
-# Todo Island
+# Pulse
 
-Todo Island is a macOS accessory application for viewing and managing unfinished reminders from iCloud and its own on-device storage in a notch-attached surface.
+Pulse is a personal macOS accessory application that brings reminders, AI agent activity and usage, music, clipboard history, and local weather into a notch-attached surface.
 
 ## Language
 
@@ -9,11 +9,11 @@ An item belonging to a Reminder List, with a title and optional Due Date and Pri
 _Avoid_: Todo, task
 
 **Pending Reminder**:
-A Reminder that has not been completed. Todo Island presents only Pending Reminders in its normal list views.
+A Reminder that has not been completed. Pulse presents only Pending Reminders in its normal list views.
 _Avoid_: Open todo, incomplete task
 
 **Completed Reminder**:
-A Reminder that has been marked complete. Todo Island retains Completed Reminders in their source but does not present a completed-history view.
+A Reminder that has been marked complete. Pulse retains Completed Reminders in their source but does not present a completed-history view.
 _Avoid_: Deleted Reminder, archived task
 
 **Reminder List**:
@@ -21,7 +21,7 @@ A user-defined collection of Reminders owned by exactly one Reminder Source.
 _Avoid_: Calendar, category
 
 **Reminder Source**:
-The system that owns a Reminder List and its Reminders. Todo Island supports the iCloud Source.
+The system that owns a Reminder List and its Reminders. Pulse supports the iCloud Source.
 _Avoid_: Account, storage mode, provider
 
 **iCloud Source**:
@@ -29,7 +29,7 @@ The Reminder Source backed by Apple Reminders and synchronized through iCloud.
 _Avoid_: Cloud mode, Apple source, local source
 
 **Active List**:
-The iCloud Reminder List the Island currently tracks. Todo Island picks it automatically; switching and managing lists happens in Apple Reminders.
+The iCloud Reminder List the Island currently tracks. Pulse picks it automatically; switching and managing lists happens in Apple Reminders.
 _Avoid_: Selected calendar, current category
 
 **Island**:
@@ -61,7 +61,7 @@ The in-Island experience in which a user must explicitly choose Collapsed Island
 _Avoid_: Onboarding page, setup window
 
 **Host Display**:
-The single display that currently hosts the Island. Todo Island determines it from the display containing the pointer rather than asking the user to select one.
+The single display that currently hosts the Island. Pulse determines it from the display containing the pointer rather than asking the user to select one.
 _Avoid_: Selected Display, main monitor, primary screen
 
 **Island Preview**:
@@ -101,7 +101,7 @@ The user-defined positions of Pending Reminders in one Reminder List after its f
 _Avoid_: Automatic order, global order
 
 **Recurring Reminder**:
-A Reminder whose repetition rule is managed in iCloud Reminders. Todo Island can present and complete it but does not change its repetition rule.
+A Reminder whose repetition rule is managed in iCloud Reminders. Pulse can present and complete it but does not change its repetition rule.
 _Avoid_: Repeating task, recurrence item
 
 **All Done**:

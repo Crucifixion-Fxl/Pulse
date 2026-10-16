@@ -1,14 +1,12 @@
-# Todo Island
+# Pulse
 
-Todo Island is a native macOS 14+ menu-bar application that presents and manages pending reminders from iCloud or Todo Island's private local storage in a Dynamic Island-style surface on the display where the pointer is currently working.
+Pulse is a native macOS 14+ workspace in the menu bar: reminders, AI agent activity and usage, music, clipboard history, and local weather, gathered in a Dynamic Island-style surface that follows the display you are working on.
 
 ## Download
 
-Grab `TodoIsland-<version>.dmg` from [GitHub Releases](https://github.com/Crucifixion-Fxl/TodoIsland/releases/latest), drag **TodoIsland.app** to **Applications**, and launch. Builds are ad-hoc signed — if Gatekeeper complains, right-click the app → **Open**, or run:
+Download available builds from [GitHub Releases](https://github.com/Crucifixion-Fxl/Pulse/releases/latest). New builds produce **Pulse.app**; older releases may still be named **TodoIsland.app**. Drag the app into **Applications** to install.
 
-```sh
-xattr -cr /Applications/TodoIsland.app
-```
+This project was previously called Todo Island. Pulse keeps the existing app identity and local data locations, so existing reminders, settings and agent integrations continue to work after upgrading.
 
 ## Features
 
@@ -18,6 +16,9 @@ xattr -cr /Applications/TodoIsland.app
 - **Completion feedback** — the circle fills and the checkmark draws in, the title fades, and the row closes smoothly without recentering the list. Successful completions can be undone in reverse order for eight seconds; text editing keeps its own undo.
 - **Day Schedule grouped by List** — same-List tasks stay together, ordered like the Lists themselves, with overdue items greeting today.
 - **Quick Add** — the Task Input creates a reminder on the selected day in any List; the first click on the hover preview pins the Island and puts the caret in the field.
+- **AI agent activity** — live coding-agent sessions and requests for attention.
+- **Clipboard history** — recent clipboard content in a dedicated panel.
+- **Local weather** — current-city conditions beside the bot, with a clickable detail panel.
 - **AI usage dashboard** — today's tokens with an input/output/cache split, a fifteen-day trend, and per-subscription weekly quota cards (sample data until real providers land).
 - **Music panel** — the system Now Playing (any player, e.g. NetEase Cloud Music) with artwork, progress, and controls on the left; time-synced lyrics with translations on the right, fetched from NetEase with an LRCLIB fallback.
 - **List management** — iCloud Reminders plus a private local source with per-List accents, renaming, and deletion summaries.
@@ -26,8 +27,8 @@ xattr -cr /Applications/TodoIsland.app
 
 ## Open and run
 
-1. Open `TodoIsland.xcodeproj` in Xcode 26 or newer.
-2. Select the `TodoIsland` scheme and **My Mac** destination.
+1. Open `Pulse.xcodeproj` in Xcode 26 or newer.
+2. Select the `Pulse` scheme and **My Mac** destination.
 3. Run the application.
 4. Pick the Collapsed Island stay mode in **Settings → Island** (defaults to always visible).
 5. Grant Reminders access for iCloud or choose **Use Local** to work without that permission.
@@ -38,10 +39,10 @@ The checked-in project uses `Sign to Run Locally`, the bundle identifier `com.fx
 
 ```sh
 xcodebuild \
-  -project TodoIsland.xcodeproj \
-  -scheme TodoIsland \
+  -project Pulse.xcodeproj \
+  -scheme Pulse \
   -configuration Debug \
-  -derivedDataPath /tmp/TodoIslandDerivedData \
+  -derivedDataPath /tmp/PulseDerivedData \
   build
 ```
 
@@ -49,11 +50,11 @@ xcodebuild \
 
 ```sh
 xcodebuild \
-  -project TodoIsland.xcodeproj \
-  -scheme TodoIsland \
+  -project Pulse.xcodeproj \
+  -scheme Pulse \
   -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath /tmp/TodoIslandDerivedData \
+  -derivedDataPath /tmp/PulseDerivedData \
   test
 ```
 
@@ -65,6 +66,6 @@ xcodebuild \
 
 ## Privacy and source boundary
 
-iCloud Reminder content is accessed through EventKit. Todo Island Local lists and reminders are stored in a sandboxed, versioned SwiftData store in Application Support with CloudKit synchronization disabled. Todo Island has no backend, analytics SDK, or content logging.
+iCloud Reminder content is accessed through EventKit. Pulse Local lists and reminders are stored in a sandboxed, versioned SwiftData store in Application Support with CloudKit synchronization disabled. Pulse has no backend, analytics SDK, or content logging.
 
 The Island implementation is original code informed by the public architectural approach of boring.notch. No GPLv3 source or artwork from boring.notch is copied into this project.
