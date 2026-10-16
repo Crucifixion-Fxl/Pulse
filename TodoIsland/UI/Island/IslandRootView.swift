@@ -799,8 +799,14 @@ struct IslandRootView: View {
         ForEach(0..<(MonthCalendar.totalDayCount / 7), id: \.self) { week in
           HStack(spacing: 0) {
             ForEach(0..<7, id: \.self) { weekday in
-              if let day = grid.day(at: week * 7 + weekday) {
+              if let day = grid.day(at: week * 7 + weekday), day.isInMonth {
                 calendarDayCell(day, today: today, counts: counts, metrics: metrics)
+              } else {
+                Color.clear
+                  .frame(height: metrics.cellMinHeight)
+                  .frame(maxWidth: .infinity)
+                  .allowsHitTesting(false)
+                  .accessibilityHidden(true)
               }
             }
           }
@@ -856,7 +862,7 @@ struct IslandRootView: View {
         Text("\(calendar.component(.day, from: dayDate))")
           .font(.system(size: metrics.daySize, weight: isSelected || isToday ? .semibold : .regular))
           .foregroundStyle(
-            dayCellTextColor(isSelected: isSelected, isToday: isToday, isInMonth: day.isInMonth)
+            dayCellTextColor(isSelected: isSelected, isToday: isToday)
           )
           .frame(width: metrics.circleSize, height: metrics.circleSize)
           .background {
@@ -898,6 +904,7 @@ struct IslandRootView: View {
     for week in 0..<(MonthCalendar.totalDayCount / 7) {
       for weekday in 0..<7 {
         if let day = grid.day(at: week * 7 + weekday),
+          day.isInMonth,
           calendar.isDate(day.date, inSameDayAs: model.selectedDay)
         {
           return (week, weekday)
@@ -942,11 +949,11 @@ struct IslandRootView: View {
       .offset(x: beadX, y: beadY)
   }
 
-  private func dayCellTextColor(isSelected: Bool, isToday: Bool, isInMonth: Bool) -> Color {
+  private func dayCellTextColor(isSelected: Bool, isToday: Bool) -> Color {
     // White keeps the number readable through the translucent bead.
     if isSelected { return .white }
     if isToday { return accentColor }
-    return isInMonth ? .white.opacity(0.85) : .white.opacity(0.3)
+    return .white.opacity(0.85)
   }
 
   /// Per-List dot colours for one day: one accent dot per List that has
