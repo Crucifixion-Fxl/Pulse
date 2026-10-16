@@ -13,7 +13,6 @@ private enum Layout {
 /// puts it back on the system pasteboard.
 struct ClipboardPanelView: View {
   @EnvironmentObject private var model: AppModel
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// Decoded-once thumbnails: decoding at render time hitches the first
   /// scroll frame, so every item's image is preloaded into an NSCache the
@@ -50,21 +49,13 @@ struct ClipboardPanelView: View {
     static let contentHeight: CGFloat = 324
   }
 
-  /// Card-granular position: the index at the rail's left edge. The
-  /// pixel offset derives from it (index × pitch), so the rail can only
-  /// ever rest card-aligned — no fractional positions exist.
-  @State private var pageIndex: Int = 0
-  /// Precise-delta accumulation toward the next page step.
-  @State private var pendingPrecise: CGFloat = 0
-  @State private var pendingDecay: Task<Void, Never>?
-  @State private var wheelMonitor: Any?
+  @State private var leadingItemID: UUID?
   @State private var copiedFlashID: UUID?
 
-  private var cardPitch: CGFloat { Layout.cardWidth + Layout.cardSpacing }
-  private var pageCount: Int {
-    max(1, model.clipboardItems.count - 2)
+  private var pageCount: Int { max(1, model.clipboardItems.count - 2) }
+  private var clampedIndex: Int {
+    min(model.clipboardItems.firstIndex { $0.id == leadingItemID } ?? 0, pageCount - 1)
   }
-  private var clampedIndex: Int { min(max(pageIndex, 0), pageCount - 1) }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -78,10 +69,8 @@ struct ClipboardPanelView: View {
     }
     .padding(.top, 2)
     .onAppear {
-      installWheelMonitor()
       ThumbnailCache.shared.preload(model.clipboardItems)
     }
-    .onDisappear { removeWheelMonitor() }
     .onChange(of: model.clipboardItems) { _, items in
       ThumbnailCache.shared.preload(items)
     }
@@ -101,75 +90,19 @@ struct ClipboardPanelView: View {
   // MARK: - Rail
 
   private var rail: some View {
-    HStack(spacing: Layout.cardSpacing) {
-      ForEach(model.clipboardItems) { item in
-        ClipboardCard(item: item, flashCopied: copiedFlashID == item.id) {
-          model.recopyClipboardItem(item)
-          flashCopied(item)
+    ClipboardCardRail(itemIDs: model.clipboardItems.map(\.id), leadingItemID: $leadingItemID) {
+      HStack(spacing: Layout.cardSpacing) {
+        ForEach(model.clipboardItems) { item in
+          ClipboardCard(item: item, flashCopied: copiedFlashID == item.id) {
+            model.recopyClipboardItem(item)
+            flashCopied(item)
+          }
+          .frame(width: Layout.cardWidth, height: Layout.cardHeight)
         }
-        .frame(width: Layout.cardWidth, height: Layout.cardHeight)
       }
+      .scrollTargetLayout()
     }
-    .offset(x: -CGFloat(clampedIndex) * cardPitch)
-    .animation(
-      reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.9),
-      value: clampedIndex
-    )
-    .frame(width: Layout.viewport, height: Layout.cardHeight, alignment: .leading)
-    .clipped()
-  }
-
-  /// Notched mice step one card per event; precise devices (trackpads,
-  /// smooth wheels) accumulate against a threshold that commits exactly
-  /// one card per crossing, with a decay so stale momentum never fires.
-  private static let preciseThreshold: CGFloat = 36
-
-  private func installWheelMonitor() {
-    guard wheelMonitor == nil else { return }
-    wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-      let deltaY = event.scrollingDeltaY
-      let deltaX = event.scrollingDeltaX
-      guard deltaY != 0 || deltaX != 0 else { return event }
-      let primary = deltaY != 0 ? deltaY : -deltaX
-      if event.hasPreciseScrollingDeltas {
-        onPreciseScroll(primary)
-      } else {
-        // Wheel-down returns toward the newest items (natural reading
-        // direction for a history rail): down = newer, up = older.
-        stepPage(primary > 0 ? -1 : 1)
-      }
-      return event
-    }
-  }
-
-  private func onPreciseScroll(_ delta: CGFloat) {
-    pendingPrecise += delta
-    pendingDecay?.cancel()
-    pendingDecay = Task { @MainActor in
-      try? await Task.sleep(for: .milliseconds(220))
-      guard !Task.isCancelled else { return }
-      pendingPrecise = 0
-    }
-    // Keep the remainder: a fast fling carries many crossings, and
-    // discarding them turned speed into single-card crawls.
-    let crossings = Int(abs(pendingPrecise) / Self.preciseThreshold)
-    guard crossings > 0 else { return }
-    let sign: CGFloat = pendingPrecise > 0 ? 1 : -1
-    pendingPrecise -= CGFloat(crossings) * Self.preciseThreshold * sign
-    stepPage((pendingPrecise > 0 ? -1 : 1) * min(crossings, 4))
-  }
-
-  private func stepPage(_ delta: Int) {
-    let target = min(max(clampedIndex + delta, 0), pageCount - 1)
-    guard target != clampedIndex else { return }
-    pageIndex = target
-  }
-
-  private func removeWheelMonitor() {
-    if let wheelMonitor {
-      NSEvent.removeMonitor(wheelMonitor)
-    }
-    wheelMonitor = nil
+    .frame(width: Layout.viewport, height: Layout.cardHeight)
   }
 
   private var pageDots: some View {
