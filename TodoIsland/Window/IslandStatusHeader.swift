@@ -1,24 +1,28 @@
 import AppKit
 import QuartzCore
 
-/// Live status items sit above the content snapshots. Only their positions
-/// animate, using the silhouette's spring and clock; they never crossfade.
+/// Live status items sit above the content snapshots and travel with the
+/// silhouette. The original quota and bot stay opaque; extra vendors fade
+/// in after the expanding left wing has room for them.
 @MainActor
 final class IslandStatusHeader: NSView {
   let quota: NSView
   let bot: NSView
+  let additionalQuotas: NSView?
+  private var items: [NSView] { [quota, bot] + [additionalQuotas].compactMap { $0 } }
   var barHeight: CGFloat
 
   override var isFlipped: Bool { true }
 
-  init(quota: NSView, bot: NSView, barHeight: CGFloat) {
+  init(quota: NSView, bot: NSView, additionalQuotas: NSView? = nil, barHeight: CGFloat) {
     self.quota = quota
     self.bot = bot
+    self.additionalQuotas = additionalQuotas
     self.barHeight = barHeight
     super.init(frame: .zero)
     wantsLayer = true
     layer?.zPosition = 2
-    for item in [quota, bot] {
+    for item in items {
       item.wantsLayer = true
       addSubview(item)
     }
@@ -27,7 +31,7 @@ final class IslandStatusHeader: NSView {
   required init?(coder: NSCoder) { nil }
 
   var presentedItemFrames: [CGRect] {
-    [quota, bot].map { $0.layer?.presentation()?.frame ?? $0.frame }
+    items.map { $0.layer?.presentation()?.frame ?? $0.frame }
   }
 
   /// Rebase the visible positions into the resized transparent envelope,
@@ -35,7 +39,7 @@ final class IslandStatusHeader: NSView {
   func prepare(envelope: CGSize, shiftX: CGFloat) {
     let frames = presentedItemFrames
     frame = CGRect(origin: .zero, size: envelope)
-    for (item, visible) in zip([quota, bot], frames) {
+    for (item, visible) in zip(items, frames) {
       item.layer?.removeAnimation(forKey: "headerPosition")
       item.frame = visible.offsetBy(dx: shiftX, dy: 0)
     }
@@ -48,9 +52,10 @@ final class IslandStatusHeader: NSView {
     let frames = [
       CGRect(x: left + inset, y: 0, width: 60, height: barHeight),
       CGRect(x: left + size.width - inset - faceSize / 2 - 16,
-        y: 0, width: 32, height: barHeight)
+        y: 0, width: 32, height: barHeight),
+      CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight)
     ]
-    for (item, destination) in zip([quota, bot], frames) {
+    for (item, destination) in zip(items, frames) {
       let start = item.layer?.position ?? .zero
       item.frame = destination
       guard let layer = item.layer else { continue }
@@ -61,6 +66,23 @@ final class IslandStatusHeader: NSView {
         movement.toValue = NSValue(point: layer.position)
         layer.add(movement, forKey: "headerPosition")
       }
+    }
+    guard let additionalQuotas, let layer = additionalQuotas.layer else { return }
+    let opacity = layer.presentation()?.opacity ?? layer.opacity
+    layer.removeAnimation(forKey: "headerReveal")
+    let target: Float = state == .collapsed ? 0 : 1
+    layer.opacity = target
+    if let spring {
+      let reveal = CABasicAnimation(keyPath: "opacity")
+      reveal.fromValue = opacity
+      reveal.toValue = target
+      // Wait until the left wing clears the physical notch before revealing
+      // the extra vendors; hide promptly when that wing folds back in.
+      reveal.beginTime = spring.beginTime + (state == .collapsed ? 0 : 0.24)
+      reveal.duration = state == .collapsed ? 0.08 : 0.18
+      reveal.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+      reveal.fillMode = .backwards
+      layer.add(reveal, forKey: "headerReveal")
     }
   }
 

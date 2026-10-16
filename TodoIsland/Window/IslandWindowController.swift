@@ -184,6 +184,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         return host
       }
       let header = IslandStatusHeader(quota: statusItem(.quota), bot: statusItem(.bot),
+        additionalQuotas: statusItem(.additionalQuotas),
         barHeight: DisplayGeometryCalculator.statusHeaderHeight(for: DisplaySupport.metrics(for: screen)))
       let transition = IslandTransitionView(content: hostingView, statusHeader: header)
       panel.contentView = transition

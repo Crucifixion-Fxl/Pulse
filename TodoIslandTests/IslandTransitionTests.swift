@@ -65,6 +65,33 @@ final class IslandTransitionTests: XCTestCase {
     XCTAssertNil(header.hitTest(CGPoint(x: 20, y: 16)), "Surface clicks pass through the header")
   }
 
+  func testAdditionalQuotasRevealOnlyAfterOpeningAndHideOnReversal() async throws {
+    let extras = NSView()
+    let header = IslandStatusHeader(quota: NSView(), bot: NSView(),
+      additionalQuotas: extras, barHeight: collapsed.height)
+    let (window, transition, _) = fixture(header: header)
+    defer { window.close() }
+    XCTAssertEqual(extras.layer?.opacity, 0)
+    transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: true)
+    try await Task.sleep(for: .milliseconds(120))
+    XCTAssertEqual(extras.layer?.presentation()?.opacity ?? extras.layer?.opacity, 0,
+      "Extra vendors must not flash over the notch at the start of opening")
+    try await Task.sleep(for: .milliseconds(230))
+    let partial = try XCTUnwrap(extras.layer?.presentation()?.opacity)
+    XCTAssertGreaterThan(partial, 0)
+    XCTAssertLessThan(partial, 1, "Reveal gradually instead of inserting fully opaque chips")
+    transition.transition(to: collapsed, state: .collapsed, collapsedRadius: 18, animated: true)
+    try await Task.sleep(for: .milliseconds(160))
+    XCTAssertEqual(extras.layer?.presentation()?.opacity ?? extras.layer?.opacity, 0)
+    transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: true)
+    try await Task.sleep(for: .seconds(1.2))
+    XCTAssertEqual(extras.layer?.opacity, 1)
+    XCTAssertEqual(extras.frame.minX - header.quota.frame.minX, 72, accuracy: 0.5)
+    XCTAssertLessThanOrEqual(extras.frame.maxX, expanded.width / 2 - 90,
+      "Keep all vendor chips in the left wing, clear of the physical notch")
+    XCTAssertTrue(extras.superview === header)
+  }
+
   func testOpeningUnfoldsFromCenterBeforeSettling() async throws {
     let (window, transition, _) = fixture()
     defer { window.close() }
