@@ -93,10 +93,10 @@ final class IslandTransitionView: NSView {
     }
 
     let oldEnvelope = bounds.size
-    let fromPath =
-      isRunning
-      ? (silhouette.presentation()?.path ?? silhouette.path)
-      : path(size: previousSize, state: previousState, envelope: oldEnvelope)
+    // Start from the outline actually on screen, including a partially
+    // completed close/open, rather than reconstructing a nominal bar.
+    let fromPath = silhouette.presentation()?.path ?? silhouette.path
+      ?? path(size: previousSize, state: previousState, envelope: oldEnvelope)
     let outgoingOpacity = isRunning ? (live.layer?.presentation()?.opacity ?? 0) : 1
     if outgoingOpacity > 0.001 {
       guard let image = snapshot() else {
@@ -126,7 +126,7 @@ final class IslandTransitionView: NSView {
       return true
     }
     silhouette.removeAllAnimations()
-    let visibleSize = fromPath?.boundingBoxOfPath.size ?? previousSize
+    let visibleSize = fromPath.boundingBoxOfPath.size
     // Reserve room for spring overshoot without resizing the NSWindow per frame.
     let extra =
       state == .collapsed
@@ -140,7 +140,7 @@ final class IslandTransitionView: NSView {
     let dx = (envelope.width - oldEnvelope.width) / 2
     for image in images { image.position.x += dx }
     var shift = CGAffineTransform(translationX: dx, y: 0)
-    let startPath = fromPath?.copy(using: &shift)
+    let startPath = fromPath.copy(using: &shift)
     live.layer?.removeAllAnimations()
     live.layer?.opacity = 0
     layer?.mask = silhouette
@@ -217,8 +217,12 @@ final class IslandTransitionView: NSView {
     placeContent(size: frame.size)
     live.layer?.removeAllAnimations()
     live.layer?.opacity = 1
-    layer?.mask = nil
-    layer?.backgroundColor = NSColor.clear.cgColor
+    // Keep a single owner of the visible outline between transitions too.
+    // SwiftUI can prepare its destination content without changing the
+    // currently displayed bar's width, shoulders, or bottom corners.
+    silhouette.path = path(size: frame.size, state: targetState, envelope: frame.size)
+    layer?.mask = silhouette
+    layer?.backgroundColor = NSColor.black.cgColor
     overlay.isHidden = true
     silhouette.removeAllAnimations()
     for image in images {

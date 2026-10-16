@@ -361,7 +361,13 @@ struct IslandRootView: View {
   }
 
   private var islandShape: IslandSurfaceShape {
-    IslandSurfaceShape(
+    // The native compositor owns the silhouette even while settled.
+    // Changing SwiftUI's clip to the expanded shoulders at the old bar
+    // size would pull both edges inward before the queued spring starts.
+    if usesCompositorTransitions {
+      return IslandSurfaceShape(shoulderInset: 0, topShoulderDepth: 0, bottomRadius: 0)
+    }
+    return IslandSurfaceShape(
       shoulderInset: effectiveState == .collapsed ? 0 : 8,
       topShoulderDepth: effectiveState == .collapsed ? 0 : expandedTopShoulderDepth,
       bottomRadius: effectiveState == .collapsed

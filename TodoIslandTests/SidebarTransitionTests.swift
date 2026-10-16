@@ -5,6 +5,57 @@ import XCTest
 
 @MainActor
 final class SidebarTransitionTests: XCTestCase {
+  func testClickKeepsVisibleEdgesUntilCompositorTakesOver() async throws {
+    let suite = "OpeningVisibleEdges-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(store: SidebarLayoutStore(), defaults: defaults,
+      aiUsageProvider: SampleAIUsageProvider())
+    await model.reload()
+    let screen = try XCTUnwrap(NSScreen.screens.first)
+    let displayID = try XCTUnwrap(screen.todoIslandDisplayID)
+    model.setHostDisplayID(displayID)
+    let geometry = DisplayGeometryCalculator.geometry(for: DisplaySupport.metrics(for: screen))
+    let host = NSHostingView(rootView: IslandRootView(displayID: displayID,
+      usesCompositorTransitions: true).environmentObject(model).environmentObject(AgentSessionStore()))
+    host.sizingOptions = []
+    let surface = IslandTransitionView(content: host)
+    let window = NSWindow(contentRect: .zero, styleMask: .borderless,
+      backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.isOpaque = false
+    window.backgroundColor = .clear
+    window.contentView = surface
+    defer { window.close() }
+    let collapsed = CGRect(origin: CGPoint(x: 100, y: 150), size: geometry.collapsedSize)
+    surface.transition(to: collapsed, state: .collapsed, collapsedRadius: 14, animated: false)
+    window.orderFront(nil)
+    try await Task.sleep(for: .milliseconds(100))
+    func edgeWidth() throws -> CGFloat {
+      host.layoutSubtreeIfNeeded()
+      let bitmap = try XCTUnwrap(surface.bitmapImageRepForCachingDisplay(in: surface.bounds))
+      surface.cacheDisplay(in: surface.bounds, to: bitmap)
+      let y = bitmap.pixelsHigh / 2
+      let occupied = (0..<bitmap.pixelsWide).filter { x in
+        (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.9
+      }
+      return CGFloat(try XCTUnwrap(occupied.last) - (try XCTUnwrap(occupied.first)) + 1)
+        * surface.bounds.width / CGFloat(bitmap.pixelsWide)
+    }
+    let before = try edgeWidth()
+    model.pinIslandFromSurface(on: displayID)
+    let expanded = CGRect(x: collapsed.midX - geometry.expandedSize.width / 2,
+      y: collapsed.maxY - geometry.expandedSize.height,
+      width: geometry.expandedSize.width, height: geometry.expandedSize.height)
+    surface.transition(to: expanded, state: .pinned, collapsedRadius: 14, animated: true)
+    // Publishers have updated SwiftUI, while the native transition is
+    // deliberately queued for the next main-loop turn in production.
+    let afterClick = try edgeWidth()
+    print("Visible width before click=\(before), before compositor takeover=\(afterClick)")
+    XCTAssertGreaterThanOrEqual(afterClick, before - 1,
+      "A click must not clip the existing bar narrower before native expansion starts")
+  }
+
   func testOpeningEdgesNeverRetractBeforeReachingExpandedWidth() async throws {
     let suite = "OpeningEdges-\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!
@@ -86,16 +137,18 @@ final class SidebarTransitionTests: XCTestCase {
     let surfaces = NSApp.windows.filter { !existing.contains($0.windowNumber) }
       .compactMap { $0.contentView as? IslandTransitionView }
     XCTAssertFalse(surfaces.isEmpty)
+    let transition = try XCTUnwrap(surfaces.first {
+      $0.window?.screen?.todoIslandDisplayID == model.hostDisplayID
+    })
+    let collapsedWidth = try XCTUnwrap(transition.window).frame.width
     model.pinIslandForApproval()
     // Cold SwiftUI layout may consume the first event-loop turns. Wait for
-    // an actual compositor path, not merely a queued transition request.
+    // actual movement on the active display, not merely a queued request.
+    // Settled surfaces now retain their compositor mask too.
     for _ in 0..<25 {
-      if surfaces.contains(where: { $0.isRunning && $0.presentedSurfaceBounds != nil }) { break }
+      if (transition.presentedSurfaceBounds?.width ?? 0) > collapsedWidth + 1 { break }
       try await Task.sleep(for: .milliseconds(20))
     }
-    let transition = try XCTUnwrap(surfaces.first {
-      $0.isRunning && $0.presentedSurfaceBounds != nil
-    })
     let earlyWidth = try XCTUnwrap(transition.presentedSurfaceBounds).width
     try await Task.sleep(for: .milliseconds(300))
     XCTAssertEqual(model.islandState, .pinned)
