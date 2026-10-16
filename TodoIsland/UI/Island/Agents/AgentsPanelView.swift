@@ -172,6 +172,8 @@ private struct SessionCard: View {
   private var headerRow: some View {
     HStack(spacing: 6) {
       AgentStatusChip(label: status.label, color: status.color, type: type)
+        .fixedSize(horizontal: true, vertical: false)
+        .layoutPriority(3)
 
       if let project = session.projectName {
         AgentProjectCapsule(name: project, type: type)
@@ -181,10 +183,8 @@ private struct SessionCard: View {
         .foregroundStyle(.white.opacity(0.95))
         .lineLimit(1)
         .truncationMode(.tail)
-        .layoutPriority(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .help(session.displayTitle(sessionId: sessionID))
-
-      Spacer(minLength: 2)
 
       if let model = session.model, !model.isEmpty {
         Text(model)
