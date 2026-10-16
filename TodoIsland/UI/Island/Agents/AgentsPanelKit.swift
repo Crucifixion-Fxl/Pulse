@@ -74,6 +74,22 @@ struct AgentTypography {
   var icon: CGFloat { base + 2 }
 }
 
+/// Compact project context shared by session and approval headers.
+struct AgentProjectCapsule: View {
+  let name: String
+  let type: AgentTypography
+
+  var body: some View {
+    AgentStatusChip(label: name, color: .white.opacity(0.65), type: type)
+      .lineLimit(1)
+      .truncationMode(.middle)
+      .frame(maxWidth: 140)
+      .fixedSize(horizontal: true, vertical: false)
+      .layoutPriority(2)
+      .help(name)
+  }
+}
+
 /// Retained sidebar panes pause their frame drivers while hidden.
 private struct AgentPanelActiveKey: EnvironmentKey {
   static let defaultValue = true
