@@ -1211,6 +1211,14 @@ struct IslandRootView: View {
           }
           .padding(.top, 14)
           .padding(.bottom, 18)
+          .background {
+            ReminderScrollEvents(
+              isActive: model.islandState != .collapsed && selectedSidebarItem == .reminders,
+              reduceMotion: reduceMotion,
+              selectionRequest: model.selectionScrollRequestID
+            )
+            .id(model.selectedDay)
+          }
         }
         .scrollBounceBehavior(.basedOnSize)
         .onChange(of: model.selectionScrollRequestID) { _, _ in
