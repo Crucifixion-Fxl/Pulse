@@ -319,13 +319,18 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   }
 
   private func updateAllVisibility(animated: Bool) {
-    for id in windows.keys {
-      applyWindow(
-        IslandRouting.effectiveState(
+    // Visibility polls must never reapply geometry: a nonanimated request
+    // cancels an in-flight spring, even when its destination is unchanged.
+    // State/height/display subscriptions own geometry; the collapsed-frame
+    // watchdog below still repairs displaced, settled windows.
+    for (id, window) in windows {
+      updateVisibility(
+        of: window,
+        state: IslandRouting.effectiveState(
           global: model.islandState,
           activeDisplayID: model.hostDisplayID,
           windowDisplayID: id),
-        on: id,
+        displayID: id,
         expandedContentHeight: model.expandedContentHeight,
         animated: animated)
     }

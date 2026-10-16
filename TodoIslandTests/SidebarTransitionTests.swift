@@ -5,6 +5,43 @@ import XCTest
 
 @MainActor
 final class SidebarTransitionTests: XCTestCase {
+  func testVisibilityPollDoesNotCutShortLiveOpening() async throws {
+    let suite = "OpeningVisibility-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(store: SidebarLayoutStore(), defaults: defaults,
+      aiUsageProvider: SampleAIUsageProvider())
+    await model.reload()
+    let existing = Set(NSApp.windows.map(\.windowNumber))
+    let controller = IslandWindowController(model: model)
+    defer { withExtendedLifetime(controller) {} }
+    // Open shortly before the controller's one-second full-screen poll.
+    // This uses the actual SwiftUI content and production subscriptions.
+    try await Task.sleep(for: .milliseconds(700))
+    let surfaces = NSApp.windows.filter { !existing.contains($0.windowNumber) }
+      .compactMap { $0.contentView as? IslandTransitionView }
+    XCTAssertFalse(surfaces.isEmpty)
+    model.pinIslandForApproval()
+    // Cold SwiftUI layout may consume the first event-loop turns. Wait for
+    // an actual compositor path, not merely a queued transition request.
+    for _ in 0..<25 {
+      if surfaces.contains(where: { $0.isRunning && $0.presentedSurfaceBounds != nil }) { break }
+      try await Task.sleep(for: .milliseconds(20))
+    }
+    let transition = try XCTUnwrap(surfaces.first {
+      $0.isRunning && $0.presentedSurfaceBounds != nil
+    })
+    let earlyWidth = try XCTUnwrap(transition.presentedSurfaceBounds).width
+    try await Task.sleep(for: .milliseconds(300))
+    XCTAssertEqual(model.islandState, .pinned)
+    XCTAssertTrue(transition.isRunning,
+      "A visibility poll must not snap a live spring to its final frame")
+    XCTAssertGreaterThan(try XCTUnwrap(transition.presentedSurfaceBounds).width, earlyWidth)
+    try await Task.sleep(for: .seconds(1.2))
+    XCTAssertFalse(transition.isRunning)
+    XCTAssertEqual(transition.snapshotCount, 0)
+  }
+
   func testHiddenAgentTimelinePausesAndResumes() async throws {
     let recorder = SidebarFrameRecorder()
     let view = AgentMascotTimeline(interval: 0.05) { time in
