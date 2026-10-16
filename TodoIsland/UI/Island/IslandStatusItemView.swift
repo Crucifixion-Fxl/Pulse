@@ -5,7 +5,6 @@ enum IslandStatusItem: CaseIterable {
   case additionalQuotas
   case bot
   case weather
-  case runner
 }
 
 /// Mounted once per display so quota and bot animations survive opening.
@@ -60,8 +59,6 @@ struct IslandStatusItemView: View {
             isAnimated: !reduceMotion && (model.isCollapsedIslandVisible || isExpanded))
         case .weather:
           WeatherStatusView(store: model.weatherStore, isActive: isExpanded)
-        case .runner:
-          RunningCharacterView(store: model.runnerArtworkStore, isActive: isExpanded)
         }
       }
     }

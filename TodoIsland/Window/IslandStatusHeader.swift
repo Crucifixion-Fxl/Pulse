@@ -10,20 +10,18 @@ final class IslandStatusHeader: NSView {
   let bot: NSView
   let additionalQuotas: NSView?
   let weather: NSView?
-  let runner: NSView?
-  private var items: [NSView] { [quota, bot] + [additionalQuotas, weather, runner].compactMap { $0 } }
+  private var items: [NSView] { [quota, bot] + [additionalQuotas, weather].compactMap { $0 } }
   private var isExpanded = false
   var barHeight: CGFloat
 
   override var isFlipped: Bool { true }
 
   init(quota: NSView, bot: NSView, additionalQuotas: NSView? = nil,
-       weather: NSView? = nil, runner: NSView? = nil, barHeight: CGFloat) {
+       weather: NSView? = nil, barHeight: CGFloat) {
     self.quota = quota
     self.bot = bot
     self.additionalQuotas = additionalQuotas
     self.weather = weather
-    self.runner = runner
     self.barHeight = barHeight
     super.init(frame: .zero)
     wantsLayer = true
@@ -65,10 +63,7 @@ final class IslandStatusHeader: NSView {
       frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
     }
     if weather != nil {
-      frames.append(CGRect(x: botX - 228, y: 0, width: 156, height: barHeight))
-    }
-    if runner != nil {
-      frames.append(CGRect(x: botX - 64, y: 0, width: 52, height: barHeight))
+      frames.append(CGRect(x: botX - 164, y: 0, width: 156, height: barHeight))
     }
     for (item, destination) in zip(items, frames) {
       let start = item.layer?.position ?? .zero
@@ -82,7 +77,7 @@ final class IslandStatusHeader: NSView {
         layer.add(movement, forKey: "headerPosition")
       }
     }
-    for extra in [additionalQuotas, weather, runner].compactMap({ $0 }) {
+    for extra in [additionalQuotas, weather].compactMap({ $0 }) {
       reveal(extra, state: state, spring: spring)
     }
   }
