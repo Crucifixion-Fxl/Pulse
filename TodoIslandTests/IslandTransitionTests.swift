@@ -22,6 +22,38 @@ final class IslandTransitionTests: XCTestCase {
     return (window, transition, content)
   }
 
+  func testOpeningUnfoldsFromCenterBeforeSettling() async throws {
+    let (window, transition, _) = fixture()
+    defer { window.close() }
+    transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: true)
+    var samples: [(Double, CGFloat, Float)] = []
+    let start = CACurrentMediaTime()
+    for _ in 0..<14 {
+      try await Task.sleep(for: .milliseconds(50))
+      let bounds = try XCTUnwrap(transition.presentedSurfaceBounds)
+      let progress = (bounds.width - collapsed.width) / (expanded.width - collapsed.width)
+      samples.append((CACurrentMediaTime() - start, progress, transition.presentedContentOpacity))
+      if transition.isRunning {
+        XCTAssertEqual(bounds.midX, transition.bounds.midX, accuracy: 0.5,
+          "Both edges must travel symmetrically away from the center")
+      }
+    }
+    print("Opening time / width progress / content opacity: \(samples)")
+    let early = try XCTUnwrap(samples.first { $0.0 >= 0.09 })
+    XCTAssertLessThan(early.2, 0.15, "The shape should open before the content appears")
+    let revealed = try XCTUnwrap(samples.first { $0.0 >= 0.45 })
+    XCTAssertGreaterThan(revealed.2, 0.95, "Content must be ready before the spring settles")
+    let quarterSecond = try XCTUnwrap(samples.first { $0.0 >= 0.23 })
+    XCTAssertLessThan(quarterSecond.1, 0.85,
+      "Opening should still visibly unfold at 250ms, not already be full width")
+    XCTAssertGreaterThan(quarterSecond.1, 0.35, "Respond promptly without an artificial wait")
+    XCTAssertLessThanOrEqual(samples.map(\.1).max() ?? 0, 1.035,
+      "A content panel should settle with restrained overshoot")
+    try await Task.sleep(for: .milliseconds(700))
+    XCTAssertFalse(transition.isRunning)
+    XCTAssertEqual(window.frame, expanded)
+  }
+
   func testCompositorMovesWhileWindowAndLiveLayoutRemainFixed() async throws {
     let (window, transition, content) = fixture()
     defer { window.close() }

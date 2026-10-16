@@ -87,11 +87,11 @@ final class IslandStateTests: XCTestCase {
   func testMotionProfilesUseSmoothStateSpecificTiming() {
     XCTAssertEqual(
       IslandPresentationState.preview.motionProfile,
-      IslandMotionProfile(response: 0.5, dampingFraction: 0.68)
+      IslandMotionProfile(response: 0.78, dampingFraction: 0.82)
     )
     XCTAssertEqual(
       IslandPresentationState.pinned.motionProfile,
-      IslandMotionProfile(response: 0.44, dampingFraction: 0.75)
+      IslandMotionProfile.opening
     )
     XCTAssertEqual(
       IslandPresentationState.collapsed.motionProfile,
