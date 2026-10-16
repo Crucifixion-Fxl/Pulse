@@ -634,6 +634,7 @@ struct IslandRootView: View {
           reduceMotion ? nil : .smooth(duration: 0.19),
           value: model.selectedDay
         )
+        .animation(reduceMotion ? nil : .smooth(duration: 0.19), value: model.calendarMonth)
         .frame(width: metrics.paneWidth, alignment: .top)
         .background(
           GeometryReader { geo in
@@ -741,8 +742,8 @@ struct IslandRootView: View {
     metrics: ScheduleMetrics
   ) -> some View {
     let calendar = Calendar.current
-    let grid = MonthCalendar(containing: model.selectedDay, calendar: calendar)
-    let counts = ReminderSchedule.dayCounts(in: model.monthReminders, calendar: calendar)
+    let grid = MonthCalendar(containing: model.calendarMonth, calendar: calendar)
+    let counts = ReminderSchedule.dayCounts(in: model.calendarReminders, calendar: calendar)
     let today = calendar.startOfDay(for: Date())
 
     return VStack(alignment: .leading, spacing: 2) {
@@ -935,7 +936,7 @@ struct IslandRootView: View {
         pendingByList[reminder.listID, default: 0] += 1
       }
     }
-    count(model.monthReminders)
+    count(model.calendarReminders)
     if dayKey == today { count(model.overdueReminders) }
 
     guard !pendingByList.isEmpty else { return [] }
