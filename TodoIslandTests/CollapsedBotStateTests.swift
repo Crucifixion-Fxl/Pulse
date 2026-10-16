@@ -2,30 +2,6 @@ import XCTest
 @testable import TodoIsland
 
 final class CollapsedBotStateTests: XCTestCase {
-  func testVendorBotsUseModelIdentityBeforeClientAndKeepActivitySeparate() {
-    var codex = AgentSessionSnapshot()
-    codex.source = "codex"
-    codex.status = .processing
-    var glm = AgentSessionSnapshot()
-    glm.source = "claude"
-    glm.model = "zai/glm-4.7"
-    glm.status = .running
-    glm.currentTool = "WebSearch"
-    var claude = AgentSessionSnapshot()
-    claude.source = "claude"
-    claude.model = "claude-sonnet-4-6"
-    let sessions = ["codex": codex, "glm": glm, "claude": claude]
-    for (vendor, expected) in [(AIUsageVendor.openAI, CollapsedBotState.thinking),
-      (.zhipuGLM, .searching), (.anthropic, .idle)] {
-      let matching = sessions.filter { CollapsedBotState.vendor(for: $0.value) == vendor }
-      XCTAssertEqual(matching.count, 1)
-      XCTAssertEqual(CollapsedBotState.activity(in: matching), expected)
-    }
-    var unknown = AgentSessionSnapshot()
-    unknown.source = "gemini"
-    XCTAssertNil(CollapsedBotState.vendor(for: unknown))
-  }
-
   func testIdleSleepsAndActivityWakesExactlyOnce() {
     var animation = CollapsedBotAnimation(at: 0)
     XCTAssertEqual(animation.state(at: 44.9), .idle)

@@ -4,7 +4,6 @@ enum IslandStatusItem: CaseIterable {
   case quota
   case additionalQuotas
   case bot
-  case additionalBots
 }
 
 /// Mounted once per display so quota and bot animations survive opening.
@@ -25,10 +24,6 @@ struct IslandStatusItemView: View {
       activeDisplayID: model.hostDisplayID, windowDisplayID: displayID) != .collapsed
   }
 
-  private var additionalVendors: [AIUsageVendor] {
-    [AIUsageVendor.openAI, .zhipuGLM, .anthropic].filter { $0 != model.collapsedQuotaVendor }
-  }
-
   var body: some View {
     Group {
       if model.canUseActiveList {
@@ -41,7 +36,8 @@ struct IslandStatusItemView: View {
           }
         case .additionalQuotas:
           HStack(spacing: 16) {
-            ForEach(additionalVendors, id: \.self) { vendor in
+            ForEach([AIUsageVendor.openAI, .zhipuGLM, .anthropic]
+              .filter { $0 != model.collapsedQuotaVendor }, id: \.self) { vendor in
               if let subscription = model.aiUsage?.subscriptions.first(where: { $0.vendor == vendor }) {
                 CollapsedQuotaChipView(subscription: subscription,
                   label: vendor == .anthropic ? "Anthropic" : nil,
@@ -52,40 +48,18 @@ struct IslandStatusItemView: View {
           }
           .accessibilityHidden(!isExpanded)
         case .bot:
-          bot(for: model.collapsedQuotaVendor, isPrimary: true)
-        case .additionalBots:
-          HStack(spacing: 12) {
-            ForEach(additionalVendors, id: \.self) { vendor in
-              bot(for: vendor, isPrimary: false).frame(width: 32)
-            }
-          }
-          .accessibilityHidden(!isExpanded)
+          CollapsedBotFaceView(
+            size: min(26, max(18, barHeight - 6)).rounded(),
+            faceColor: model.collapsedQuotaVendor.accent,
+            isPlaying: model.nowPlaying?.isPlaying == true,
+            isHovered: model.isPointerInsideIsland,
+            isAlert: agentStore.hasPending,
+            activity: CollapsedBotState.activity(in: agentStore.sessions),
+            isAnimated: !reduceMotion && (model.isCollapsedIslandVisible || isExpanded))
         }
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity,
       alignment: item == .bot ? .center : .leading)
-  }
-
-  private func bot(for vendor: AIUsageVendor, isPrimary: Bool) -> some View {
-    let sessions = isPrimary && !isExpanded ? agentStore.sessions
-      : agentStore.sessions.filter { CollapsedBotState.vendor(for: $0.value) == vendor }
-    let hasPending = isPrimary && !isExpanded ? agentStore.hasPending
-      : agentStore.permissionQueue.contains { sessions[$0.sessionId] != nil }
-        || agentStore.questionQueue.contains { sessions[$0.sessionId] != nil }
-    let label = vendor == .anthropic ? "Anthropic" : vendor.chipLabel
-    return ZStack {
-      CollapsedBotFaceView(
-        size: min(26, max(18, barHeight - 6)).rounded(),
-        faceColor: vendor.accent,
-        isPlaying: model.nowPlaying?.isPlaying == true,
-        isHovered: model.isPointerInsideIsland,
-        isAlert: hasPending,
-        activity: CollapsedBotState.activity(in: sessions),
-        isAnimated: !reduceMotion && (isExpanded || (isPrimary && model.isCollapsedIslandVisible)))
-    }
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(Text("\(label) Bot"))
-    .help(label)
   }
 }

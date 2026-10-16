@@ -3,17 +3,6 @@ import Foundation
 enum CollapsedBotState: String, CaseIterable, Sendable {
   case idle, sleeping, waking, listening, thinking, searching, working
 
-  /// Model identity wins over the client: Claude Code can run GLM.
-  static func vendor(for session: AgentSessionSnapshot) -> AIUsageVendor? {
-    let model = session.model?.lowercased() ?? ""
-    if model.contains("glm") { return .zhipuGLM }
-    if model.contains("claude") { return .anthropic }
-    if model.contains("gpt") || model.contains("codex") { return .openAI }
-    if session.isCodex { return .openAI }
-    if session.isClaude { return .anthropic }
-    return nil
-  }
-
   /// Prefer the latest active session, rather than an arbitrary dictionary
   /// entry. Waiting requests keep their separate, higher-priority red alert.
   static func activity(in sessions: [String: AgentSessionSnapshot]) -> Self {
