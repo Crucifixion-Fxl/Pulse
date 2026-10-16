@@ -11,6 +11,8 @@ enum ICloudSourceMenuState: Equatable, Sendable {
 
 @MainActor
 final class AppModel: ObservableObject {
+  /// Shared across display headers; created only when weather is mounted.
+  lazy var weatherStore = WeatherStore()
   @Published private(set) var authorization: ReminderAuthorization
   @Published private(set) var lists: [ReminderListSnapshot] = []
   @Published private(set) var reminders: [ReminderSnapshot] = []

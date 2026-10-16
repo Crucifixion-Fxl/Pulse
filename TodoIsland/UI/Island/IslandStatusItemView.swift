@@ -4,6 +4,7 @@ enum IslandStatusItem: CaseIterable {
   case quota
   case additionalQuotas
   case bot
+  case weather
 }
 
 /// Mounted once per display so quota and bot animations survive opening.
@@ -56,6 +57,8 @@ struct IslandStatusItemView: View {
             isAlert: agentStore.hasPending,
             activity: CollapsedBotState.activity(in: agentStore.sessions),
             isAnimated: !reduceMotion && (model.isCollapsedIslandVisible || isExpanded))
+        case .weather:
+          WeatherStatusView(store: model.weatherStore, isActive: isExpanded)
         }
       }
     }

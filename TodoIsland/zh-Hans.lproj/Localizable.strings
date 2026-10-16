@@ -205,3 +205,26 @@
 "music.controls.pause" = "暂停";
 
 "reminder.delete.accessibility" = "删除 %@";
+
+/* Local weather */
+"weather.title" = "天气";
+"weather.clear" = "晴";
+"weather.partly-cloudy" = "多云";
+"weather.overcast" = "阴";
+"weather.fog" = "雾";
+"weather.drizzle" = "小雨";
+"weather.rain" = "雨";
+"weather.snow" = "雪";
+"weather.thunderstorm" = "雷雨";
+"weather.unknown" = "天气";
+"weather.current-location" = "当前位置";
+"weather.location-denied" = "需要定位权限";
+"weather.location-unavailable" = "暂时无法定位";
+"weather.unavailable" = "天气暂不可用";
+"weather.locating" = "正在定位…";
+"weather.stale" = "待更新";
+"weather.high-low" = "最高 %d°  最低 %d°";
+"weather.updated" = "更新于";
+"weather.last-update" = "上次更新";
+"weather.location-settings" = "打开定位设置";
+"weather.refresh" = "刷新天气";
