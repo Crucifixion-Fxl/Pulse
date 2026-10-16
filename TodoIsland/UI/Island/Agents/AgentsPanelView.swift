@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The agents sidebar pane, 1:1 with CodeIsland's expanded surfaces: the
@@ -132,8 +133,11 @@ private struct SessionCard: View {
 
       VStack(alignment: .leading, spacing: 5) {
         headerRow
-        chatRows
-        liveRow
+        if session.status == .running || session.status == .processing {
+          liveRow
+        } else {
+          chatRows
+        }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -141,6 +145,7 @@ private struct SessionCard: View {
     .padding(.vertical, 10)
     .padding(.horizontal, 6)
     .background(cardBackground)
+    .contextMenu { copySessionIDButton }
   }
 
   private var status: AgentCardStatus { cardStatus(session) }
@@ -169,16 +174,26 @@ private struct SessionCard: View {
       AgentStatusChip(label: status.label, color: status.color, type: type)
 
       Text(session.displayTitle(sessionId: sessionID))
-        .font(.system(size: type.body + 2, weight: .bold, design: .monospaced))
+        .font(.system(size: type.body + 2, weight: .semibold))
         .foregroundStyle(.white.opacity(0.95))
         .lineLimit(1)
-        .truncationMode(.middle)
+        .truncationMode(.tail)
+        .layoutPriority(1)
+        .help(session.displayTitle(sessionId: sessionID))
 
-      Text(session.displaySessionId(sessionId: sessionID))
-        .font(.system(size: type.secondary, design: .monospaced))
-        .foregroundStyle(.white.opacity(0.76))
-        .lineLimit(1)
-        .truncationMode(.middle)
+      if let project = session.projectName {
+        Text(project)
+          .font(.system(size: type.secondary, weight: .medium))
+          .foregroundStyle(.white.opacity(0.65))
+          .lineLimit(1)
+          .truncationMode(.middle)
+          .padding(.horizontal, 6)
+          .padding(.vertical, 3)
+          .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+          .frame(maxWidth: 110)
+          .layoutPriority(2)
+          .help(project)
+      }
 
       Spacer(minLength: 2)
 
@@ -187,16 +202,39 @@ private struct SessionCard: View {
           .font(.system(size: type.caption, design: .monospaced))
           .foregroundStyle(.white.opacity(0.45))
           .lineLimit(1)
+          .frame(maxWidth: 110, alignment: .trailing)
+          .layoutPriority(2)
+          .help(model)
       }
-      Text(timeAgo(session.startTime))
-        .font(.system(size: type.caption, design: .monospaced))
+      AgentActivityTime(date: session.lastActivity)
+        .font(.system(size: type.caption))
         .foregroundStyle(.white.opacity(0.55))
+        .fixedSize()
+
+      Menu { copySessionIDButton } label: {
+        Image(systemName: "ellipsis")
+          .foregroundStyle(.white.opacity(0.5))
+          .frame(width: 18, height: 18)
+      }
+      .menuStyle(.borderlessButton)
+      .menuIndicator(.hidden)
+      .fixedSize()
+      .accessibilityLabel(Text("agents.session.actions"))
+    }
+  }
+
+  private var copySessionIDButton: some View {
+    Button {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(session.displaySessionId(sessionId: sessionID), forType: .string)
+    } label: {
+      Label("agents.session.copy-id", systemImage: "doc.on.doc")
     }
   }
 
   @ViewBuilder
   private var chatRows: some View {
-    let messages = session.recentMessages.suffix(session.status == .idle ? 3 : 2)
+    let messages = session.recentMessages.suffix(1)
     if !messages.isEmpty {
       VStack(alignment: .leading, spacing: 3) {
         ForEach(Array(messages.enumerated()), id: \.offset) { _, message in
@@ -287,14 +325,28 @@ struct AgentMonogramView: View {
 
 // MARK: - Helpers
 
-func timeAgo(_ date: Date, from now: Date = Date()) -> String {
-  let seconds = max(0, now.timeIntervalSince(date))
-  if seconds < 60 { return "<1m" }
-  let minutes = Int(seconds / 60)
-  if minutes < 60 { return "\(minutes)m" }
+/// Redraw only the small timestamp, and pause while the retained pane is hidden.
+private struct AgentActivityTime: View {
+  let date: Date
+  @Environment(\.agentPanelActive) private var panelActive
+
+  var body: some View {
+    TimelineView(.animation(minimumInterval: 1, paused: !panelActive)) { timeline in
+      Text(agentActivityAge(date, from: timeline.date))
+    }
+    .help(Text("agents.activity.help"))
+  }
+}
+
+func agentActivityAge(_ date: Date, from now: Date = Date()) -> String {
+  let seconds = max(0, Int(now.timeIntervalSince(date)))
+  if seconds < 10 { return L10n.text("agents.activity.now") }
+  if seconds < 60 { return String(format: L10n.text("agents.activity.seconds"), seconds) }
+  let minutes = seconds / 60
+  if minutes < 60 { return String(format: L10n.text("agents.activity.minutes"), minutes) }
   let hours = minutes / 60
-  if hours < 24 { return "\(hours)h" }
-  return "\(hours / 24)d"
+  if hours < 24 { return String(format: L10n.text("agents.activity.hours"), hours) }
+  return String(format: L10n.text("agents.activity.days"), hours / 24)
 }
 
 extension AnyTransition {

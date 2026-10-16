@@ -186,3 +186,14 @@
 "reminder.undo-completion" = "Undo";
 "reminder.undo-completion.accessibility" = "Undo completion of %@";
 "reminder.undo-completion.help" = "Undo the last completion (⌘Z)";
+
+"agents.task.untitled" = "%@ task";
+"agents.task.pending" = "Pending task";
+"agents.session.actions" = "Session actions";
+"agents.session.copy-id" = "Copy session ID";
+"agents.activity.help" = "Time since the latest activity";
+"agents.activity.now" = "Just now";
+"agents.activity.seconds" = "%ds ago";
+"agents.activity.minutes" = "%dm ago";
+"agents.activity.hours" = "%dh ago";
+"agents.activity.days" = "%dd ago";

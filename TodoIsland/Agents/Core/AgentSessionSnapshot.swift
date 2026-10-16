@@ -96,7 +96,15 @@ struct AgentSessionSnapshot: Sendable {
     /// Persist restore does not apply this cap (see ``restoreClosedSubagentIds``).
     static let maxClosedSubagentIds = 256
     var startTime: Date = Date()
-    var lastUserPrompt: String?
+    /// Keep the task identity stable as follow-up prompts arrive.
+    private(set) var firstUserPrompt: String?
+    var lastUserPrompt: String? {
+        didSet {
+            guard firstUserPrompt == nil, let prompt = lastUserPrompt,
+                  !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            firstUserPrompt = prompt
+        }
+    }
     var lastAssistantMessage: String?
     /// Public assistant text emitted during the active Codex turn. This is
     /// transient UI state: a new turn clears it while chat history remains.
@@ -402,7 +410,25 @@ struct AgentSessionSnapshot: Sendable {
     }
 
     func displayTitle(sessionId: String) -> String {
-        sessionLabel ?? sessionId
+        if let title = sessionLabel, title != sessionId,
+           title != displaySessionId(sessionId: sessionId), UUID(uuidString: title) == nil {
+            return Self.compactTaskTitle(title)
+        }
+        if let prompt = firstUserPrompt ?? recentMessages.first(where: \.isUser)?.text {
+            return Self.compactTaskTitle(prompt)
+        }
+        return String(format: L10n.text("agents.task.untitled"), sourceLabel)
+    }
+
+    private static func compactTaskTitle(_ text: String) -> String {
+        let singleLine = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return singleLine.count > 64 ? String(singleLine.prefix(64)) + "…" : singleLine
+    }
+
+    var projectName: String? {
+        guard let cwd, !cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              cwd != "/", !Self.isUnhelpfulHookCwd(cwd) else { return nil }
+        return displayName
     }
 
     func displaySessionId(sessionId: String) -> String {

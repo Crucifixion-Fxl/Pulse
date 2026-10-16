@@ -238,7 +238,58 @@ final class AgentSessionStore: ObservableObject {
             }
         }
 
+        if prevStatus == nil { loadLocalSessionTitle(for: sessionId) }
         return effects
+    }
+
+    /// Hooks received after an app restart may contain only tool activity.
+    /// Recover the existing Codex title off the main thread, without reading
+    /// transcripts or blocking the opening animation. Hook titles take priority.
+    private func loadLocalSessionTitle(for sessionId: String) {
+        guard let snapshot = sessions[sessionId], snapshot.isCodex,
+              !snapshot.isRemote, snapshot.sessionLabel == nil else { return }
+        let providerID = snapshot.displaySessionId(sessionId: sessionId)
+        let startTime = snapshot.startTime
+        var home = ProcessInfo.processInfo.environment["CODEX_HOME"]
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex").path
+        if let transcript = snapshot.transcriptPath,
+           let sessionsRange = transcript.range(of: "/sessions/") {
+            home = String(transcript[..<sessionsRange.lowerBound])
+        }
+        let indexURL = URL(fileURLWithPath: home).appendingPathComponent("session_index.jsonl")
+        Task { [weak self] in
+            let title = await Task.detached(priority: .utility) {
+                Self.localCodexTitle(sessionId: providerID, indexURL: indexURL)
+            }.value
+            guard let self, let title, let current = self.sessions[sessionId],
+                  current.startTime == startTime, current.isCodex, !current.isRemote,
+                  current.sessionLabel == nil,
+                  current.displaySessionId(sessionId: sessionId) == providerID else { return }
+            self.sessions[sessionId]?.sessionTitle = title
+        }
+    }
+
+    /// The index is append-only; the latest nonempty matching title wins.
+    /// Limit I/O to the newest 2 MB even if a user's index grows indefinitely.
+    nonisolated static func localCodexTitle(sessionId: String, indexURL: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: indexURL) else { return nil }
+        defer { try? handle.close() }
+        guard let size = try? handle.seekToEnd() else { return nil }
+        let limit: UInt64 = 2 * 1024 * 1024
+        do {
+            try handle.seek(toOffset: size > limit ? size - limit : 0)
+            guard let data = try handle.read(upToCount: Int(limit)) else { return nil }
+            // A clipped first line and a partially written final line are
+            // harmless: JSON decoding skips them, retaining the last valid row.
+            for line in data.split(separator: 0x0A).reversed() {
+                guard let row = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
+                      row["id"] as? String == sessionId,
+                      let rawTitle = row["thread_name"] as? String else { continue }
+                let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !title.isEmpty { return title }
+            }
+        } catch { return nil }
+        return nil
     }
 
     // MARK: - Connection routing (HookServer.processRequest + AppState handlers)
