@@ -20,6 +20,9 @@ final class IslandTransitionView: NSView {
   private var requestGeneration = 0
   var isRunning: Bool { isAnimating || hasPendingRequest }
   var snapshotCount: Int { images.count }
+  var presentedContentOpacity: Float {
+    live.layer?.presentation()?.opacity ?? live.layer?.opacity ?? 0
+  }
   var presentedSurfaceBounds: CGRect? {
     (silhouette.presentation()?.path ?? silhouette.path)?.boundingBoxOfPath
   }
@@ -183,7 +186,11 @@ final class IslandTransitionView: NSView {
       fade(outgoing, from: outgoing.opacity, to: 0, duration: 0.12)
     }
     if let incoming = live.layer {
-      fade(incoming, from: 0, to: 1, duration: state == .collapsed ? 0.18 : 0.22)
+      // Give the silhouette a head start so text does not appear inside a
+      // narrow slit, then reveal the live controls as the shoulders unfold.
+      fade(incoming, from: 0, to: 1,
+        duration: state == .collapsed ? 0.18 : 0.30,
+        delay: state == .collapsed ? 0 : 0.10)
     }
     silhouette.path = endPath
     silhouette.add(spring, forKey: "islandSilhouette")
@@ -266,11 +273,16 @@ final class IslandTransitionView: NSView {
     return result
   }
 
-  private func fade(_ layer: CALayer, from: Float, to: Float, duration: Double) {
+  private func fade(
+    _ layer: CALayer, from: Float, to: Float, duration: Double, delay: Double = 0
+  ) {
     let animation = CABasicAnimation(keyPath: "opacity")
     animation.fromValue = from
     animation.toValue = to
     animation.duration = duration
+    animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+    animation.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + delay
+    animation.fillMode = .backwards
     layer.opacity = to
     layer.add(animation, forKey: "contentFade")
   }

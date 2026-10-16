@@ -32,10 +32,11 @@ struct IslandMotionProfile: Equatable, Sendable {
   let response: Double
   let dampingFraction: Double
 
-  // The reference surface expands with a single elastic wobble before
-  // settling, and closes without overshoot.
-  static let opening = IslandMotionProfile(response: 0.5, dampingFraction: 0.68)
-  static let pinning = IslandMotionProfile(response: 0.44, dampingFraction: 0.75)
+  // Let the center-out expansion remain visible for roughly half a second,
+  // then settle with only a small overshoot. Click and hover openings share
+  // the same weight; pinning must not turn a direct click into a snap-open.
+  static let opening = IslandMotionProfile(response: 0.78, dampingFraction: 0.82)
+  static let pinning = opening
   static let closing = IslandMotionProfile(response: 0.24, dampingFraction: 1.0)
 }
 
