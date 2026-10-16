@@ -53,8 +53,13 @@ enum DisplayGeometryCalculator {
   static let expandedBottomInset: CGFloat = 7
   static let expandedDisplayMargin: CGFloat = 16
 
+  static func statusHeaderHeight(for display: DisplayMetrics) -> CGFloat {
+    display.hasPhysicalNotch
+      ? display.safeAreaTop : max(30, display.frame.maxY - display.visibleFrame.maxY)
+  }
+
   static func expandedContentTopInset(for display: DisplayMetrics) -> CGFloat {
-    max(16, display.safeAreaTop + 6)
+    statusHeaderHeight(for: display) + 8
   }
 
   static func geometry(

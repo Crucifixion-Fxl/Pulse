@@ -177,7 +177,15 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       // temporary compositor animation and window envelope.
       hostingView.sizingOptions = []
       hostingView.layer?.backgroundColor = NSColor.clear.cgColor
-      let transition = IslandTransitionView(content: hostingView)
+      func statusItem(_ item: IslandStatusItem) -> NSView {
+        let host = NSHostingView(rootView: IslandStatusItemView(item: item, displayID: id)
+          .environmentObject(model).environmentObject(agentStore))
+        host.sizingOptions = []
+        return host
+      }
+      let header = IslandStatusHeader(quota: statusItem(.quota), bot: statusItem(.bot),
+        barHeight: DisplayGeometryCalculator.statusHeaderHeight(for: DisplaySupport.metrics(for: screen)))
+      let transition = IslandTransitionView(content: hostingView, statusHeader: header)
       panel.contentView = transition
       let initiallyVisible = model.islandState != .collapsed || model.isCollapsedIslandVisible
       panel.alphaValue = initiallyVisible ? 1 : 0
@@ -278,6 +286,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       origin: geometry.origin(for: state, in: metrics), size: geometry.size(for: state))
 
     panel.acceptsKeyInput = state == .pinned
+    window.transition.statusHeader?.barHeight = DisplayGeometryCalculator.statusHeaderHeight(for: metrics)
     window.transition.transition(
       to: frame, state: state,
       collapsedRadius: metrics.hasPhysicalNotch ? 14 : 18,

@@ -188,7 +188,13 @@ struct IslandRootView: View {
 
       ZStack(alignment: .top) {
         if effectiveState == .collapsed {
-          collapsedContent
+          Group {
+            if usesCompositorTransitions && model.canUseActiveList {
+              Color.clear
+            } else {
+              collapsedContent
+            }
+          }
             .transition(
               .asymmetric(
                 insertion: .opacity.combined(with: .scale(scale: 0.94, anchor: .top)),
@@ -317,6 +323,18 @@ struct IslandRootView: View {
         }
       }
       .frame(width: surfaceSize.width, height: surfaceSize.height, alignment: .top)
+      .overlay(alignment: .top) {
+        if !usesCompositorTransitions, effectiveState != .collapsed, model.canUseActiveList {
+          HStack(spacing: 0) {
+            IslandStatusItemView(item: .quota, displayID: displayID).frame(width: 60)
+            Spacer(minLength: 0)
+            IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
+          }
+          .padding(.horizontal, 20)
+          .frame(height: expandedContentTopInset - 8)
+          .allowsHitTesting(false)
+        }
+      }
       .background(alignment: .top) {
         if effectiveState == .collapsed, isPrewarmingPanes {
           // A background does not contribute its 760pt ideal width to the
@@ -1823,8 +1841,8 @@ struct IslandRootView: View {
   }
 
   private var expandedContentTopInset: CGFloat {
-    guard let metrics = DisplaySupport.cachedMetrics(for: displayID ?? model.hostDisplayID) else { return 16 }
-    return max(16, metrics.safeAreaTop + 6)
+    guard let metrics = DisplaySupport.cachedMetrics(for: displayID ?? model.hostDisplayID) else { return 40 }
+    return DisplayGeometryCalculator.expandedContentTopInset(for: metrics)
   }
 
   private var islandSurfaceSize: CGSize {
