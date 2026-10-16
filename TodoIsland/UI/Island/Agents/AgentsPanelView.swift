@@ -173,27 +173,15 @@ private struct SessionCard: View {
     HStack(spacing: 6) {
       AgentStatusChip(label: status.label, color: status.color, type: type)
 
-      Text(session.displayTitle(sessionId: sessionID))
+      let heading = [session.projectName, session.displayTitle(sessionId: sessionID)]
+        .compactMap { $0 }.joined(separator: " ")
+      Text(heading)
         .font(.system(size: type.body + 2, weight: .semibold))
         .foregroundStyle(.white.opacity(0.95))
         .lineLimit(1)
         .truncationMode(.tail)
         .layoutPriority(1)
-        .help(session.displayTitle(sessionId: sessionID))
-
-      if let project = session.projectName {
-        Text(project)
-          .font(.system(size: type.secondary, weight: .medium))
-          .foregroundStyle(.white.opacity(0.65))
-          .lineLimit(1)
-          .truncationMode(.middle)
-          .padding(.horizontal, 6)
-          .padding(.vertical, 3)
-          .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
-          .frame(maxWidth: 110)
-          .layoutPriority(2)
-          .help(project)
-      }
+        .help(heading)
 
       Spacer(minLength: 2)
 
