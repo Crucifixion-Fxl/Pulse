@@ -5,6 +5,26 @@ import XCTest
 
 @MainActor
 final class SidebarTransitionTests: XCTestCase {
+  func testSurfaceClickRoutesDisplayAndSurvivesReloadWithoutPriorHover() async throws {
+    let suite = "SurfaceClick-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(store: SidebarLayoutStore(), defaults: defaults,
+      aiUsageProvider: SampleAIUsageProvider())
+    await model.reload()
+    model.setHostDisplayID("previous-display")
+    model.pinIslandFromSurface(on: "clicked-display")
+    XCTAssertEqual(model.hostDisplayID, "clicked-display")
+    // A store refresh used to treat a click without mouseEntered as a
+    // pointer exit and close the panel in the middle of its opening.
+    await model.reload()
+    try await Task.sleep(for: .milliseconds(300))
+    XCTAssertEqual(model.islandState, .pinned)
+    model.setIslandHovered(false, on: "clicked-display")
+    try await Task.sleep(for: .milliseconds(300))
+    XCTAssertEqual(model.islandState, .collapsed, "Real pointer exits must still dismiss")
+  }
+
   func testVisibilityPollDoesNotCutShortLiveOpening() async throws {
     let suite = "OpeningVisibility-\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!

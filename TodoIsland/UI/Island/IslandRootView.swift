@@ -351,8 +351,8 @@ struct IslandRootView: View {
         // controls inside a pinned surface, including the setup close button,
         // from being re-pinned by the parent gesture after they act.
         // Tapping the collapsed bar opens directly too — no hover wait.
-        if model.islandState == .preview || model.islandState == .collapsed {
-          model.pinIsland()
+        if effectiveState == .preview || effectiveState == .collapsed {
+          model.pinIslandFromSurface(on: displayID)
         }
       }
       .animation(surfaceAnimation, value: effectiveState)
