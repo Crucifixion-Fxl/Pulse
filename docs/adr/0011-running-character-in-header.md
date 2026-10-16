@@ -1,43 +1,62 @@
-# Running anime character in the expanded header
+# Daily anime character in the expanded header
 
-The user selected the default anime character from
-[TonyNa-code/desktop-pet](https://github.com/TonyNa-code/desktop-pet).
-Show its right-running loop to the left of weather in the expanded header,
-retaining the existing Codex bot. The character is decorative and does not
-intercept clicks or claim to represent an agent's status.
+The expanded header now reads **weather → daily character → Codex bot**. Both
+native-compositor and SwiftUI fallback layouts preserve the same 8pt/12pt gaps.
+The character is decorative; weather remains clickable. Collapse hides it and
+stops its Core Animation loop. Reduce Motion retains a still pose.
 
-Use the upstream 768x832 preview atlas at commit
-`85896750a3e4198c278e443efe77e58142aa9709`, whose second row contains the eight
-right-running frames. The preview has enough resolution for the 30pt Retina
-character. Preserve the upstream 100ms frame timing and transparency.
+## Weekly schedule
 
-Artwork is downloaded on first expansion, SHA-256 verified, decoded off the
-main thread and cached in Application Support/TodoIsland/CharacterAssets.
-Further launches can use the verified cache offline. Downloads coalesce across
-display headers and failures are throttled for two minutes. Until artwork is
-available this decorative slot stays empty. No third-party script is executed.
+Use the Mac's local calendar weekday, Monday through Sunday:
+Sigewinne, Furina, Navia, Nahida, Clorinde, Emilie, Chasca. Sigewinne and Chasca
+run; the other five use their original walking loops. Restarting does not change
+the day's character. A calendar-based midnight timer plus day/time-zone/clock
+and wake notifications refresh the selection. Tests inject dates without
+changing the workstation's clock. An older asynchronous decode cannot overwrite
+a newer requested character. Only the current character's decoded frames are kept.
 
-The repository's MIT license covers application source. Its
-[asset notice](https://github.com/TonyNa-code/desktop-pet/blob/85896750a3e4198c278e443efe77e58142aa9709/ASSET_NOTICE.md)
-separately asks distributors to establish artwork rights. Therefore this change
-does not vendor the artwork or include it in distributed app bundles; it loads
-the selected upstream artwork into the user's local cache. Public redistribution
-of the artwork itself requires separately establishing permission.
+## Artwork and playback
 
-A persistent native layer plays the decoded frames; no SwiftUI frame timer or
-per-frame layout is used. Header positioning and fade use the existing native
-transition. Playback stops on collapse, view removal or Reduce Motion. Reduce
-Motion retains a still pose. Weather and quota changes do not restart the loop.
+Source: https://github.com/Senkin219/GI-Character-Spine at
+`4c4e667f87edd4fbba85ad26b781d82f757af537`.
+The bundled manifest records paths, chosen right-facing skins, original action
+names, durations and sheet digests. Artwork belongs to miHoYo / HoYoverse and
+is credited separately from application-source licensing in the bundled notice.
+This supersedes the earlier eight-frame TonyNa atlas and runtime download cache.
 
-Verification covers atlas row selection, equal timing for all eight frames,
-playback cancellation, header separation and collapse visibility. Installed-app
-acceptance additionally requires observing different poses, opening/closing,
-weather interaction and persistence across restart.
+The original Spine loops are rendered using the author's compatible miHoYo
+extension/physics parser at >=60 samples/second, keeping the original speed.
+Secondary motion is aligned to the loop and warmed for four cycles. One fixed
+bounding box per whole loop avoids per-frame resizing/jitter; visible alpha
+bounds avoid invisible geometry shrinking the character. Explicit skins are
+required for complete hair and hats on Furina, Navia, Clorinde and Chasca.
+Each transparent frame is 128×128, enough for the 30pt Retina header character.
+See `scripts/characters/README.md` for reproducible preparation/export.
 
-Validated on 2026-10-16: all 16 focused tests passed (3 character, 5 weather,
-8 island transitions). Installed the signed Release build and used computer
-interaction to observe distinct running poses, collapse/reopen, open/close the
-weather popover, and restart the app. The character returned after restart and
-the verified cached artwork's modification time remained unchanged. Physical
-Reduce Motion was not toggled; the stopped-animation path is covered by the
-native view test.
+Bundled SHA-256 verified sheets work immediately offline. Frames decode on a
+utility task; a persistent native layer plays the frames without a SwiftUI frame
+timer, browser runtime or per-frame layout. Unrelated quota/weather updates do
+not restart the animation. Each closing frame receives the same time as every
+other frame. The previous downloaded artwork is no longer read.
+
+## Verification
+
+Seven-day selection, weekly rollover, time-zone changes, DST midnights, simulated
+live day changes and fresh-store consistency are tested. Each shipped sheet is
+checked for correct digest, dimensions, transparency, distinct frames and <=16.67ms
+pose intervals. Native-layer tests verify duration, character replacement and
+stopping on collapse/detach. Header tests assert weather < character < bot.
+
+Export inspection confirms all seven characters have complete hair/hat/body
+rendering. For every clip, the last→first mean absolute pixel difference is below
+the largest adjacent-frame difference; no additional loop-seam jump was found.
+Installed-app visual verification and test results are recorded after execution.
+
+Validated 2026-10-17: all 19 focused tests passed (6 daily-character, 5 weather,
+8 island-transition tests). Signed Release installed at `/Applications/TodoIsland.app`;
+installed/build executable SHA-256 matched. Computer interaction confirmed the
+Saturday Emilie between weather and bot, distinct walking poses, weather popover
+interaction, collapse/reopen, and the same character after process restart.
+The app remains open for inspection. Actual wall-clock midnight and physical
+Reduce Motion were not awaited/toggled; their selection/stop paths are covered
+by tests. Frame sampling is verified; display-presented FPS was not measured.

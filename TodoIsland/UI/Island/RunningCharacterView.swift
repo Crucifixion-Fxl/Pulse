@@ -8,7 +8,7 @@ struct RunningCharacterView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    RunnerSprite(frames: store.frames, isPlaying: isActive && !reduceMotion)
+    RunnerSprite(clip: store.clip, isPlaying: isActive && !reduceMotion)
       .allowsHitTesting(false)
       .accessibilityHidden(true)
       .task(id: isActive) {
@@ -18,17 +18,17 @@ struct RunningCharacterView: View {
 }
 
 private struct RunnerSprite: NSViewRepresentable {
-  let frames: [CGImage]
+  let clip: RunnerArtwork.Clip?
   let isPlaying: Bool
 
   func makeNSView(context: Context) -> RunnerSpriteView { RunnerSpriteView() }
 
   func updateNSView(_ view: RunnerSpriteView, context: Context) {
-    view.update(frames: frames, isPlaying: isPlaying)
+    view.update(clip: clip, isPlaying: isPlaying)
   }
 
   static func dismantleNSView(_ view: RunnerSpriteView, coordinator: ()) {
-    view.update(frames: [], isPlaying: false)
+    view.update(clip: nil, isPlaying: false)
   }
 }
 
@@ -37,7 +37,7 @@ private struct RunnerSprite: NSViewRepresentable {
 @MainActor
 final class RunnerSpriteView: NSView {
   let sprite = CALayer()
-  private var frames: [CGImage] = []
+  private var clip: RunnerArtwork.Clip?
   private var shouldPlay = false
 
   override init(frame frameRect: NSRect) {
@@ -57,8 +57,8 @@ final class RunnerSpriteView: NSView {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     let height = max(0, bounds.height - 2)
-    sprite.frame = CGRect(x: (bounds.width - height * 96 / 104) / 2, y: 1,
-      width: height * 96 / 104, height: height)
+    sprite.frame = CGRect(x: (bounds.width - height) / 2, y: 1,
+      width: height, height: height)
     CATransaction.commit()
   }
 
@@ -67,14 +67,14 @@ final class RunnerSpriteView: NSView {
     syncPlayback()
   }
 
-  func update(frames next: [CGImage], isPlaying: Bool) {
-    let changed = frames.count != next.count || frames.first !== next.first
+  func update(clip next: RunnerArtwork.Clip?, isPlaying: Bool) {
+    let changed = clip?.frames.first !== next?.frames.first
     if changed {
-      frames = next
+      clip = next
       sprite.removeAnimation(forKey: "run")
       CATransaction.begin()
       CATransaction.setDisableActions(true)
-      sprite.contents = next.first
+      sprite.contents = next?.frames.first
       CATransaction.commit()
     }
     shouldPlay = isPlaying
@@ -82,16 +82,17 @@ final class RunnerSpriteView: NSView {
   }
 
   private func syncPlayback() {
-    guard shouldPlay, window != nil, frames.count == RunnerArtwork.frameCount else {
+    guard shouldPlay, window != nil, let clip, clip.frames.count > 1 else {
       sprite.removeAnimation(forKey: "run")
       return
     }
     guard sprite.animation(forKey: "run") == nil else { return }
+    let frames = clip.frames
     let animation = CAKeyframeAnimation(keyPath: "contents")
     animation.values = frames + [frames[0]]
     animation.keyTimes = (0...frames.count).map { NSNumber(value: Double($0) / Double(frames.count)) }
     animation.calculationMode = .discrete
-    animation.duration = Double(frames.count) * RunnerArtwork.frameInterval
+    animation.duration = clip.character.duration
     animation.repeatCount = .infinity
     sprite.add(animation, forKey: "run")
   }

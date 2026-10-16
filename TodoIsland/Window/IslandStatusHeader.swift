@@ -65,10 +65,10 @@ final class IslandStatusHeader: NSView {
       frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
     }
     if weather != nil {
-      frames.append(CGRect(x: botX - 168, y: 0, width: 156, height: barHeight))
+      frames.append(CGRect(x: botX - 228, y: 0, width: 156, height: barHeight))
     }
     if runner != nil {
-      frames.append(CGRect(x: botX - 228, y: 0, width: 52, height: barHeight))
+      frames.append(CGRect(x: botX - 64, y: 0, width: 52, height: barHeight))
     }
     for (item, destination) in zip(items, frames) {
       let start = item.layer?.position ?? .zero
