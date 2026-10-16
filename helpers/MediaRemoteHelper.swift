@@ -31,10 +31,14 @@ private typealias GetFn = @convention(c) (
 ) -> Void
 private typealias RegFn = @convention(c) (DispatchQueue?) -> Void
 private typealias SeekFn = @convention(c) (Double) -> Void
+private typealias GetPIDFn = @convention(c) (
+  DispatchQueue?, @escaping (@convention(block) (Int32) -> Void)
+) -> Void
 
 private var handle: UnsafeMutableRawPointer?
 private var getNowPlayingInfo: GetFn!
 private var setElapsedTimeFn: SeekFn!
+private var getNowPlayingApplicationPID: GetPIDFn!
 
 // Commands arrive as signals from the app (kill from the parent is always
 // sandbox-permitted; the temp-file channel proved unreadable from inside
@@ -48,16 +52,10 @@ private func signalToggle(_ sig: Int32) { pendingToggle = true }
 private func signalNext(_ sig: Int32) { pendingNext = true }
 private func signalPrevious(_ sig: Int32) { pendingPrevious = true }
 
-// Controls synthesize the keyboard media keys (NX_SYSDEFINED subtype 8) —
-// the only command path 网易云音乐's CEF shell honors. Both
-// MRMediaRemoteSendCommand and MRMediaRemoteSendCommandToClient are
-// silently ignored by it (verified against the live player).
-// Media-key control. Synthetic NX events get dropped or repurposed by
-// mediaremoted's trusted-forwarding (网易云 only honors keys that look
-// genuinely hardware-born), but a COPY of a REAL keyboard media event
-// re-posts perfectly. So: passively tap the HID stream, template the
-// user's own media-key presses, and re-post clones on demand. Synthetic
-// and osascript variants remain as fallbacks before a template exists.
+// NetEase ignores MediaRemote commands and reconstructed media-key events.
+// Its native Control menu is the authoritative command endpoint; target only
+// the current Now Playing process, without activating it or stealing focus.
+// Other players retain the existing media-key bridge below.
 // Toolchain hazard: file-scope lets read as 0 and dictionary globals crash
 // on lazy init in this dlopen'd dylib — hold state in a class instance
 // behind a trivially-nil global instead.
@@ -201,6 +199,71 @@ private func startMediaKeyTap() {
   CGEvent.tapEnable(tap: tap, enable: true)
 }
 
+private func controlPlayback(_ key: Int32) {
+  guard let getPID = getNowPlayingApplicationPID else {
+    postMediaKey(key)
+    return
+  }
+  getPID(DispatchQueue.main) { pid in
+    guard pid > 0,
+      NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.netease.163music"
+    else {
+      postMediaKey(key)
+      return
+    }
+    let handled = pressNetEaseControl(pid: pid, key: key)
+    fputs("CONTROL route=netease-menu key=\(key) handled=\(handled)\n", stderr)
+    // An accepted menu action must never also emit a media key: that would
+    // toggle twice. Fall back only when no native action was dispatched.
+    if !handled { postMediaKey(key) }
+  }
+}
+
+private func pressNetEaseControl(pid: pid_t, key: Int32) -> Bool {
+  guard AXIsProcessTrusted() else { return false }
+  let app = AXUIElementCreateApplication(pid)
+  AXUIElementSetMessagingTimeout(app, 0.3)
+  // CEF otherwise omits children of closed menus from its accessibility tree.
+  AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+  AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+
+  func value(_ node: AXUIElement, _ attribute: String) -> CFTypeRef? {
+    var result: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(node, attribute as CFString, &result) == .success
+    else { return nil }
+    return result
+  }
+  func children(_ node: AXUIElement) -> [AXUIElement] {
+    value(node, kAXChildrenAttribute) as? [AXUIElement] ?? []
+  }
+  func title(_ node: AXUIElement) -> String {
+    (value(node, kAXTitleAttribute) as? String ?? "").trimmingCharacters(in: .whitespaces)
+  }
+  guard let barValue = value(app, kAXMenuBarAttribute),
+    CFGetTypeID(barValue) == AXUIElementGetTypeID()
+  else { return false }
+  let bar = unsafeBitCast(barValue, to: AXUIElement.self)
+  guard let control = children(bar).first(where: {
+    ["控制", "控制項", "Control", "Controls", "Playback"].contains(title($0))
+  }) else { return false }
+  let titles: [String]
+  switch key {
+  case 16: titles = ["播放", "暂停", "暫停", "Play", "Pause", "Play/Pause", "播放/暂停"]
+  case 17: titles = ["下一个", "下一個", "下一首", "Next", "Next Track"]
+  case 18: titles = ["上一个", "上一個", "上一首", "Previous", "Previous Track"]
+  default: return false
+  }
+  // Only direct items in the Control menu; never recursively select a
+  // similarly named playlist, track or submenu item.
+  let entries = children(control).flatMap { node -> [AXUIElement] in
+    (value(node, kAXRoleAttribute) as? String) == kAXMenuRole ? children(node) : [node]
+  }
+  guard let item = entries.first(where: { titles.contains(title($0)) }),
+    (value(item, kAXEnabledAttribute) as? Bool) != false
+  else { return false }
+  return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+}
+
 private func postMediaKey(_ key: Int32) {
   if let template = mediaKeyStore?.templates[key] {
     fputs("POST key=\(key) via captured template pair\n", stderr)
@@ -269,6 +332,9 @@ public func mediaHelperMain() -> Int32 {
 
   if let p = dlsym(handle, "MRMediaRemoteGetNowPlayingInfo") {
     getNowPlayingInfo = unsafeBitCast(p, to: GetFn.self)
+  }
+  if let p = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationPID") {
+    getNowPlayingApplicationPID = unsafeBitCast(p, to: GetPIDFn.self)
   }
   if let p = dlsym(handle, "MRMediaRemoteSetElapsedTime") {
     setElapsedTimeFn = unsafeBitCast(p, to: SeekFn.self)
@@ -389,17 +455,17 @@ private func startElapsedTimer() {
     if pendingToggle {
       pendingToggle = false
       fputs("GOT sig=toggle\n", stderr)
-      postMediaKey(16)
+      controlPlayback(16)
     }
     if pendingNext {
       pendingNext = false
       fputs("GOT sig=next\n", stderr)
-      postMediaKey(17)
+      controlPlayback(17)
     }
     if pendingPrevious {
       pendingPrevious = false
       fputs("GOT sig=previous\n", stderr)
-      postMediaKey(18)
+      controlPlayback(18)
     }
     drainCommands()
     // Unconditional: 网易云 may omit PlaybackRate entirely, and gating on
@@ -446,11 +512,11 @@ private func handleCommand(_ cmd: String, _ payload: [String: Any]) {
   fputs("GOT cmd=\(cmd)\n", stderr)
   switch cmd {
   case "toggle", "play", "pause":
-    postMediaKey(16)
+    controlPlayback(16)
   case "next":
-    postMediaKey(17)
+    controlPlayback(17)
   case "previous":
-    postMediaKey(18)
+    controlPlayback(18)
   case "seek":
     if let seconds = payload["t"] as? Double { setElapsedTimeFn(seconds) }
   case "active":
