@@ -67,22 +67,27 @@ final class IslandTransitionTests: XCTestCase {
 
   func testAdditionalQuotasRevealOnlyAfterOpeningAndHideOnReversal() async throws {
     let extras = NSView()
+    let bots = NSView()
     let header = IslandStatusHeader(quota: NSView(), bot: NSView(),
-      additionalQuotas: extras, barHeight: collapsed.height)
+      additionalQuotas: extras, additionalBots: bots, barHeight: collapsed.height)
     let (window, transition, _) = fixture(header: header)
     defer { window.close() }
     XCTAssertEqual(extras.layer?.opacity, 0)
+    XCTAssertEqual(bots.layer?.opacity, 0)
     transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: true)
     try await Task.sleep(for: .milliseconds(120))
     XCTAssertEqual(extras.layer?.presentation()?.opacity ?? extras.layer?.opacity, 0,
       "Extra vendors must not flash over the notch at the start of opening")
+    XCTAssertEqual(bots.layer?.presentation()?.opacity ?? bots.layer?.opacity, 0)
     try await Task.sleep(for: .milliseconds(230))
     let partial = try XCTUnwrap(extras.layer?.presentation()?.opacity)
     XCTAssertGreaterThan(partial, 0)
     XCTAssertLessThan(partial, 1, "Reveal gradually instead of inserting fully opaque chips")
+    XCTAssertEqual(try XCTUnwrap(bots.layer?.presentation()?.opacity), partial, accuracy: 0.05)
     transition.transition(to: collapsed, state: .collapsed, collapsedRadius: 18, animated: true)
     try await Task.sleep(for: .milliseconds(160))
     XCTAssertEqual(extras.layer?.presentation()?.opacity ?? extras.layer?.opacity, 0)
+    XCTAssertEqual(bots.layer?.presentation()?.opacity ?? bots.layer?.opacity, 0)
     transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: true)
     try await Task.sleep(for: .seconds(1.2))
     XCTAssertEqual(extras.layer?.opacity, 1)
@@ -90,6 +95,15 @@ final class IslandTransitionTests: XCTestCase {
     XCTAssertLessThanOrEqual(extras.frame.maxX, expanded.width / 2 - 90,
       "Keep all vendor chips in the left wing, clear of the physical notch")
     XCTAssertTrue(extras.superview === header)
+    XCTAssertEqual(bots.layer?.opacity, 1)
+    XCTAssertEqual(bots.frame.minX - header.bot.frame.minX, 44, accuracy: 0.5)
+    XCTAssertGreaterThan(header.bot.frame.minX, expanded.width / 2 + 90)
+    XCTAssertLessThanOrEqual(bots.frame.maxX, expanded.width - 16)
+    XCTAssertEqual(header.subviews.count, 4, "Keep the original bot mounted alongside two additional faces")
+    transition.transition(to: collapsed, state: .collapsed, collapsedRadius: 18, animated: true)
+    try await Task.sleep(for: .seconds(1.2))
+    XCTAssertEqual(bots.layer?.opacity, 0)
+    XCTAssertEqual(header.bot.frame.midX, collapsed.width - 12 - 13, accuracy: 0.5)
   }
 
   func testOpeningUnfoldsFromCenterBeforeSettling() async throws {

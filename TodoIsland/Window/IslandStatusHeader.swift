@@ -3,21 +3,24 @@ import QuartzCore
 
 /// Live status items sit above the content snapshots and travel with the
 /// silhouette. The original quota and bot stay opaque; extra vendors fade
-/// in after the expanding left wing has room for them.
+/// in after the expanding wings have room for them.
 @MainActor
 final class IslandStatusHeader: NSView {
   let quota: NSView
   let bot: NSView
   let additionalQuotas: NSView?
-  private var items: [NSView] { [quota, bot] + [additionalQuotas].compactMap { $0 } }
+  let additionalBots: NSView?
+  private var items: [NSView] { [quota, bot] + [additionalQuotas, additionalBots].compactMap { $0 } }
   var barHeight: CGFloat
 
   override var isFlipped: Bool { true }
 
-  init(quota: NSView, bot: NSView, additionalQuotas: NSView? = nil, barHeight: CGFloat) {
+  init(quota: NSView, bot: NSView, additionalQuotas: NSView? = nil,
+       additionalBots: NSView? = nil, barHeight: CGFloat) {
     self.quota = quota
     self.bot = bot
     self.additionalQuotas = additionalQuotas
+    self.additionalBots = additionalBots
     self.barHeight = barHeight
     super.init(frame: .zero)
     wantsLayer = true
@@ -49,12 +52,19 @@ final class IslandStatusHeader: NSView {
     let inset: CGFloat = state == .collapsed ? 12 : 20
     let left = (bounds.width - size.width) / 2
     let faceSize = min(26, max(18, barHeight - 6)).rounded()
-    let frames = [
+    let trailingBotX = left + size.width - inset - faceSize / 2 - 16
+    let primaryBotX = trailingBotX - (state != .collapsed && additionalBots != nil ? 88 : 0)
+    var frames = [
       CGRect(x: left + inset, y: 0, width: 60, height: barHeight),
-      CGRect(x: left + size.width - inset - faceSize / 2 - 16,
-        y: 0, width: 32, height: barHeight),
-      CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight)
+      CGRect(x: primaryBotX, y: 0, width: 32, height: barHeight)
     ]
+    if additionalQuotas != nil {
+      frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
+    }
+    if additionalBots != nil {
+      frames.append(CGRect(x: primaryBotX + (state == .collapsed ? 0 : 44),
+        y: 0, width: 76, height: barHeight))
+    }
     for (item, destination) in zip(items, frames) {
       let start = item.layer?.position ?? .zero
       item.frame = destination
@@ -67,7 +77,13 @@ final class IslandStatusHeader: NSView {
         layer.add(movement, forKey: "headerPosition")
       }
     }
-    guard let additionalQuotas, let layer = additionalQuotas.layer else { return }
+    for extra in [additionalQuotas, additionalBots].compactMap({ $0 }) {
+      reveal(extra, state: state, spring: spring)
+    }
+  }
+
+  private func reveal(_ item: NSView, state: IslandPresentationState, spring: CASpringAnimation?) {
+    guard let layer = item.layer else { return }
     let opacity = layer.presentation()?.opacity ?? layer.opacity
     layer.removeAnimation(forKey: "headerReveal")
     let target: Float = state == .collapsed ? 0 : 1
@@ -76,8 +92,7 @@ final class IslandStatusHeader: NSView {
       let reveal = CABasicAnimation(keyPath: "opacity")
       reveal.fromValue = opacity
       reveal.toValue = target
-      // Wait until the left wing clears the physical notch before revealing
-      // the extra vendors; hide promptly when that wing folds back in.
+      // Reveal both vendor groups together once the wings clear the notch.
       reveal.beginTime = spring.beginTime + (state == .collapsed ? 0 : 0.24)
       reveal.duration = state == .collapsed ? 0.08 : 0.18
       reveal.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)

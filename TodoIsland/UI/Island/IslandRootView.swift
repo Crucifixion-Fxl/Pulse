@@ -331,6 +331,8 @@ struct IslandRootView: View {
               .frame(width: 170).padding(.leading, 12)
             Spacer(minLength: 0)
             IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
+            IslandStatusItemView(item: .additionalBots, displayID: displayID)
+              .frame(width: 76).padding(.leading, 12)
           }
           .padding(.horizontal, 20)
           .frame(height: expandedContentTopInset - 8)
