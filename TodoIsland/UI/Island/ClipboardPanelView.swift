@@ -336,14 +336,7 @@ private struct ClipboardCard: View {
     case .text:
       // Full-bleed text well with a fade at the bottom so truncation
       // reads as "more below" rather than a hard cut.
-      ScrollView(.vertical, showsIndicators: false) {
-        Text(item.text ?? "")
-          .font(.system(size: 10.5))
-          .foregroundStyle(.white.opacity(0.88))
-          .lineSpacing(2.5)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(9)
-      }
+      ClipboardTextPreview(text: item.text ?? "")
       .frame(maxHeight: .infinity)
       .background(
         RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -455,5 +448,56 @@ private struct ClipboardCard: View {
     case .image: "clipboard.kind.image"
     case .video: "clipboard.kind.video"
     }
+  }
+}
+
+// MARK: - Text typography
+
+/// Short notes read at a glance; paragraphs keep a consistent reading edge.
+/// This changes only the preview — copying always uses the original text.
+struct ClipboardTextPreview: View {
+  let text: String
+
+  private var trimmedText: String {
+    text.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private var isShortNote: Bool {
+    trimmedText.count <= 36 && paragraphs.count <= 2
+  }
+
+  private var paragraphs: [String] {
+    text.replacingOccurrences(of: "\r\n", with: "\n")
+      .replacingOccurrences(of: "\r", with: "\n")
+      .components(separatedBy: "\n")
+  }
+
+  var body: some View {
+    GeometryReader { geometry in
+      if isShortNote {
+        Text(trimmedText)
+          .font(.system(size: 16, weight: .medium))
+          .multilineTextAlignment(.center)
+          .lineSpacing(4)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(width: max(0, geometry.size.width - 24),
+            height: geometry.size.height * 0.82, alignment: .center)
+          .padding(.horizontal, 12)
+      } else {
+        ScrollView(.vertical, showsIndicators: false) {
+          LazyVStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, paragraph in
+              Text(paragraph.isEmpty ? " " : paragraph)
+                .font(.system(size: 13))
+                .lineSpacing(5)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+          }
+          .padding(12)
+        }
+      }
+    }
+    .foregroundStyle(.white.opacity(0.88))
   }
 }
