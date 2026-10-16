@@ -179,6 +179,11 @@ final class IslandTransitionView: NSView {
     let endPath = path(size: frame.size, state: state, envelope: bounds.size)
     spring.toValue = endPath
     spring.duration = spring.settlingDuration
+    // The model path is already the destination. Hold the starting path
+    // until the compositor activates the spring, so its first commit
+    // cannot flash the full-width destination and then retract.
+    spring.beginTime = silhouette.convertTime(CACurrentMediaTime(), from: nil)
+    spring.fillMode = .backwards
 
     CATransaction.begin()
     CATransaction.setDisableActions(true)

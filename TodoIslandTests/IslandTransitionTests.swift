@@ -54,6 +54,26 @@ final class IslandTransitionTests: XCTestCase {
     XCTAssertEqual(window.frame, expanded)
   }
 
+  func testOpeningMaskNeverFlashesDestinationBeforeSpringStarts() async throws {
+    for _ in 0..<12 {
+      let (window, transition, _) = fixture()
+      defer { window.close() }
+      try await Task.sleep(for: .milliseconds(20))
+      transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: true)
+      var previousWidth = collapsed.width
+      var largestRetraction: CGFloat = 0
+      for _ in 0..<20 {
+        try await Task.sleep(for: .milliseconds(8))
+        guard transition.layer?.mask != nil,
+          let width = transition.presentedSurfaceBounds?.width else { continue }
+        largestRetraction = max(largestRetraction, previousWidth - width)
+        previousWidth = width
+      }
+      XCTAssertLessThanOrEqual(largestRetraction, 1,
+        "The opening mask must not show its final width before the spring's first frame")
+    }
+  }
+
   func testCompositorMovesWhileWindowAndLiveLayoutRemainFixed() async throws {
     let (window, transition, content) = fixture()
     defer { window.close() }

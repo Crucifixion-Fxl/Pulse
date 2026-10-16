@@ -5,6 +5,51 @@ import XCTest
 
 @MainActor
 final class SidebarTransitionTests: XCTestCase {
+  func testOpeningEdgesNeverRetractBeforeReachingExpandedWidth() async throws {
+    let suite = "OpeningEdges-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(store: SidebarLayoutStore(), defaults: defaults,
+      aiUsageProvider: SampleAIUsageProvider())
+    await model.reload()
+    let existing = Set(NSApp.windows.map(\.windowNumber))
+    let controller = IslandWindowController(model: model)
+    defer { withExtendedLifetime(controller) {} }
+    let surface = try XCTUnwrap(NSApp.windows.filter {
+      !existing.contains($0.windowNumber)
+    }.compactMap { $0.contentView as? IslandTransitionView }.first {
+      $0.window?.screen?.todoIslandDisplayID == model.hostDisplayID
+    })
+    for cycle in 0..<8 {
+      let initialWidth = try XCTUnwrap(surface.window).frame.width
+      var widths = [initialWidth]
+      model.pinIslandForApproval()
+      let start = CACurrentMediaTime()
+      while CACurrentMediaTime() - start < 0.45 {
+        try await Task.sleep(for: .milliseconds(8))
+        let width = surface.layer?.mask == nil
+          ? surface.window!.frame.width
+          : try XCTUnwrap(surface.presentedSurfaceBounds).width
+        widths.append(width)
+      }
+      var peak = initialWidth
+      var largestRetraction: CGFloat = 0
+      for width in widths {
+        // The small spring settle at its destination is intentional; an
+        // inward step during the initial unfold is not.
+        if width < surface.content.bounds.width * 0.98 {
+          largestRetraction = max(largestRetraction, peak - width)
+        }
+        peak = max(peak, width)
+      }
+      XCTAssertLessThanOrEqual(largestRetraction, 1,
+        "Opening cycle \(cycle) must not retract before reaching the destination: \(widths)")
+      try await Task.sleep(for: .seconds(1))
+      model.collapseIsland()
+      try await Task.sleep(for: .milliseconds(500))
+    }
+  }
+
   func testSurfaceClickRoutesDisplayAndSurvivesReloadWithoutPriorHover() async throws {
     let suite = "SurfaceClick-\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!
