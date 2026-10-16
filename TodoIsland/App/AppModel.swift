@@ -772,6 +772,15 @@ final class AppModel: ObservableObject {
     }
   }
 
+  /// A click is sufficient evidence of entry. Mouse-entered delivery can
+  /// lag behind a click (including accessibility clicks), so do not rely on
+  /// hover to route the display or keep a reload from scheduling dismissal.
+  func pinIslandFromSurface(on displayID: String?) {
+    if let displayID { setHostDisplayID(displayID) }
+    isPointerInsideIsland = true
+    pinIsland()
+  }
+
   func pinIsland() {
     hoverTask?.cancel()
     showCollapsedIsland()
