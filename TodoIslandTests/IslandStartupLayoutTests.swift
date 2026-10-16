@@ -17,21 +17,31 @@ final class IslandStartupLayoutTests: XCTestCase {
     let screen = try XCTUnwrap(NSScreen.screens.first)
     let displayID = try XCTUnwrap(screen.todoIslandDisplayID)
     let size = DisplayGeometryCalculator.geometry(for: DisplaySupport.metrics(for: screen)).collapsedSize
-    let host = NSHostingView(rootView: IslandRootView(displayID: displayID)
+    let host = NSHostingView(rootView: IslandRootView(displayID: displayID, usesCompositorTransitions: true)
       .environmentObject(model).environmentObject(AgentSessionStore()))
     host.sizingOptions = []
+    func statusItem(_ item: IslandStatusItem) -> NSView {
+      let view = NSHostingView(rootView: IslandStatusItemView(item: item, displayID: displayID)
+        .environmentObject(model).environmentObject(AgentSessionStore()))
+      view.sizingOptions = []
+      return view
+    }
+    let header = IslandStatusHeader(quota: statusItem(.quota), bot: statusItem(.bot), barHeight: size.height)
+    let surface = IslandTransitionView(content: host, statusHeader: header)
     let window = NSWindow(contentRect: NSRect(origin: NSPoint(x: 100, y: 100), size: size),
       styleMask: .borderless, backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
-    window.contentView = host
+    window.contentView = surface
+    surface.transition(to: window.frame, state: .collapsed,
+      collapsedRadius: screen.safeAreaInsets.top > 0 ? 14 : 18, animated: false)
     defer { window.close() }
     window.orderFront(nil)
     var centers: [CGFloat] = []
     for _ in 0..<28 {
       try await Task.sleep(for: .milliseconds(100))
-      host.layoutSubtreeIfNeeded()
-      let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-      host.cacheDisplay(in: host.bounds, to: bitmap)
+      surface.layoutSubtreeIfNeeded()
+      let bitmap = try XCTUnwrap(surface.bitmapImageRepForCachingDisplay(in: surface.bounds))
+      surface.cacheDisplay(in: surface.bounds, to: bitmap)
       var xs: [Int] = []
       for y in 0..<bitmap.pixelsHigh {
         // Ignore the quota chip; only the right-hand bot is under test.

@@ -7,6 +7,7 @@ import QuartzCore
 @MainActor
 final class IslandTransitionView: NSView {
   let content: NSView
+  let statusHeader: IslandStatusHeader?
   private let live = NSView()
   private let overlay = CALayer()
   private let silhouette = CAShapeLayer()
@@ -29,8 +30,9 @@ final class IslandTransitionView: NSView {
 
   override var isFlipped: Bool { true }
 
-  init(content: NSView) {
+  init(content: NSView, statusHeader: IslandStatusHeader? = nil) {
     self.content = content
+    self.statusHeader = statusHeader
     super.init(frame: .zero)
     wantsLayer = true
     live.wantsLayer = true
@@ -40,6 +42,7 @@ final class IslandTransitionView: NSView {
     silhouette.fillColor = NSColor.black.cgColor
     overlay.isHidden = true
     layer?.addSublayer(overlay)
+    if let statusHeader { addSubview(statusHeader) }
   }
 
   required init?(coder: NSCoder) { nil }
@@ -141,6 +144,7 @@ final class IslandTransitionView: NSView {
     for image in images { image.position.x += dx }
     var shift = CGAffineTransform(translationX: dx, y: 0)
     let startPath = fromPath.copy(using: &shift)
+    statusHeader?.prepare(envelope: envelope, shiftX: dx)
     live.layer?.removeAllAnimations()
     live.layer?.opacity = 0
     layer?.mask = silhouette
@@ -200,6 +204,7 @@ final class IslandTransitionView: NSView {
     }
     silhouette.path = endPath
     silhouette.add(spring, forKey: "islandSilhouette")
+    statusHeader?.move(to: frame.size, state: state, spring: spring)
     CATransaction.commit()
 
     // One completion, not a display-link callback. A stale completion can
@@ -215,6 +220,7 @@ final class IslandTransitionView: NSView {
     CATransaction.setDisableActions(true)
     window?.setFrame(frame, display: false)
     placeContent(size: frame.size)
+    statusHeader?.settle(size: frame.size, state: targetState)
     live.layer?.removeAllAnimations()
     live.layer?.opacity = 1
     // Keep a single owner of the visible outline between transitions too.

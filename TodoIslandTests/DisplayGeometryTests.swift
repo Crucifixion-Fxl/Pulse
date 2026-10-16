@@ -15,7 +15,7 @@ final class DisplayGeometryTests: XCTestCase {
   }
 
   func testContentHeightSizesBothExpandedStatesAndPreservesTopAnchor() {
-    for (safeAreaTop, expectedHeight) in [(32.0, 355.0), (0.0, 333.0)] {
+    for (safeAreaTop, expectedHeight) in [(32.0, 357.0), (0.0, 357.0)] {
       let display = DisplayMetrics(
         frame: CGRect(x: 100, y: 50, width: 1512, height: 982),
         visibleFrame: CGRect(x: 100, y: 50, width: 1512, height: 950),
@@ -34,6 +34,22 @@ final class DisplayGeometryTests: XCTestCase {
         XCTAssertEqual(origin.y + geometry.size(for: state).height, display.frame.maxY)
         XCTAssertEqual(origin.x + geometry.size(for: state).width / 2, display.frame.midX)
       }
+    }
+  }
+
+  func testStatusHeaderHasDedicatedSpaceAboveFeatureContent() {
+    for safeAreaTop in [0.0, 32.0, 48.0] {
+      let display = DisplayMetrics(
+        frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 950),
+        safeAreaTop: safeAreaTop, auxiliaryLeftWidth: nil, auxiliaryRightWidth: nil)
+      let geometry = DisplayGeometryCalculator.geometry(for: display, expandedContentHeight: 324)
+      let headerHeight = DisplayGeometryCalculator.statusHeaderHeight(for: display)
+      let contentTop = DisplayGeometryCalculator.expandedContentTopInset(for: display)
+      XCTAssertEqual(headerHeight, geometry.collapsedSize.height)
+      XCTAssertGreaterThanOrEqual(contentTop - headerHeight, 8)
+      XCTAssertEqual(geometry.expandedSize.height - contentTop
+        - DisplayGeometryCalculator.expandedBottomInset, 324)
     }
   }
 
