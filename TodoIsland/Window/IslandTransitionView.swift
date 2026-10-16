@@ -182,15 +182,16 @@ final class IslandTransitionView: NSView {
 
     CATransaction.begin()
     CATransaction.setDisableActions(true)
+    let contentSpeed = state == .collapsed ? 1 : IslandMotionProfile.openingSpeed
     for outgoing in images {
-      fade(outgoing, from: outgoing.opacity, to: 0, duration: 0.12)
+      fade(outgoing, from: outgoing.opacity, to: 0, duration: 0.12 / contentSpeed)
     }
     if let incoming = live.layer {
       // Give the silhouette a head start so text does not appear inside a
       // narrow slit, then reveal the live controls as the shoulders unfold.
       fade(incoming, from: 0, to: 1,
-        duration: state == .collapsed ? 0.18 : 0.30,
-        delay: state == .collapsed ? 0 : 0.10)
+        duration: state == .collapsed ? 0.18 : 0.30 / contentSpeed,
+        delay: state == .collapsed ? 0 : 0.10 / contentSpeed)
     }
     silhouette.path = endPath
     silhouette.add(spring, forKey: "islandSilhouette")
