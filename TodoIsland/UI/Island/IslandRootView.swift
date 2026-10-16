@@ -1767,6 +1767,7 @@ struct IslandRootView: View {
       isPlaying: model.nowPlaying?.isPlaying == true,
       isHovered: model.isPointerInsideIsland,
       isAlert: agentStore.hasPending,
+      activity: CollapsedBotState.activity(in: agentStore.sessions),
       isAnimated: collapsedFaceIsAnimated)
   }
 

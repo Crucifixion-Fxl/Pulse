@@ -12,6 +12,8 @@ enum CollapsedBotFace {
     var isHovered: Bool
     /// 0...1 scowl blend — how far the red alert flood has climbed the face.
     var alertUnit: CGFloat = 0
+    var state: CollapsedBotState = .idle
+    var stateElapsed: TimeInterval = 0
   }
 
   struct Expression: Equatable, Sendable {
@@ -32,6 +34,8 @@ enum CollapsedBotFace {
     /// Per-eye scowl rotation in radians, applied mirrored (`side * tilt`)
     /// so the eye tops lean outward into an angry \ / — 0 when calm.
     var angryTilt: CGFloat = 0
+    var eyeWidthScale: CGFloat = 1
+    var faceRotation: CGFloat = 0
   }
 
   // Timing, in seconds.
@@ -57,6 +61,10 @@ enum CollapsedBotFace {
   static let cleaverSpread: CGFloat = 0.065
 
   static func expression(at t: TimeInterval, inputs: Inputs) -> Expression {
+    if inputs.state != .idle {
+      return applyAlert(inputs.alertUnit, to: basicExpression(
+        inputs.state, at: t, elapsed: inputs.stateElapsed))
+    }
     let glance = glanceUnit(at: t)
     let base: Expression
     if inputs.isHovered {
@@ -64,9 +72,7 @@ enum CollapsedBotFace {
         eyeOpen: 1.25, glanceX: 0, eyeTilt: 0, lookY: -0.8, faceScale: 1,
         faceOffsetYFraction: 0)
     } else {
-      // No sleep mode: the face stays awake whether or not music plays —
-      // playback only adds the beat bounce. The eyes never change size
-      // except for the momentary blink envelope.
+      // Idle stays awake; the lifecycle controller enters sleep separately.
       let beat = inputs.isPlaying ? beatPulse(at: t) : 0
       let breath = CGFloat(sin(2 * .pi * t / 3.9))
       // Grok Bot motion language: a slow tilt sway plus a lean into the
@@ -90,6 +96,76 @@ enum CollapsedBotFace {
       to: Expression(
         eyeOpen: 1, glanceX: 0, eyeTilt: 0.06, lookY: 0, faceScale: 1,
         faceOffsetYFraction: 0))
+  }
+
+  /// Compact native interpretations of the seven Grok Bot lifecycle poses:
+  /// https://github.com/iduu/grokbot-animation/blob/main/component/runtime/state-behavior-system.js
+  /// Adapted to our existing 24–26pt circle and capsule eyes, without a web runtime.
+  static func basicExpression(
+    _ state: CollapsedBotState, at t: TimeInterval, elapsed: TimeInterval
+  ) -> Expression {
+    let blink = blinkOpenFraction(at: t)
+    var e = Expression(eyeOpen: blink, glanceX: 0, eyeTilt: 0.06, lookY: 0,
+      faceScale: 1, faceOffsetYFraction: 0)
+    switch state {
+    case .idle: break
+    case .sleeping:
+      e.eyeOpen = 0.07
+      e.eyeWidthScale = 1.45
+      e.eyeTilt = 0
+      e.lookY = 0.5
+      e.faceRotation = 0.07
+      e.faceScale = 1 + 0.012 * sin(t * 0.8)
+      e.faceOffsetYFraction = 0.018 + 0.008 * sin(t * 0.8)
+    case .waking:
+      let stretch = sin(.pi * min(1, max(0, (elapsed - 0.25) / 0.95)))
+      e.eyeOpen = 0.07 + 0.93 * min(1, max(0, (elapsed - 0.2) / 0.35)) + 0.18 * stretch
+      e.eyeWidthScale = 1 + 0.12 * stretch
+      e.lookY = -0.35 * stretch
+      e.faceScale = 1 + 0.035 * stretch
+      e.faceOffsetYFraction = -0.025 * stretch
+    case .listening:
+      let nod = max(0, sin(t * 2.2))
+      e.eyeOpen = 1.15 * blink
+      e.eyeWidthScale = 1.08
+      e.lookY = -0.5 + 0.15 * nod
+      e.faceRotation = 0.12 + 0.02 * sin(t * 0.7)
+      e.faceOffsetYFraction = 0.009 * nod
+    case .thinking:
+      e.eyeOpen = 0.78 * blink
+      e.eyeWidthScale = 1.1
+      e.glanceX = 0.45 + 0.18 * sin(t * 0.65)
+      e.lookY = -0.75
+      e.eyeTilt = -0.10
+      e.faceRotation = -0.10 + 0.04 * sin(t * 0.5)
+      e.faceOffsetYFraction = 0.009 * sin(t * 0.8)
+    case .searching:
+      let scan = sin(t * 1.3)
+      e.glanceX = 0.95 * scan
+      e.lookY = 0.2 * sin(t * 1.7)
+      e.eyeOpen = 1.05 * blink
+      e.eyeTilt = 0.07 * scan
+      e.faceRotation = 0.14 * scan
+      e.faceOffsetYFraction = 0.012 * sin(t * 1.7)
+    case .working:
+      let nod = max(0, sin(t * .pi * 3.2))
+      e.eyeOpen = 0.88 * blink
+      e.eyeWidthScale = 0.95
+      e.glanceX = 0.12 * sin(t * 1.2)
+      e.lookY = 0.55
+      e.faceRotation = 0.05 + 0.025 * nod
+      e.faceScale = 1 - 0.012 * nod
+      e.faceOffsetYFraction = 0.012 * nod
+    }
+    return e
+  }
+
+  static func staticExpression(state: CollapsedBotState, alert: Bool) -> Expression {
+    if state == .idle { return staticExpression(isPlaying: false, alert: alert) }
+    var pose = basicExpression(state, at: 0, elapsed: 0.8)
+    pose.faceScale = 1
+    pose.faceOffsetYFraction = 0
+    return applyAlert(alert ? 1 : 0, to: pose)
   }
 
   /// Alert-flood envelope: 0 → 1 as the red rises from the chin when a
@@ -204,7 +280,7 @@ enum CollapsedBotFace {
 /// The animated bot character shown in the collapsed island bar: a white
 /// face and two solid-black slanted capsule eyes (Grok Bot style — roughly
 /// 3:1 pills) that sway, lean into glances, blink, and ride the beat — no
-/// mouth, no brows, no sleep mode, flat coloring. The tilt is the life of
+/// mouth, no brows, flat coloring. The tilt is the life of
 /// it: perfectly upright eyes read as vacant, swaying ones read as curious.
 /// While an agent request waits the face floods red and the eyes morph
 /// into cleaver eyes (菜刀眼): each a straight lid line across the top
@@ -220,6 +296,7 @@ struct CollapsedBotFaceView: View {
   /// True while an agent approval/question is pending: the face floods red
   /// from the chin and the eyes scowl until the queue clears.
   var isAlert: Bool = false
+  var activity: CollapsedBotState = .idle
   /// false under Reduce Motion or while the surface is hidden — renders one
   /// static frame instead of subscribing to the 30 Hz timeline.
   let isAnimated: Bool
@@ -232,6 +309,11 @@ struct CollapsedBotFaceView: View {
   /// rise/drain. nil = no transition seen yet (an alert already pending at
   /// first appearance renders fully red, without replaying the climb).
   @State private var alertAnchor: Double?
+  @State private var animation = CollapsedBotAnimation()
+
+  private var context: CollapsedBotAnimation.Context {
+    .init(activity: activity, isPlaying: isPlaying, isHovered: isHovered, isAlert: isAlert)
+  }
 
   var body: some View {
     Group {
@@ -240,20 +322,22 @@ struct CollapsedBotFaceView: View {
           let t = timeline.date.timeIntervalSinceReferenceDate
           let flood = alertUnit(now: t)
           face(
-            CollapsedBotFace.expression(
-              at: t,
-              inputs: CollapsedBotFace.Inputs(
-                isPlaying: isPlaying, isHovered: isHovered, alertUnit: flood)),
+            CollapsedBotFace.applyAlert(flood, to: animation.expression(at: t)),
             flood: flood)
         }
       } else {
         face(
-          CollapsedBotFace.staticExpression(isPlaying: isPlaying, alert: isAlert),
+          CollapsedBotFace.staticExpression(
+            state: animation.state(at: Date.timeIntervalSinceReferenceDate), alert: isAlert),
           flood: isAlert ? 1 : 0)
       }
     }
     .frame(width: size, height: size)
     .accessibilityHidden(true)  // decorative; the container keeps its label
+    .onAppear { animation.update(context, at: Date.timeIntervalSinceReferenceDate) }
+    .onChange(of: context) { _, next in
+      animation.update(next, at: Date.timeIntervalSinceReferenceDate)
+    }
     .onChange(of: isAlert) { _, _ in
       alertAnchor = Date().timeIntervalSinceReferenceDate
     }
@@ -273,6 +357,7 @@ struct CollapsedBotFaceView: View {
       eye(e, side: 1, m: m, alert: flood)
     }
     .scaleEffect(e.faceScale)
+    .rotationEffect(.radians(e.faceRotation * (1 - flood)))
     .offset(y: e.faceOffsetYFraction * size)
   }
 
@@ -312,7 +397,7 @@ struct CollapsedBotFaceView: View {
       style: .continuous
     )
     .fill(Self.eyeColor)
-    .frame(width: g.w, height: max(1, g.h))
+    .frame(width: g.w * (1 + (e.eyeWidthScale - 1) * (1 - alert)), height: max(1, g.h))
     // Mirrored tilt: tops lean OUTWARD (\ /) so the inner lid corners press
     // down toward the nose — the arms of a 'Y', the angry 倒八字, not the
     // worried 八 the un-negated sign renders.
