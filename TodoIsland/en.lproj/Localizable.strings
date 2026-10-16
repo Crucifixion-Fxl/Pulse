@@ -205,3 +205,26 @@
 "music.controls.pause" = "Pause";
 
 "reminder.delete.accessibility" = "Delete %@";
+
+/* Local weather */
+"weather.title" = "Weather";
+"weather.clear" = "Clear";
+"weather.partly-cloudy" = "Partly cloudy";
+"weather.overcast" = "Overcast";
+"weather.fog" = "Fog";
+"weather.drizzle" = "Drizzle";
+"weather.rain" = "Rain";
+"weather.snow" = "Snow";
+"weather.thunderstorm" = "Thunderstorm";
+"weather.unknown" = "Weather";
+"weather.current-location" = "Current location";
+"weather.location-denied" = "Location access needed";
+"weather.location-unavailable" = "Location unavailable";
+"weather.unavailable" = "Weather unavailable";
+"weather.locating" = "Locating…";
+"weather.stale" = "Update pending";
+"weather.high-low" = "High %d°  Low %d°";
+"weather.updated" = "Updated";
+"weather.last-update" = "Last update";
+"weather.location-settings" = "Location settings";
+"weather.refresh" = "Refresh weather";

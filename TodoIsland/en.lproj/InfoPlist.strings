@@ -1,2 +1,4 @@
 "CFBundleDisplayName" = "Todo Island";
 "NSRemindersFullAccessUsageDescription" = "Todo Island uses Reminders access to show and manage your selected iCloud reminder list. Your reminder content stays on this Mac.";
+"NSLocationUsageDescription" = "Todo Island uses your current city to show local weather. Approximate coordinates are sent to Open-Meteo; precise location is not stored.";
+"NSLocationWhenInUseUsageDescription" = "Todo Island uses your current city to show local weather. Approximate coordinates are sent to Open-Meteo; precise location is not stored.";

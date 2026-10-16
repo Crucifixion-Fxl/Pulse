@@ -9,15 +9,19 @@ final class IslandStatusHeader: NSView {
   let quota: NSView
   let bot: NSView
   let additionalQuotas: NSView?
-  private var items: [NSView] { [quota, bot] + [additionalQuotas].compactMap { $0 } }
+  let weather: NSView?
+  private var items: [NSView] { [quota, bot] + [additionalQuotas, weather].compactMap { $0 } }
+  private var isExpanded = false
   var barHeight: CGFloat
 
   override var isFlipped: Bool { true }
 
-  init(quota: NSView, bot: NSView, additionalQuotas: NSView? = nil, barHeight: CGFloat) {
+  init(quota: NSView, bot: NSView, additionalQuotas: NSView? = nil,
+       weather: NSView? = nil, barHeight: CGFloat) {
     self.quota = quota
     self.bot = bot
     self.additionalQuotas = additionalQuotas
+    self.weather = weather
     self.barHeight = barHeight
     super.init(frame: .zero)
     wantsLayer = true
@@ -46,15 +50,21 @@ final class IslandStatusHeader: NSView {
   }
 
   func move(to size: CGSize, state: IslandPresentationState, spring: CASpringAnimation?) {
+    isExpanded = state != .collapsed
     let inset: CGFloat = state == .collapsed ? 12 : 20
     let left = (bounds.width - size.width) / 2
     let faceSize = min(26, max(18, barHeight - 6)).rounded()
-    let frames = [
+    let botX = left + size.width - inset - faceSize / 2 - 16
+    var frames = [
       CGRect(x: left + inset, y: 0, width: 60, height: barHeight),
-      CGRect(x: left + size.width - inset - faceSize / 2 - 16,
-        y: 0, width: 32, height: barHeight),
-      CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight)
+      CGRect(x: botX, y: 0, width: 32, height: barHeight)
     ]
+    if additionalQuotas != nil {
+      frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
+    }
+    if weather != nil {
+      frames.append(CGRect(x: botX - 168, y: 0, width: 156, height: barHeight))
+    }
     for (item, destination) in zip(items, frames) {
       let start = item.layer?.position ?? .zero
       item.frame = destination
@@ -67,7 +77,13 @@ final class IslandStatusHeader: NSView {
         layer.add(movement, forKey: "headerPosition")
       }
     }
-    guard let additionalQuotas, let layer = additionalQuotas.layer else { return }
+    for extra in [additionalQuotas, weather].compactMap({ $0 }) {
+      reveal(extra, state: state, spring: spring)
+    }
+  }
+
+  private func reveal(_ item: NSView, state: IslandPresentationState, spring: CASpringAnimation?) {
+    guard let layer = item.layer else { return }
     let opacity = layer.presentation()?.opacity ?? layer.opacity
     layer.removeAnimation(forKey: "headerReveal")
     let target: Float = state == .collapsed ? 0 : 1
@@ -91,6 +107,12 @@ final class IslandStatusHeader: NSView {
     move(to: size, state: state, spring: nil)
   }
 
-  // Decorative chrome must not swallow the surface's click/hover routing.
-  override func hitTest(_ point: NSPoint) -> NSView? { nil }
+  // Only the weather chip is interactive; the rest remains surface chrome.
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let localPoint = convert(point, from: superview)
+    guard isExpanded, let weather,
+      (weather.layer?.presentation()?.opacity ?? weather.layer?.opacity ?? 0) > 0.95,
+      weather.frame.contains(localPoint) else { return nil }
+    return weather.hitTest(localPoint)
+  }
 }

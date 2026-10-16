@@ -330,11 +330,12 @@ struct IslandRootView: View {
             IslandStatusItemView(item: .additionalQuotas, displayID: displayID)
               .frame(width: 170).padding(.leading, 12)
             Spacer(minLength: 0)
+            IslandStatusItemView(item: .weather, displayID: displayID)
+              .frame(width: 156).padding(.trailing, 12)
             IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
           }
           .padding(.horizontal, 20)
           .frame(height: expandedContentTopInset - 8)
-          .allowsHitTesting(false)
         }
       }
       .background(alignment: .top) {

@@ -30,6 +30,10 @@
 	<string>Copyright © 2026 fxl. All rights reserved.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Todo Island uses Reminders access to show and manage your selected iCloud reminder list. Your reminder content stays on this Mac.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Todo Island uses your current city to show local weather. Approximate coordinates are sent to Open-Meteo; precise location is not stored.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Todo Island uses your current city to show local weather. Approximate coordinates are sent to Open-Meteo; precise location is not stored.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSAppTransportSecurity</key>
