@@ -332,8 +332,6 @@ struct IslandRootView: View {
             Spacer(minLength: 0)
             IslandStatusItemView(item: .weather, displayID: displayID)
               .frame(width: 156).padding(.trailing, 8)
-            IslandStatusItemView(item: .runner, displayID: displayID)
-              .frame(width: 52).padding(.trailing, 12)
             IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
           }
           .padding(.horizontal, 20)
