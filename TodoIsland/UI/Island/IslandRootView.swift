@@ -334,6 +334,13 @@ struct IslandRootView: View {
           }
           .padding(.horizontal, 20)
           .frame(height: expandedContentTopInset - 8)
+          .overlay(alignment: .top) {
+            IslandHeaderDividerView()
+              .frame(height: 1)
+              .padding(.horizontal, 20)
+              .offset(y: expandedContentTopInset - 4)
+              .accessibilityHidden(true)
+          }
           .allowsHitTesting(false)
         }
       }

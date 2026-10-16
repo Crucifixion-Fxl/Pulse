@@ -10,6 +10,7 @@ final class IslandStatusHeader: NSView {
   let bot: NSView
   let additionalQuotas: NSView?
   private var items: [NSView] { [quota, bot] + [additionalQuotas].compactMap { $0 } }
+  private let divider = IslandHeaderDivider()
   var barHeight: CGFloat
 
   override var isFlipped: Bool { true }
@@ -22,6 +23,7 @@ final class IslandStatusHeader: NSView {
     super.init(frame: .zero)
     wantsLayer = true
     layer?.zPosition = 2
+    layer?.addSublayer(divider)
     for item in items {
       item.wantsLayer = true
       addSubview(item)
@@ -38,6 +40,7 @@ final class IslandStatusHeader: NSView {
   /// preserving continuity even when an opening or closing is interrupted.
   func prepare(envelope: CGSize, shiftX: CGFloat) {
     let frames = presentedItemFrames
+    divider.freeze(shiftX: shiftX)
     frame = CGRect(origin: .zero, size: envelope)
     for (item, visible) in zip(items, frames) {
       item.layer?.removeAnimation(forKey: "headerPosition")
@@ -67,6 +70,8 @@ final class IslandStatusHeader: NSView {
         layer.add(movement, forKey: "headerPosition")
       }
     }
+    divider.move(width: size.width, centerX: bounds.midX, y: barHeight + 4,
+      expanded: state != .collapsed, spring: spring)
     guard let additionalQuotas, let layer = additionalQuotas.layer else { return }
     let opacity = layer.presentation()?.opacity ?? layer.opacity
     layer.removeAnimation(forKey: "headerReveal")
