@@ -1383,20 +1383,21 @@ struct IslandRootView: View {
           .accessibilityLabel(priorityLabel(reminder.priority))
       }
 
-      if isPinned {
-        Menu {
-          Button(L10n.text("reminder.edit")) { model.beginEditing(reminder) }
-          Divider()
-          Button(L10n.text("reminder.delete"), role: .destructive) {
-            reminderPendingDeletion = reminder
-          }
-        } label: {
-          Image(systemName: "ellipsis")
-            .frame(width: 11, height: 11)
-        }
-        .menuStyle(.borderlessButton)
-        .accessibilityLabel(Text(String(format: L10n.text("reminder.actions"), reminder.title)))
+      Button(role: .destructive) {
+        if !isPinned { model.pinIslandFromSurface(on: displayID) }
+        reminderPendingDeletion = reminder
+      } label: {
+        Image(systemName: "trash")
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(isHovered ? Color.red.opacity(0.85) : ReUITheme.muted)
+          .frame(width: 20, height: 20)
+          .contentShape(Rectangle())
       }
+      .buttonStyle(.plain)
+      .fixedSize()
+      .disabled(isCompleting)
+      .help(L10n.text("reminder.delete"))
+      .accessibilityLabel(Text(String(format: L10n.text("reminder.delete.accessibility"), reminder.title)))
     }
     .padding(.horizontal, 5.5)
     .padding(.vertical, 4)

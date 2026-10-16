@@ -203,3 +203,5 @@
 "music.controls.space-hint" = "Space to play / pause";
 "music.controls.play" = "Play";
 "music.controls.pause" = "Pause";
+
+"reminder.delete.accessibility" = "Delete %@";
