@@ -44,3 +44,24 @@ struct KeyboardEventMonitor: NSViewRepresentable {
     }
   }
 }
+
+/// Space belongs to playback only inside the opened island, outside editors.
+/// Handle it before SwiftUI buttons/list shortcuts so one press has one effect.
+@MainActor
+enum IslandPlaybackShortcut {
+  static func handle(
+    _ event: NSEvent, isExpanded: Bool, isEditingReminder: Bool,
+    toggle: () -> Void
+  ) -> Bool {
+    guard isExpanded, !isEditingReminder, event.type == .keyDown, event.keyCode == 49,
+      event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift]),
+      let panel = event.window as? IslandPanel, panel.isKeyWindow,
+      panel.acceptsKeyInput, panel.attachedSheet == nil,
+      NSApp.modalWindow == nil
+    else { return false }
+    if let editor = panel.firstResponder as? NSText, editor.isEditable { return false }
+    // Consume auto-repeat without toggling back and forth while Space is held.
+    if !event.isARepeat { toggle() }
+    return true
+  }
+}

@@ -1924,6 +1924,13 @@ struct IslandRootView: View {
   }
 
   private func handleKeyEvent(_ event: NSEvent) -> Bool {
+    if IslandPlaybackShortcut.handle(event,
+      isExpanded: effectiveState != .collapsed,
+      isEditingReminder: model.editingReminderID != nil,
+      toggle: {
+        if model.nowPlaying != nil { model.musicTogglePlayPause() }
+      }) { return true }
+
     // A retained, invisible reminder pane must not consume typing or list
     // shortcuts while the user interacts with another destination.
     guard selectedSidebarItem == .reminders else {
@@ -1993,11 +2000,6 @@ struct IslandRootView: View {
     case 36:
       if let selected = model.selectedReminder {
         model.beginEditing(selected)
-        return true
-      }
-    case 49:
-      if let selected = model.selectedReminder {
-        model.complete(selected, reduceMotion: reduceMotion)
         return true
       }
     case 51, 117:

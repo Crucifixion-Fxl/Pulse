@@ -199,3 +199,7 @@
 "agents.activity.days" = "%d 天前";
 
 "island.quota.demo" = "示例";
+
+"music.controls.space-hint" = "空格键 播放 / 暂停";
+"music.controls.play" = "播放";
+"music.controls.pause" = "暂停";

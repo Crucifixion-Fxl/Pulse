@@ -149,12 +149,10 @@ struct MusicPanelView: View {
 
       controlsRow
 
-      if !model.mediaKeysReady.contains(16) {
-        Text("music.controls.seed-hint")
-          .font(.system(size: 9, weight: .medium))
-          .foregroundStyle(ReUITheme.muted)
-          .padding(.top, 6)
-      }
+      Text("music.controls.space-hint")
+        .font(.system(size: 9, weight: .medium))
+        .foregroundStyle(ReUITheme.muted)
+        .padding(.top, 6)
     }
     .padding(12)
     .frame(width: Layout.playerCardWidth, height: Layout.cardHeight, alignment: .top)
@@ -267,7 +265,7 @@ struct MusicPanelView: View {
       ControlButton(
         symbol: model.nowPlaying?.isPlaying == true ? "pause.fill" : "play.fill",
         size: 17,
-        label: "music.controls.toggle"
+        label: model.nowPlaying?.isPlaying == true ? "music.controls.pause" : "music.controls.play"
       ) {
         model.musicTogglePlayPause()
       }
