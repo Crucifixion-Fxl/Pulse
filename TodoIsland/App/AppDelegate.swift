@@ -3,11 +3,11 @@ import Combine
 import SwiftUI
 
 @main
-enum TodoIslandApplication {
+enum PulseApplication {
   @MainActor
   static func main() {
     // Hidden diagnostic: runs the perl-helper transport test inside the
-    // real (sandboxed) process and exits. `TodoIsland --media-harness-test`
+    // real (sandboxed) process and exits. `Pulse --media-harness-test`
     if CommandLine.arguments.contains("--media-harness-test") {
       NowPlayingController.runSandboxedHarness()
     }

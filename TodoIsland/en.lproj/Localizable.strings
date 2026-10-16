@@ -1,5 +1,5 @@
-"app.name" = "Todo Island";
-"about.detail" = "A private island for your iCloud reminders.";
+"app.name" = "Pulse";
+"about.detail" = "Your daily workspace for reminders, AI, music, clipboard, and weather.";
 
 "common.ok" = "OK";
 "common.cancel" = "Cancel";
@@ -8,12 +8,12 @@
 
 "error.title" = "Something Went Wrong";
 "error.list-not-found" = "The selected reminder list is no longer available.";
-"error.reminder-not-found" = "This reminder is no longer available. Todo Island will refresh the list.";
+"error.reminder-not-found" = "This reminder is no longer available. Pulse will refresh the list.";
 "error.empty-title" = "A reminder title cannot be empty.";
 "error.empty-list-title" = "A list name cannot be empty.";
 "error.duplicate-list-name" = "A list with this name already exists in the selected source.";
 "error.operation-unsupported" = "This action is not available for the selected source.";
-"error.local-store-unavailable" = "Todo Island local storage is unavailable. Your existing data has not been changed.";
+"error.local-store-unavailable" = "Pulse local storage is unavailable. Your existing data has not been changed.";
 
 "island.locked" = "Authorize iCloud Reminders";
 "island.locked.accessibility" = "Authorize iCloud Reminders to see your lists.";
@@ -70,8 +70,8 @@
 "calendar.empty-day.detail" = "Reminders you add in Apple Reminders appear here.";
 
 "permission.required" = "Reminders Access Required";
-"permission.required.detail" = "Apple does not offer read-only Reminders permission. Todo Island uses full access only to display and manage the iCloud reminders you choose.";
-"permission.privacy" = "Todo Island does not upload reminder content. iCloud sync remains managed by Apple Reminders.";
+"permission.required.detail" = "Apple does not offer read-only Reminders permission. Pulse uses full access only to display and manage the iCloud reminders you choose.";
+"permission.privacy" = "Pulse does not upload reminder content. iCloud sync remains managed by Apple Reminders.";
 "permission.allow" = "Allow Reminders Access";
 "permission.open-island" = "Open Island to Authorize";
 "permission.open-settings" = "Open System Settings";
@@ -80,7 +80,7 @@
 "permission.denied" = "Denied";
 "permission.restricted" = "Restricted";
 
-"settings.title" = "Todo Island Settings";
+"settings.title" = "Pulse Settings";
 "settings.reminders" = "iCloud Reminders";
 "settings.permission" = "Permission";
 "settings.island" = "Island";
@@ -90,12 +90,12 @@
 "settings.fullscreen.policy" = "Hide the collapsed fallback capsule; allow explicitly opened Islands";
 "settings.launch-at-login" = "Launch at Login";
 "settings.about" = "About";
-"settings.privacy" = "Todo Island processes Reminder content only on this Mac.";
+"settings.privacy" = "Pulse processes Reminder content only on this Mac.";
 
-"menu.open" = "Open Todo Island";
+"menu.open" = "Open Pulse";
 "menu.settings" = "Settings…";
-"menu.about" = "About Todo Island";
-"menu.quit" = "Quit Todo Island";
+"menu.about" = "About Pulse";
+"menu.quit" = "Quit Pulse";
 "sidebar.reminders" = "Reminders";
 "heatmap.cell.tooltip" = "%1$@: %2$d completed";
 "sidebar.placeholder" = "Coming soon";

@@ -279,14 +279,14 @@ final class LocalSourceAppModelTests: XCTestCase {
     await model.start()
 
     await model.useLocal()
-    XCTAssertEqual(store.createdListTitles, ["Todo Island"])
+    XCTAssertEqual(store.createdListTitles, ["Pulse"])
     XCTAssertEqual(model.activeList?.source, .local)
 
     store.removeAllLists()
     await model.reload()
     await model.useLocal()
 
-    XCTAssertEqual(store.createdListTitles, ["Todo Island"])
+    XCTAssertEqual(store.createdListTitles, ["Pulse"])
     XCTAssertEqual(model.requestedListCreationSource, .local)
   }
 

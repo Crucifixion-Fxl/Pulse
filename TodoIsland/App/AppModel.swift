@@ -765,7 +765,7 @@ final class AppModel: ObservableObject {
     }
 
     if !defaults.bool(forKey: Keys.didInitializeLocalSource) {
-      _ = await createList(title: "Todo Island", source: .local)
+      _ = await createList(title: "Pulse", source: .local)
     } else {
       requestNewList(source: .local)
     }

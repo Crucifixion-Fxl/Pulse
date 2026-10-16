@@ -1,4 +1,4 @@
-"CFBundleDisplayName" = "Todo Island";
-"NSRemindersFullAccessUsageDescription" = "Todo Island 使用提醒事项权限来显示和管理你选择的 iCloud 列表。提醒事项内容只保留在这台 Mac 上。";
-"NSLocationUsageDescription" = "Todo Island 使用当前城市显示本地天气，仅向 Open-Meteo 发送降低精度的坐标，不保存精确位置。";
-"NSLocationWhenInUseUsageDescription" = "Todo Island 使用当前城市显示本地天气，仅向 Open-Meteo 发送降低精度的坐标，不保存精确位置。";
+"CFBundleDisplayName" = "Pulse";
+"NSRemindersFullAccessUsageDescription" = "Pulse 使用提醒事项权限来显示和管理你选择的 iCloud 列表。提醒事项内容只保留在这台 Mac 上。";
+"NSLocationUsageDescription" = "Pulse 使用当前城市显示本地天气，仅向 Open-Meteo 发送降低精度的坐标，不保存精确位置。";
+"NSLocationWhenInUseUsageDescription" = "Pulse 使用当前城市显示本地天气，仅向 Open-Meteo 发送降低精度的坐标，不保存精确位置。";

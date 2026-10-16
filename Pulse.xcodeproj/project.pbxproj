@@ -12,19 +12,19 @@
 			containerPortal = AA0000000000000000000010 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = AA0000000000000000000020;
-			remoteInfo = TodoIsland;
+			remoteInfo = Pulse;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		AA0000000000000000000030 /* TodoIsland.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TodoIsland.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000030 /* Pulse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pulse.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000031 /* TodoIslandTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TodoIslandTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000032 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA0000000000000000000033 /* TodoIsland.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TodoIsland.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AA0000000000000000000040 /* TodoIsland */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = TodoIsland; sourceTree = "<group>"; };
+		AA0000000000000000000040 /* Pulse */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = TodoIsland; sourceTree = "<group>"; };
 		AA0000000000000000000041 /* TodoIslandTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = TodoIslandTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -49,7 +49,7 @@
 		AA0000000000000000000060 = {
 			isa = PBXGroup;
 			children = (
-				AA0000000000000000000040 /* TodoIsland */,
+				AA0000000000000000000040 /* Pulse */,
 				AA0000000000000000000041 /* TodoIslandTests */,
 				AA0000000000000000000061 /* Config */,
 				AA0000000000000000000062 /* Products */,
@@ -68,7 +68,7 @@
 		AA0000000000000000000062 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				AA0000000000000000000030 /* TodoIsland.app */,
+				AA0000000000000000000030 /* Pulse.app */,
 				AA0000000000000000000031 /* TodoIslandTests.xctest */,
 			);
 			name = Products;
@@ -77,9 +77,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		AA0000000000000000000020 /* TodoIsland */ = {
+		AA0000000000000000000020 /* Pulse */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = AA0000000000000000000070 /* Build configuration list for PBXNativeTarget "TodoIsland" */;
+			buildConfigurationList = AA0000000000000000000070 /* Build configuration list for PBXNativeTarget "Pulse" */;
 			buildPhases = (
 				AA0000000000000000000080 /* Sources */,
 				AA0000000000000000000050 /* Frameworks */,
@@ -90,13 +90,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				AA0000000000000000000040 /* TodoIsland */,
+				AA0000000000000000000040 /* Pulse */,
 			);
-			name = TodoIsland;
+			name = Pulse;
 			packageProductDependencies = (
 			);
-			productName = TodoIsland;
-			productReference = AA0000000000000000000030 /* TodoIsland.app */;
+			productName = Pulse;
+			productReference = AA0000000000000000000030 /* Pulse.app */;
 			productType = "com.apple.product-type.application";
 		};
 		AA0000000000000000000021 /* TodoIslandTests */ = {
@@ -141,7 +141,7 @@
 					};
 				};
 			};
-			buildConfigurationList = AA0000000000000000000072 /* Build configuration list for PBXProject "TodoIsland" */;
+			buildConfigurationList = AA0000000000000000000072 /* Build configuration list for PBXProject "Pulse" */;
 			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -156,7 +156,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				AA0000000000000000000020 /* TodoIsland */,
+				AA0000000000000000000020 /* Pulse */,
 				AA0000000000000000000021 /* TodoIslandTests */,
 			);
 		};
@@ -199,7 +199,7 @@
 /* Begin PBXTargetDependency section */
 		AA00000000000000000000A1 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = AA0000000000000000000020 /* TodoIsland */;
+			target = AA0000000000000000000020 /* Pulse */;
 			targetProxy = AA0000000000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -226,6 +226,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fxl.TodoIsland;
+				PRODUCT_MODULE_NAME = TodoIsland;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
@@ -256,6 +257,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fxl.TodoIsland;
+				PRODUCT_MODULE_NAME = TodoIsland;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
@@ -279,7 +281,7 @@
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TodoIsland.app/Contents/MacOS/TodoIsland";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Pulse.app/Contents/MacOS/Pulse";
 			};
 			name = Debug;
 		};
@@ -296,7 +298,7 @@
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TodoIsland.app/Contents/MacOS/TodoIsland";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Pulse.app/Contents/MacOS/Pulse";
 			};
 			name = Release;
 		};
@@ -338,7 +340,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		AA0000000000000000000070 /* Build configuration list for PBXNativeTarget "TodoIsland" */ = {
+		AA0000000000000000000070 /* Build configuration list for PBXNativeTarget "Pulse" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AA00000000000000000000B0 /* Debug */,
@@ -356,7 +358,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		AA0000000000000000000072 /* Build configuration list for PBXProject "TodoIsland" */ = {
+		AA0000000000000000000072 /* Build configuration list for PBXProject "Pulse" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AA00000000000000000000B4 /* Debug */,

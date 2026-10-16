@@ -1,10 +1,10 @@
-# Todo Island Product Specification
+# Pulse Product Specification
 
 ## Product
 
-Todo Island is a personal macOS accessory application that presents and manages Reminders from the iCloud Source in a Dynamic Island-style surface attached to the top center of one automatically determined Host Display.
+Pulse is a personal macOS accessory application that brings reminders, AI agent activity and usage, music, clipboard history, and local weather into a notch-attached surface.
 
-- Product name: `Todo Island`
+- Product name: `Pulse`
 - Bundle identifier: `com.fxl.TodoIsland`
 - Minimum system: macOS 14
 - Initial delivery: personal, local build signed with `Sign to Run Locally`
@@ -14,7 +14,7 @@ The canonical product vocabulary lives in [`CONTEXT.md`](../CONTEXT.md). Archite
 
 ## Product Boundaries
 
-Todo Island reads and writes iCloud Reminders through Apple's public EventKit APIs. It requests full Reminders access because Apple does not expose a read-only authorization level. Todo Island never uploads, analyzes, or writes Reminder content to logs; Apple Reminders remains responsible for iCloud synchronization of the iCloud Source.
+Pulse reads and writes iCloud Reminders through Apple's public EventKit APIs. It requests full Reminders access because Apple does not expose a read-only authorization level. Pulse never uploads, analyzes, or writes Reminder content to logs; Apple Reminders remains responsible for iCloud synchronization of the iCloud Source.
 
 The product:
 
@@ -34,7 +34,7 @@ The first version does not include search, filters, notes, URLs, attachments, lo
 
 ## Reminder Ordering
 
-EventKit does not expose the manual ordering used by Apple Reminders. Todo Island therefore does not support drag reordering and computes a stable action order:
+EventKit does not expose the manual ordering used by Apple Reminders. Pulse therefore does not support drag reordering and computes a stable action order:
 
 1. overdue;
 2. due today;
@@ -95,7 +95,7 @@ Reminders without a Due Date always appear in the Undated section of the Day Sch
 
 The last valid Active List is restored on launch. If it no longer exists, the app falls back to the first available iCloud Reminder List. Lists are ordered alphabetically inside each source group.
 
-Todo Island does not manage lists: creating, renaming, deleting, and switching Reminder Lists happen in Apple Reminders. Externally created duplicate iCloud names remain supported and are distinguished by stable identity, source, and color.
+Pulse does not manage lists: creating, renaming, deleting, and switching Reminder Lists happen in Apple Reminders. Externally created duplicate iCloud names remain supported and are distinguished by stable identity, source, and color.
 
 When neither the selected date nor the Undated section has any Reminder, the Day Schedule shows a short all-clear state.
 
@@ -121,7 +121,7 @@ The application icon is an original black notch silhouette with a colored checkm
 
 When the Island grows between presentation states, the surface follows a damped spring pinned at the top edge and horizontal center: it overshoots its final size and settles with a small elastic wobble. Collapsing stays critically damped without overshoot. Reduce Motion keeps immediate state changes.
 
-Todo Island supports VoiceOver, keyboard navigation, increased contrast where applicable, and Reduce Motion. Reduce Motion replaces geometry-heavy spring transitions with restrained fades or immediate state changes. VoiceOver temporarily keeps the Collapsed Island visible even when Auto-Hide is selected; the menu-bar Open Island action remains an accessible path and no new global shortcut is introduced.
+Pulse supports VoiceOver, keyboard navigation, increased contrast where applicable, and Reduce Motion. Reduce Motion replaces geometry-heavy spring transitions with restrained fades or immediate state changes. VoiceOver temporarily keeps the Collapsed Island visible even when Auto-Hide is selected; the menu-bar Open Island action remains an accessible path and no new global shortcut is introduced.
 
 ## Displays and Full Screen
 
@@ -144,7 +144,7 @@ A normal collapsed Host Display change uses a brief fade out on the old display 
 
 ## Application Surfaces
 
-Todo Island is an accessory application with no Dock icon. Its menu-bar icon opens a menu containing:
+Pulse is an accessory application with no Dock icon. Its menu-bar icon opens a menu containing:
 
 - Open Island;
 - Settings;
@@ -167,7 +167,7 @@ Launch at Login is disabled by default.
 
 Authorization controls the iCloud Source.
 
-On first launch, Todo Island opens a Pinned Initial Setup Island. Its Collapsed Island Visibility section presents two unselected cards: `Always Visible — Keep the Collapsed Island visible.` and `Auto-Hide — Hide it when the pointer leaves; move to the top center to reveal it.` In Simplified Chinese they read `常驻显示：折叠灵动岛始终保持可见` and `自动隐藏：鼠标离开后隐藏，移到屏幕顶部中央即可唤醒`. The user must select one before the Allow Access action becomes available.
+On first launch, Pulse opens a Pinned Initial Setup Island. Its Collapsed Island Visibility section presents two unselected cards: `Always Visible — Keep the Collapsed Island visible.` and `Auto-Hide — Hide it when the pointer leaves; move to the top center to reveal it.` In Simplified Chinese they read `常驻显示：折叠灵动岛始终保持可见` and `自动隐藏：鼠标离开后隐藏，移到屏幕顶部中央即可唤醒`. The user must select one before the Allow Access action becomes available.
 
 After the visibility choice, Initial Setup explains why full Reminders access is required for iCloud, states that Reminder content stays on the device, and offers the Allow Access action. The application does not use a separate setup window. The macOS authorization prompt remains a system-owned surface triggered by Allow Access.
 
@@ -185,9 +185,9 @@ After launch, the app restores the last valid Active List. If it is unavailable 
 
 If no iCloud Reminder List is available, the empty state offers New iCloud List, Open Reminders, and Check Again actions.
 
-If access is revoked while Todo Island is running and an iCloud list is active, the Island preserves its current presentation state and replaces only the iCloud content with the locked state. The Island does not expand itself or take focus solely because authorization changed.
+If access is revoked while Pulse is running and an iCloud list is active, the Island preserves its current presentation state and replaces only the iCloud content with the locked state. The Island does not expand itself or take focus solely because authorization changed.
 
-If authorization is revoked while editing an iCloud Reminder, the unsaved draft remains in memory but cannot be saved. If access returns, Todo Island refetches the Reminder, validates that the draft still has a valid target, and lets the user explicitly save it. Authorization restoration never writes a draft automatically.
+If authorization is revoked while editing an iCloud Reminder, the unsaved draft remains in memory but cannot be saved. If access returns, Pulse refetches the Reminder, validates that the draft still has a valid target, and lets the user explicitly save it. Authorization restoration never writes a draft automatically.
 
 The app uses:
 
@@ -195,7 +195,7 @@ The app uses:
 - `NSRemindersFullAccessUsageDescription`; and
 - the sandbox calendar personal-information entitlement.
 
-Public EventKit does not expose a strict iCloud-only flag. Todo Island therefore keeps its current best-effort match for the iCloud CalDAV source and does not silently include Google, Exchange, or other accounts. If no strict match is available, the iCloud Source presents its normal no-list and recovery actions rather than broadening the source boundary.
+Public EventKit does not expose a strict iCloud-only flag. Pulse therefore keeps its current best-effort match for the iCloud CalDAV source and does not silently include Google, Exchange, or other accounts. If no strict match is available, the iCloud Source presents its normal no-list and recovery actions rather than broadening the source boundary.
 
 ## Data Refresh and Identity
 
@@ -207,9 +207,9 @@ EventKit identifiers are treated as recoverable references rather than permanent
 
 Application identities are namespaced by Reminder Source so identical raw identifiers cannot collide across backends. Local lists and Reminders use app-generated persistent UUIDs, and the persisted Active List reference includes its source. Persistence models are always mapped to domain snapshots before reaching UI state.
 
-Local data is stored in a versioned SwiftData store at an app-owned URL in Todo Island's sandboxed Application Support container. CloudKit synchronization is explicitly disabled. The data can participate in normal user backup such as Time Machine, but the initial Local Source does not include import, export, or a separate backup workflow.
+Local data is stored in a versioned SwiftData store at an app-owned URL in Pulse's sandboxed Application Support container. CloudKit synchronization is explicitly disabled. The data can participate in normal user backup such as Time Machine, but the initial Local Source does not include import, export, or a separate backup workflow.
 
-If the Local store cannot initialize or migrate, only the Local Source becomes unavailable. Todo Island preserves the original store, keeps iCloud operational, and presents Retry and Show in Finder recovery actions. It never silently resets the store. The initial product has no bulk Delete All Local Data action; users delete Local Reminder Lists individually.
+If the Local store cannot initialize or migrate, only the Local Source becomes unavailable. Pulse preserves the original store, keeps iCloud operational, and presents Retry and Show in Finder recovery actions. It never silently resets the store. The initial product has no bulk Delete All Local Data action; users delete Local Reminder Lists individually.
 
 ## Architecture
 

@@ -1,5 +1,5 @@
-"app.name" = "Todo Island";
-"about.detail" = "在灵动岛中管理你的 iCloud 提醒事项。";
+"app.name" = "Pulse";
+"about.detail" = "提醒事项、AI 动态、音乐、剪贴板与天气，尽在一处。";
 
 "common.ok" = "好";
 "common.cancel" = "取消";
@@ -8,12 +8,12 @@
 
 "error.title" = "出现问题";
 "error.list-not-found" = "所选提醒事项列表已不可用。";
-"error.reminder-not-found" = "该提醒事项已不可用，Todo Island 将刷新列表。";
+"error.reminder-not-found" = "该提醒事项已不可用，Pulse 将刷新列表。";
 "error.empty-title" = "提醒事项标题不能为空。";
 "error.empty-list-title" = "列表名称不能为空。";
 "error.duplicate-list-name" = "所选来源中已经存在同名列表。";
 "error.operation-unsupported" = "所选来源不支持此操作。";
-"error.local-store-unavailable" = "Todo Island 本地存储不可用，现有数据没有被修改。";
+"error.local-store-unavailable" = "Pulse 本地存储不可用，现有数据没有被修改。";
 
 "island.locked" = "请授权 iCloud 提醒事项";
 "island.locked.accessibility" = "授权 iCloud 提醒事项后即可显示列表。";
@@ -70,8 +70,8 @@
 "calendar.empty-day.detail" = "在 Apple 提醒事项中添加的事项会显示在这里。";
 
 "permission.required" = "需要提醒事项权限";
-"permission.required.detail" = "Apple 没有提供只读提醒事项权限。Todo Island 只使用完整权限来显示和管理你选择的 iCloud 提醒事项。";
-"permission.privacy" = "Todo Island 不会上传提醒事项内容，iCloud 同步仍由 Apple 提醒事项管理。";
+"permission.required.detail" = "Apple 没有提供只读提醒事项权限。Pulse 只使用完整权限来显示和管理你选择的 iCloud 提醒事项。";
+"permission.privacy" = "Pulse 不会上传提醒事项内容，iCloud 同步仍由 Apple 提醒事项管理。";
 "permission.allow" = "允许访问提醒事项";
 "permission.open-island" = "在灵动岛中授权";
 "permission.open-settings" = "打开系统设置";
@@ -80,7 +80,7 @@
 "permission.denied" = "已拒绝";
 "permission.restricted" = "受限制";
 
-"settings.title" = "Todo Island 设置";
+"settings.title" = "Pulse 设置";
 "settings.reminders" = "iCloud 提醒事项";
 "settings.permission" = "权限";
 "settings.island" = "灵动岛";
@@ -90,12 +90,12 @@
 "settings.fullscreen.policy" = "隐藏折叠胶囊，主动打开的灵动岛仍可显示";
 "settings.launch-at-login" = "登录时启动";
 "settings.about" = "关于";
-"settings.privacy" = "Todo Island 只在这台 Mac 上处理提醒事项内容。";
+"settings.privacy" = "Pulse 只在这台 Mac 上处理提醒事项内容。";
 
-"menu.open" = "打开 Todo Island";
+"menu.open" = "打开 Pulse";
 "menu.settings" = "设置…";
-"menu.about" = "关于 Todo Island";
-"menu.quit" = "退出 Todo Island";
+"menu.about" = "关于 Pulse";
+"menu.quit" = "退出 Pulse";
 "sidebar.reminders" = "提醒事项";
 "heatmap.cell.tooltip" = "%1$@：完成 %2$d 项";
 "sidebar.placeholder" = "待添加";
