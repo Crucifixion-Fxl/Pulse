@@ -22,6 +22,16 @@ final class AppModel: ObservableObject {
   @Published private(set) var heatmapGrid: ReminderHeatmap.Grid = ReminderHeatmap.Grid(
     weeks: [], counts: [:])
   @Published private(set) var selectedDay: Date = Calendar.current.startOfDay(for: Date())
+  /// Browsing months does not move the selected day or its schedule.
+  @Published private var browsedMonth: Date?
+  @Published private var browsedMonthReminders: [ReminderSnapshot] = []
+
+  var calendarMonth: Date { browsedMonth ?? selectedDay }
+
+  var calendarReminders: [ReminderSnapshot] {
+    Calendar.current.isDate(calendarMonth, equalTo: selectedDay, toGranularity: .month)
+      ? monthReminders : browsedMonthReminders
+  }
   @Published private(set) var islandState: IslandPresentationState = .collapsed {
     didSet {
       // Collapsing ends any date exploration — the next opening starts on
@@ -134,6 +144,7 @@ final class AppModel: ObservableObject {
   private(set) var internalPlayerCancellable: Set<AnyCancellable> = []
   private var refreshTask: Task<Void, Never>?
   private var scheduleTask: Task<Void, Never>?
+  private var calendarTask: Task<Void, Never>?
   private var hoverTask: Task<Void, Never>?
   /// The month whose data is currently in memory; a same-month day switch
   /// reuses it instead of re-running the EventKit queries.
@@ -424,15 +435,39 @@ final class AppModel: ObservableObject {
   }
 
   func shiftMonth(by offset: Int) {
-    guard let day = Calendar.current.date(byAdding: .month, value: offset, to: selectedDay) else {
+    let calendar = Calendar.current
+    guard let start = calendar.dateInterval(of: .month, for: calendarMonth)?.start,
+      let month = calendar.date(byAdding: .month, value: offset, to: start)
+    else {
       return
     }
-    selectDay(day)
+    browsedMonth = month
+    browsedMonthReminders = []
+    reloadBrowsedMonth()
+  }
+
+  private func reloadBrowsedMonth() {
+    calendarTask?.cancel()
+    let calendar = Calendar.current
+    guard !calendar.isDate(calendarMonth, equalTo: selectedDay, toGranularity: .month),
+      let interval = calendar.dateInterval(of: .month, for: calendarMonth)
+    else { return }
+    calendarTask = Task {
+      let reminders = (try? await store.fetchReminders(
+        dueFrom: interval.start, through: interval.end)) ?? []
+      guard !Task.isCancelled,
+        calendar.dateInterval(of: .month, for: calendarMonth) == interval
+      else { return }
+      browsedMonthReminders = reminders
+    }
   }
 
   func selectDay(_ day: Date) {
     let calendar = Calendar.current
     let newDay = calendar.startOfDay(for: day)
+    browsedMonth = nil
+    calendarTask?.cancel()
+    browsedMonthReminders = []
     guard newDay != calendar.startOfDay(for: selectedDay) else { return }
     selectedDay = newDay
     scheduleTask?.cancel()
@@ -499,6 +534,7 @@ final class AppModel: ObservableObject {
       heatmapGrid = ReminderHeatmap.grid(in: completedRecently)
       loadedMonthInterval = interval
     }
+    reloadBrowsedMonth()
     let navigable = keyboardNavigableReminders
     if !navigable.contains(where: { $0.id == selectedReminderID }) {
       selectedReminderID = navigable.first?.id

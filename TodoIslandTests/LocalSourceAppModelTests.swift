@@ -4,7 +4,7 @@ import XCTest
 
 final class LocalSourceAppModelTests: XCTestCase {
   @MainActor
-  func testMonthNavigationCrossesYearsAndClampsShortMonths() async throws {
+  func testMonthNavigationCrossesYearsWithoutMovingSelection() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)
     defer { defaults.removePersistentDomain(forName: #function) }
@@ -17,21 +17,30 @@ final class LocalSourceAppModelTests: XCTestCase {
 
     model.selectDay(date(2026, 10, 16))
     model.shiftMonth(by: -1)
-    XCTAssertEqual(model.selectedDay, date(2026, 9, 16))
+    XCTAssertEqual(model.calendarMonth, date(2026, 9, 1))
+    XCTAssertEqual(model.selectedDay, date(2026, 10, 16))
     model.shiftMonth(by: 1)
     model.shiftMonth(by: 1)
-    XCTAssertEqual(model.selectedDay, date(2026, 11, 16))
+    XCTAssertEqual(model.calendarMonth, date(2026, 11, 1))
+    XCTAssertEqual(model.selectedDay, date(2026, 10, 16))
+    XCTAssertFalse(MonthCalendar(containing: model.calendarMonth).days.contains {
+      calendar.isDate($0.date, inSameDayAs: model.selectedDay)
+    })
 
     model.selectDay(date(2026, 12, 31))
     model.shiftMonth(by: 1)
-    XCTAssertEqual(model.selectedDay, date(2027, 1, 31))
+    XCTAssertEqual(model.calendarMonth, date(2027, 1, 1))
     model.shiftMonth(by: -1)
+    XCTAssertEqual(model.calendarMonth, date(2026, 12, 1))
     XCTAssertEqual(model.selectedDay, date(2026, 12, 31))
     model.shiftMonth(by: 2)
-    XCTAssertEqual(model.selectedDay, date(2027, 2, 28))
+    XCTAssertEqual(model.calendarMonth, date(2027, 2, 1))
     model.selectDay(date(2028, 3, 31))
     model.shiftMonth(by: -1)
-    XCTAssertEqual(model.selectedDay, date(2028, 2, 29))
+    XCTAssertEqual(model.calendarMonth, date(2028, 2, 1))
+    XCTAssertEqual(model.selectedDay, date(2028, 3, 31))
+    model.selectDay(date(2028, 2, 29))
+    XCTAssertEqual(model.calendarMonth, model.selectedDay)
   }
 
   @MainActor
@@ -54,16 +63,21 @@ final class LocalSourceAppModelTests: XCTestCase {
     XCTAssertTrue(model.monthReminders.isEmpty)
 
     model.shiftMonth(by: 1)
-    for _ in 0..<100 where model.monthReminders.isEmpty {
+    for _ in 0..<100 where model.calendarReminders.isEmpty {
       try await Task.sleep(for: .milliseconds(10))
     }
-    XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["November task"])
+    XCTAssertEqual(model.calendarReminders.map(\.title), ["November task"])
+    XCTAssertEqual(model.selectedDay, october)
+    XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
     model.shiftMonth(by: -1)
-    for _ in 0..<100 where !model.monthReminders.isEmpty {
+    for _ in 0..<100 where !model.calendarReminders.isEmpty {
       try await Task.sleep(for: .milliseconds(10))
     }
     XCTAssertEqual(model.selectedDay, october)
-    XCTAssertTrue(model.monthReminders.isEmpty)
+    XCTAssertTrue(model.calendarReminders.isEmpty)
+    model.shiftMonth(by: 1)
+    model.selectDay(october)
+    XCTAssertEqual(model.calendarMonth, october)
   }
 
   func testSwitchingListCreationSourcePreservesEnteredName() {
