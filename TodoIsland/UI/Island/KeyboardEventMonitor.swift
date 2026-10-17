@@ -53,6 +53,7 @@ enum IslandPlaybackShortcut {
     _ event: NSEvent, isExpanded: Bool, isEditingReminder: Bool,
     toggle: () -> Void
   ) -> Bool {
+    guard !AIWakeShortcut.defersSpaceAction(event) else { return false }
     guard isExpanded, !isEditingReminder, event.type == .keyDown, event.keyCode == 49,
       event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift]),
       let panel = event.window as? IslandPanel, panel.isKeyWindow,

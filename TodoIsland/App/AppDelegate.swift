@@ -91,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   func applicationDidBecomeActive(_ notification: Notification) {
     model.markApplicationActive()
+    islandController?.refreshWakeShortcut()
   }
 
   func applicationWillTerminate(_ notification: Notification) {
@@ -146,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   }
 
   func menuWillOpen(_ menu: NSMenu) {
+    islandController?.refreshWakeShortcut()
     LaunchAtLoginService.shared.refresh()
     launchAtLoginMenuItem?.state = LaunchAtLoginService.shared.isEnabled ? .on : .off
   }
@@ -169,6 +171,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
       )
     }
     settingsController?.present()
+  }
+
+  @objc private func previewAIWake() {
+    islandController?.previewAIWake()
+  }
+
+  @objc private func enableGlobalWake() {
+    islandController?.enableGlobalWakeShortcut()
   }
 
   @objc private func toggleLaunchAtLogin() {
@@ -204,6 +214,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
       withTitle: L10n.text("menu.open"), action: #selector(openIsland), keyEquivalent: "")
     menu.addItem(
       withTitle: L10n.text("menu.settings"), action: #selector(openSettings), keyEquivalent: ",")
+    menu.addItem(
+      withTitle: L10n.text("wake.menu"), action: #selector(previewAIWake), keyEquivalent: "")
+    menu.addItem(
+      withTitle: L10n.text("wake.enable-global"), action: #selector(enableGlobalWake), keyEquivalent: "")
     menu.addItem(.separator())
 
     let launchItem = NSMenuItem(

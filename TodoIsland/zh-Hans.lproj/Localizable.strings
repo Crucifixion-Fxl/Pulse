@@ -228,3 +228,9 @@
 "weather.last-update" = "上次更新";
 "weather.location-settings" = "打开定位设置";
 "weather.refresh" = "刷新天气";
+"wake.menu" = "预览 AI 唤醒 · 长按空格";
+"wake.enable-global" = "启用其他应用中的长按空格…";
+"wake.title" = "AI 唤醒";
+"wake.charging" = "AI 唤醒蓄力中";
+"wake.awake" = "AI 唤醒预览，按 Escape 退出";
+"wake.dismiss" = "ESC  退出";

@@ -1941,6 +1941,7 @@ struct IslandRootView: View {
   }
 
   private func handleKeyEvent(_ event: NSEvent) -> Bool {
+    guard !AIWakeShortcut.defersIslandAction(event) else { return false }
     if IslandPlaybackShortcut.handle(event,
       isExpanded: effectiveState != .collapsed,
       isEditingReminder: model.editingReminderID != nil,
