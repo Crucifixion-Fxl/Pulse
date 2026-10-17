@@ -55,7 +55,7 @@ final class AIWakeGestureTests: XCTestCase {
 
 @MainActor
 final class BlackHoleWakeViewTests: XCTestCase {
-  func testAwakeSurfaceIsOpaqueBlackWithOnlyMonochromeStars() throws {
+  func testBlackCoreHasDenseMonochromeParticlesOutsideAndFeatheredEdges() throws {
     let view = BlackHoleWakeView(size: CGSize(width: 340, height: 32), radius: 18, reduceMotion: true)
     view.begin()
     view.awaken()
@@ -65,22 +65,44 @@ final class BlackHoleWakeViewTests: XCTestCase {
       bitsPerComponent: 8, bytesPerRow: width * 4,
       space: CGColorSpaceCreateDeviceRGB(),
       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    // Match AppKit's flipped view coordinates when rendering offscreen.
+    context.translateBy(x: 0, y: CGFloat(height))
+    context.scaleBy(x: 1, y: -1)
     try XCTUnwrap(view.layer).render(in: context)
     let pixels = try XCTUnwrap(context.data).assumingMemoryBound(to: UInt8.self)
-    var black = 0
-    var stars = 0
-    // Exclude only the rounded corners, not a transparent effects margin.
-    for y in 8..<(height - 8) {
-      for x in 24..<(width - 24) {
+    let core = view.coreFrame
+    for y in 8..<(Int(core.height) - 8) {
+      for x in (Int(core.minX) + 24)..<(Int(core.maxX) - 24) {
         let offset = (y * width + x) * 4
-        XCTAssertEqual(pixels[offset + 3], 255, "The entire interior must be opaque")
-        XCTAssertEqual(pixels[offset], pixels[offset + 1], "No colored light")
-        XCTAssertEqual(pixels[offset + 1], pixels[offset + 2])
-        if pixels[offset] < 8 { black += 1 } else { stars += 1 }
+        XCTAssertEqual(pixels[offset + 3], 255, "The center must remain opaque")
+        XCTAssertEqual(pixels[offset], 0, "The core stays empty and deep black")
+        XCTAssertEqual(pixels[offset + 1], 0)
+        XCTAssertEqual(pixels[offset + 2], 0)
       }
     }
-    XCTAssertGreaterThan(black, (height - 16) * (width - 48) * 9 / 10)
-    XCTAssertGreaterThan(stars, 20, "The black surface must contain visible star points")
+    var externalSpecks = 0
+    var whiteRimPixels = 0
+    for y in 0..<height {
+      for x in 0..<width {
+        let offset = (y * width + x) * 4
+        XCTAssertEqual(pixels[offset], pixels[offset + 1], "Particles must remain monochrome")
+        XCTAssertEqual(pixels[offset + 1], pixels[offset + 2])
+        if y > Int(core.maxY), pixels[offset] > 20 { externalSpecks += 1 }
+        if y > Int(core.maxY) + 50 {
+          XCTAssertLessThanOrEqual(pixels[offset], 1, "No detached particles below the surrounding band")
+        }
+        if x > Int(core.minX) + 30, x < Int(core.maxX) - 30,
+          y >= Int(core.maxY), y < Int(core.maxY) + 35 {
+          XCTAssertGreaterThan(pixels[offset + 3], 210, "Dark atmosphere must cover the full particle band")
+          if y <= Int(core.maxY) + 2, pixels[offset] > 60 { whiteRimPixels += 1 }
+        }
+        if x < 2 || x >= width - 2 || y >= height - 2 {
+          XCTAssertLessThanOrEqual(pixels[offset + 3], 2, "The cloud must fade out before the panel edge at \(x),\(y)")
+        }
+      }
+    }
+    XCTAssertGreaterThan(whiteRimPixels, 100, "A soft white rim must follow the lower silhouette")
+    XCTAssertGreaterThan(externalSpecks, 500, "Reference calls for a dense external cloud, not a few stars")
   }
 
   func testUnfoldAndInterruptedReturnKeepWindowFixedAndNeverRetractAtStart() async throws {
@@ -115,7 +137,7 @@ final class BlackHoleWakeViewTests: XCTestCase {
     XCTAssertEqual(panel.frame, frame)
   }
 
-  func testReduceMotionOmitsContinuousParticleAndOrbitAnimations() async throws {
+  func testReduceMotionOmitsContinuousParticleAnimations() async throws {
     let view = BlackHoleWakeView(size: CGSize(width: 340, height: 32), radius: 18, reduceMotion: true)
     view.begin()
     view.awaken()
@@ -140,7 +162,8 @@ final class AIWakeShortcutTests: XCTestCase {
     panel.makeKeyAndOrderFront(nil)
     panel.makeFirstResponder(editor)
     defer { panel.close() }
-    let shortcut = AIWakeShortcut()
+    // Synthetic local events must not mix with the user's physical keyboard.
+    let shortcut = AIWakeShortcut(registerGlobally: false)
     var starts = 0
     var releases = 0
     shortcut.onPress = { starts += 1 }
@@ -157,7 +180,11 @@ final class AIWakeShortcutTests: XCTestCase {
     XCTAssertEqual(editor.string, " ")
     XCTAssertEqual(starts, 0, "An ordinary space must not flash the wake UI")
     send(.keyDown)
-    try await Task.sleep(for: .milliseconds(160))
+    let chargeDeadline = ContinuousClock.now + .milliseconds(500)
+    while starts == 0, ContinuousClock.now < chargeDeadline {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(starts, 1, "The intent timer must begin the incomplete charge")
     send(.keyUp)
     XCTAssertEqual(editor.string, "  ", "Releasing an incomplete charge must still type a normal space")
     send(.keyDown)

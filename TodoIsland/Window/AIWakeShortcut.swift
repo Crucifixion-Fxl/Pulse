@@ -26,9 +26,9 @@ final class AIWakeShortcut {
   static let intentDelay: TimeInterval = 0.12
   var isRegistered: Bool { eventTap != nil }
 
-  init() {
+  init(registerGlobally: Bool = true) {
     Self.installed = true
-    retryGlobalRegistration()
+    if registerGlobally { retryGlobalRegistration() }
     localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
       guard let self, !Self.replayingLocal,
         event.cgEvent?.getIntegerValueField(.eventSourceUserData) != Self.replayTag else { return event }
