@@ -1,16 +1,23 @@
 import AppKit
 import QuartzCore
 
-/// An opaque, expanding patch of space. Every star stays INSIDE the black
-/// silhouette; no outer halo, orbit lines or transparent effects envelope.
+/// A deep-black core surrounded by a dense monochrome particle corona.
+/// Rasterized dust provides depth; replicated particles follow curved paths.
 /// All motion runs on the compositor, with no per-frame view/window layout.
 @MainActor
 final class BlackHoleWakeView: NSView {
   let originalSize: CGSize
   let awakenedWidth: CGFloat
   let awakenedHeight: CGFloat
+  static let sidePadding: CGFloat = 144
+  static let bottomPadding: CGFloat = 88
+  var coreFrame: CGRect {
+    CGRect(x: Self.sidePadding, y: 0, width: awakenedWidth, height: awakenedHeight)
+  }
   private let scene = CALayer()
+  private let core = CALayer()
   private let stars = CALayer()
+  private let particles = CALayer()
   private let silhouette = CAShapeLayer()
   private let reduceMotion: Bool
   private var initialScaleX: CGFloat { originalSize.width / awakenedWidth }
@@ -27,24 +34,29 @@ final class BlackHoleWakeView: NSView {
     awakenedWidth = size.width + min(64, size.width * 0.14)
     awakenedHeight = size.height + 30
     self.reduceMotion = reduceMotion
-    super.init(frame: CGRect(x: 0, y: 0, width: awakenedWidth, height: awakenedHeight))
+    super.init(frame: CGRect(x: 0, y: 0,
+      width: awakenedWidth + Self.sidePadding * 2,
+      height: awakenedHeight + Self.bottomPadding))
     wantsLayer = true
     guard let layer else { return }
     scene.bounds = bounds
     scene.anchorPoint = CGPoint(x: 0.5, y: 0)
     scene.position = CGPoint(x: bounds.midX, y: 0)
-    scene.backgroundColor = NSColor.black.cgColor
+    core.frame = coreFrame
+    core.backgroundColor = NSColor.black.cgColor
     // Compensate for the initial scale so the first black outline matches the
     // existing island exactly. There is never a full-size flash before unfolding.
     silhouette.path = outline(width: awakenedWidth, height: awakenedHeight,
       radiusX: radius / initialScaleX, radiusY: radius / initialScaleY)
-    scene.mask = silhouette
+    core.mask = silhouette
     layer.addSublayer(scene)
     stars.frame = bounds
     stars.opacity = 0
     scene.addSublayer(stars)
-    addStarfield()
-    if !reduceMotion { addInfall() }
+    addParticleCloud()
+    if !reduceMotion { addParticleFlow() }
+    addWhiteRim()
+    scene.addSublayer(core)
     scene.transform = CATransform3DMakeScale(initialScaleX, initialScaleY, 1)
     setAccessibilityElement(true)
     setAccessibilityRole(.group)
@@ -64,8 +76,7 @@ final class BlackHoleWakeView: NSView {
     setAccessibilityLabel(L10n.text("wake.awake"))
     fadeStars(to: 1, duration: 0.3)
     guard !reduceMotion else { return }
-    // A restrained collective sparkle marks the completed hold, with no ring
-    // or flash outside the black surface.
+    // A restrained sparkle in the particle cloud marks the completed hold.
     let ignition = CAKeyframeAnimation(keyPath: "opacity")
     ignition.values = [0.8, 1, 0.65, 1]
     ignition.keyTimes = [0, 0.2, 0.55, 1]
@@ -81,86 +92,188 @@ final class BlackHoleWakeView: NSView {
     fadeStars(to: 0, duration: 0.3)
   }
 
-  private func addStarfield() {
-    let now = CACurrentMediaTime()
-    // Sparse tiny points establish depth; bright stars are deliberately rare.
-    for index in 0..<72 {
-      let x = fraction(Double(index + 1) * 0.61803398875)
-      let y = fraction(Double(index + 3) * 0.75487766625)
-      let centerDistance = abs(x - 0.5) * 2
-      let bright = index % 11 == 0
-      let diameter: CGFloat = bright ? 1.6 : (index % 3 == 0 ? 1.0 : 0.65)
-      let star = CALayer()
-      star.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
-      star.position = CGPoint(x: 5 + x * (awakenedWidth - 10), y: 4 + y * (awakenedHeight - 8))
-      star.cornerRadius = diameter / 2
-      star.backgroundColor = NSColor.white.cgColor
-      // The center reads as a deeper void; denser stars remain in the wings.
-      let alpha = Float((bright ? 0.9 : 0.38) * (0.28 + 0.72 * centerDistance))
-      star.opacity = alpha
-      if bright {
-        star.shadowColor = NSColor.white.cgColor
-        star.shadowOpacity = 0.6
-        star.shadowRadius = 1.6
-        star.shadowOffset = .zero
+  /// Distance from an enclosing rounded core. The hidden upper half keeps the
+  /// visible distribution attached to the screen edge instead of forming a ring.
+  private func distanceFromCore(_ point: CGPoint) -> CGFloat {
+    let radius: CGFloat = 24
+    let center = CGPoint(x: coreFrame.midX, y: (awakenedHeight - 80) / 2)
+    let half = CGSize(width: awakenedWidth / 2, height: (awakenedHeight + 80) / 2)
+    let qx = (abs(point.x - center.x) - half.width) / 1.6 + radius
+    let qy = abs(point.y - center.y) - half.height + radius
+    return hypot(max(qx, 0), max(qy, 0)) + min(max(qx, qy), 0) - radius
+  }
+
+  private func addParticleCloud() {
+    let scale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2
+    let pixelWidth = Int(ceil(bounds.width * scale))
+    let pixelHeight = Int(ceil(bounds.height * scale))
+    // The black atmosphere extends beyond every particle, including moving
+    // copies. Both use the same contour, so detached corner clouds cannot form.
+    if let mist = CGContext(data: nil, width: pixelWidth, height: pixelHeight,
+      bitsPerComponent: 8, bytesPerRow: pixelWidth * 4,
+      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+      let data = mist.data {
+      let pixels = data.assumingMemoryBound(to: UInt8.self)
+      for y in 0..<pixelHeight {
+        for x in 0..<pixelWidth {
+          let point = CGPoint(x: CGFloat(x) / scale, y: CGFloat(y) / scale)
+          let distance = max(0, distanceFromCore(point))
+          let fade = min(1, max(0, (78 - distance) / 48))
+          let opacity = 0.94 * fade * fade * (3 - 2 * fade)
+          pixels[(y * pixelWidth + x) * 4 + 3] = UInt8(opacity * 255)
+        }
       }
-      stars.addSublayer(star)
+      let bed = CALayer()
+      bed.frame = bounds
+      bed.contents = mist.makeImage()
+      bed.contentsScale = scale
+      stars.addSublayer(bed)
+    }
+
+    particles.frame = bounds
+    stars.addSublayer(particles)
+    // A shared feathered mask also constrains replicated flow and plane drift.
+    // Keep a generous dark margin beyond the last visible speck.
+    if let maskContext = CGContext(data: nil, width: pixelWidth, height: pixelHeight,
+      bitsPerComponent: 8, bytesPerRow: pixelWidth * 4,
+      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+      let data = maskContext.data {
+      let pixels = data.assumingMemoryBound(to: UInt8.self)
+      for y in 0..<pixelHeight {
+        for x in 0..<pixelWidth {
+          let distance = distanceFromCore(CGPoint(x: CGFloat(x) / scale, y: CGFloat(y) / scale))
+          let fade = min(1, max(0, (46 - distance) / 20))
+          pixels[(y * pixelWidth + x) * 4 + 3] = UInt8(fade * fade * (3 - 2 * fade) * 255)
+        }
+      }
+      let mask = CALayer()
+      mask.frame = bounds
+      mask.contents = maskContext.makeImage()
+      mask.contentsScale = scale
+      particles.mask = mask
+    }
+
+    // Thousands of independent specks are drawn once into three depth planes,
+    // rather than allocating thousands of animated layers or views.
+    var randomState: UInt64 = 0x50554C5345
+    func random() -> Double {
+      randomState = randomState &* 6364136223846793005 &+ 1442695040888963407
+      return Double(randomState >> 11) / Double(UInt64.max >> 11)
+    }
+    for plane in 0..<3 {
+      guard let context = CGContext(data: nil, width: pixelWidth, height: pixelHeight,
+        bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { continue }
+      context.scaleBy(x: scale, y: scale)
+      for _ in 0..<24000 {
+        let point = CGPoint(x: random() * bounds.width, y: random() * bounds.height)
+        let distance = distanceFromCore(point)
+        guard distance > 0, distance < 46 else { continue }
+        // Dense at the lip, softer toward the outer cloud, no hard cutoff.
+        let envelope = exp(-distance / 32) * pow(max(0, 1 - distance / 54), 0.7)
+        guard random() < 0.62 * envelope else { continue }
+        let diameter = 0.35 + pow(random(), 2) * (plane == 2 ? 1.2 : 0.85)
+        let alpha = (0.32 + random() * 0.68) * pow(envelope, 0.25)
+        context.setFillColor(NSColor(white: 1, alpha: alpha).cgColor)
+        context.fillEllipse(in: CGRect(x: point.x, y: point.y, width: diameter, height: diameter))
+      }
+      let dust = CALayer()
+      dust.frame = bounds
+      dust.contents = context.makeImage()
+      dust.contentsScale = scale
+      particles.addSublayer(dust)
       if !reduceMotion {
-        let twinkle = CABasicAnimation(keyPath: "opacity")
-        twinkle.fromValue = alpha * 0.4
-        twinkle.toValue = alpha
-        twinkle.duration = 1.8 + Double(index % 7) * 0.35
-        twinkle.autoreverses = true
-        twinkle.repeatCount = .infinity
-        twinkle.beginTime = now - Double(index) * 0.29
-        twinkle.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        star.add(twinkle, forKey: "starlight")
+        let drift = CABasicAnimation(keyPath: "transform.translation")
+        let sign: CGFloat = plane % 2 == 0 ? 1 : -1
+        drift.fromValue = NSValue(point: CGPoint(x: -2 * sign, y: 0))
+        drift.toValue = NSValue(point: CGPoint(x: 2 * sign, y: 2))
+        drift.duration = 3.2 + Double(plane) * 0.8
+        drift.autoreverses = true
+        drift.repeatCount = .infinity
+        drift.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        dust.add(drift, forKey: "dustDrift")
+        let shimmer = CABasicAnimation(keyPath: "opacity")
+        shimmer.fromValue = 0.62
+        shimmer.toValue = 1
+        shimmer.duration = 1.7 + Double(plane) * 0.7
+        shimmer.autoreverses = true
+        shimmer.repeatCount = .infinity
+        shimmer.timeOffset = Double(plane) * 0.7
+        shimmer.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        dust.add(shimmer, forKey: "dustShimmer")
       }
     }
   }
 
-  private func addInfall() {
+  private func addWhiteRim() {
+    guard let path = silhouette.path else { return }
+    // Follow the actual black silhouette, including its unfolding corner shape.
+    // The core is composited above this rim, keeping the glow outside its edge.
+    for (width, opacity, blur) in [(CGFloat(2), Float(0.9), CGFloat(4)),
+      (CGFloat(2.2), Float(0.24), CGFloat(11))] {
+      let rim = CAShapeLayer()
+      rim.frame = coreFrame
+      rim.path = path
+      rim.fillColor = nil
+      rim.strokeColor = NSColor.white.cgColor
+      rim.lineWidth = width
+      rim.opacity = opacity
+      rim.shadowColor = NSColor.white.cgColor
+      rim.shadowOpacity = 0.9
+      rim.shadowRadius = blur
+      rim.shadowOffset = .zero
+      stars.addSublayer(rim)
+    }
+  }
+
+  private func addParticleFlow() {
     let now = CACurrentMediaTime()
-    let center = CGPoint(x: awakenedWidth / 2, y: awakenedHeight * 0.55)
-    for index in 0..<40 {
-      let angle = Double(index) * 2.39996323
+    // Mirrored currents sweep around both shoulders and along the lower lip,
+    // then bend upward into the black center. Replication keeps layer count low.
+    for stream in 0..<48 {
+      let left = stream % 2 == 0
+      let direction: CGFloat = left ? -1 : 1
+      let distance = 5 + CGFloat((stream * 17) % 38)
+      let edgeX = coreFrame.midX + direction * (awakenedWidth / 2 + distance * 1.6)
+      let lowerY = awakenedHeight + distance * 0.72
+      let startY = CGFloat((stream * 11) % 35) - 14
       let path = CGMutablePath()
-      for sample in 0...48 {
-        let t = Double(sample) / 48
-        let radius = 1.12 - 0.98 * pow(t, 1.5)
-        let theta = angle + t * 0.9
-        let point = CGPoint(
-          x: center.x + cos(theta) * (awakenedWidth / 2 - 5) * radius,
-          y: center.y + sin(theta) * (awakenedHeight / 2 - 4) * radius)
-        if sample == 0 { path.move(to: point) } else { path.addLine(to: point) }
-      }
+      path.move(to: CGPoint(x: edgeX + direction * 20, y: startY))
+      path.addCurve(to: CGPoint(x: coreFrame.midX + direction * awakenedWidth * 0.28, y: lowerY),
+        control1: CGPoint(x: edgeX + direction * 10, y: lowerY * 0.8),
+        control2: CGPoint(x: coreFrame.midX + direction * awakenedWidth * 0.46, y: lowerY + 10))
+      path.addCurve(to: CGPoint(x: coreFrame.midX + direction * 8, y: awakenedHeight - 8),
+        control1: CGPoint(x: coreFrame.midX + direction * awakenedWidth * 0.14, y: lowerY),
+        control2: CGPoint(x: coreFrame.midX + direction * 30, y: awakenedHeight + 5))
+      let duration = 4.2 + Double(stream % 9) * 0.29
+      let copies = CAReplicatorLayer()
+      copies.frame = bounds
+      copies.instanceCount = 24
+      copies.instanceDelay = duration / 24
+      // Slight positional variation avoids evenly spaced bead-like tracks.
+      copies.instanceTransform = CATransform3DMakeTranslation(0, 0.22, 0)
+      particles.addSublayer(copies)
       let particle = CALayer()
-      let diameter: CGFloat = index % 6 == 0 ? 1.8 : 1.0
+      let diameter: CGFloat = stream % 5 == 0 ? 1.55 : 0.85
       particle.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
       particle.cornerRadius = diameter / 2
       particle.backgroundColor = NSColor.white.cgColor
       particle.opacity = 0
-      if index % 6 == 0 {
-        particle.shadowColor = NSColor.white.cgColor
-        particle.shadowOpacity = 0.5
-        particle.shadowRadius = 2
-        particle.shadowOffset = .zero
-      }
-      stars.addSublayer(particle)
+      copies.addSublayer(particle)
       let travel = CAKeyframeAnimation(keyPath: "position")
       travel.path = path
       travel.calculationMode = .paced
-      travel.timingFunction = CAMediaTimingFunction(controlPoints: 0.45, 0, 0.85, 0.55)
+      travel.timingFunction = CAMediaTimingFunction(controlPoints: 0.35, 0, 0.8, 0.6)
       let visibility = CAKeyframeAnimation(keyPath: "opacity")
-      visibility.values = [0, 0.8, 0.5, 0]
-      visibility.keyTimes = [0, 0.18, 0.58, 1]
+      visibility.values = [0, 0.55, 0.8, 0]
+      visibility.keyTimes = [0, 0.15, 0.65, 1]
       let group = CAAnimationGroup()
-      group.duration = 3.2 + Double(index % 7) * 0.3
-      travel.duration = group.duration
-      visibility.duration = group.duration
+      group.duration = duration
+      travel.duration = duration
+      visibility.duration = duration
       group.animations = [travel, visibility]
       group.repeatCount = .infinity
-      group.beginTime = now - Double(index) * 0.213
+      group.beginTime = now - duration * 2 - Double(stream) * 0.137
       particle.add(group, forKey: "infall")
     }
   }
@@ -195,8 +308,6 @@ final class BlackHoleWakeView: NSView {
     stars.add(animation, forKey: "reveal")
     CATransaction.commit()
   }
-
-  private func fraction(_ value: Double) -> Double { value - floor(value) }
 
   private func outline(width: CGFloat, height: CGFloat, radiusX: CGFloat, radiusY: CGFloat) -> CGPath {
     let rx = min(radiusX, width / 2)
