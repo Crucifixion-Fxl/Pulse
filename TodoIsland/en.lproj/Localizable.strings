@@ -228,3 +228,9 @@
 "weather.last-update" = "Last update";
 "weather.location-settings" = "Location settings";
 "weather.refresh" = "Refresh weather";
+"wake.menu" = "Preview AI Wake · Hold Space";
+"wake.enable-global" = "Enable Hold Space in Other Apps…";
+"wake.title" = "AI Wake";
+"wake.charging" = "AI wake charging";
+"wake.awake" = "AI wake preview. Press Escape to close.";
+"wake.dismiss" = "ESC  TO  CLOSE";

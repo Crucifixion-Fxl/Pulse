@@ -28,6 +28,14 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   private var applicationDeactivationObserver: NSObjectProtocol?
   private var pointerDisplayTimer: Timer?
   private var fullScreenTimer: Timer?
+  private var wakeShortcut: AIWakeShortcut?
+  private var wakeGesture = AIWakeGesture()
+  private var wakeTimer: Timer?
+  private var wakePanel: IslandPanel?
+  private var wakeView: BlackHoleWakeView?
+  private var wakeDisplayID: String?
+  private var wakeGeneration = 0
+  private var wakeObservers: [NSObjectProtocol] = []
 
   init(model: AppModel, agentStore: AgentSessionStore = AgentSessionStore()) {
     self.model = model
@@ -91,6 +99,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         guard let self else { return }
+        self.finishWakeImmediately()
         self.syncWindows()
         self.applyAll(
           state: self.model.islandState,
@@ -112,7 +121,8 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
           // An approval-held panel outlives focus fights: the request
           // lands while the user is in another app, and the key-window
           // steal-and-return would otherwise collapse it instantly.
-          self?.model.isHeldForApproval != true
+          self?.model.isHeldForApproval != true,
+          self?.wakePanel == nil
         else { return }
         self?.model.collapseIsland()
       }
@@ -131,6 +141,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     fullScreenTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.updateAllVisibility(animated: false) }
     }
+    installWakeShortcut()
   }
 
   isolated deinit {
@@ -140,6 +151,9 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     }
     pointerDisplayTimer?.invalidate()
     fullScreenTimer?.invalidate()
+    wakeTimer?.invalidate()
+    for observer in wakeObservers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+    wakePanel?.close()
     for window in windows.values {
       window.panel.delegate = nil
       window.panel.close()
@@ -231,6 +245,9 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     expandedContentHeight: CGFloat?,
     animated: Bool
   ) {
+    // The wake surface temporarily owns presentation, never the selected page
+    // or draft. Apply the latest model state when it gives the surface back.
+    guard wakePanel == nil else { return }
     let activeID = activeDisplayID
     for id in windows.keys where id != activeID {
       applyWindow(
@@ -354,6 +371,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     expandedContentHeight: CGFloat?,
     animated: Bool
   ) {
+    guard displayID != wakeDisplayID else { return }
     let panel = window.panel
     guard let screen = DisplaySupport.screen(id: displayID) else {
       panel.orderOut(nil)
@@ -449,6 +467,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   /// bar contains the pointer wakes the island there.
   private func refreshActivationZoneHover() {
     guard
+      wakePanel == nil,
       model.islandState == .collapsed,
       model.usesAutoHiddenCollapsedIsland,
       !NSWorkspace.shared.isVoiceOverEnabled
@@ -480,6 +499,165 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   }
 
   // MARK: NSWindowDelegate
+
+  // MARK: AI wake presentation
+
+  private func installWakeShortcut() {
+    let shortcut = AIWakeShortcut()
+    shortcut.onPress = { [weak self] in self?.wakeKeyPressed() }
+    shortcut.onRelease = { [weak self] in self?.wakeKeyReleased() }
+    shortcut.onCancel = { [weak self] in self?.dismissWake() }
+    wakeShortcut = shortcut
+    Self.logLifecycle("wake shortcut registered=\(shortcut.isRegistered)")
+    for name in [NSWorkspace.willSleepNotification, NSWorkspace.screensDidSleepNotification,
+                 NSWorkspace.sessionDidResignActiveNotification] {
+      wakeObservers.append(NSWorkspace.shared.notificationCenter.addObserver(
+        forName: name, object: nil, queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated { self?.finishWakeImmediately() }
+      })
+    }
+  }
+
+  func refreshWakeShortcut() { wakeShortcut?.retryGlobalRegistration() }
+  func enableGlobalWakeShortcut() { wakeShortcut?.requestGlobalAccess() }
+
+  /// A discoverable preview is also available without keyboard permissions.
+  func previewAIWake() {
+    guard wakePanel == nil else { dismissWake(); return }
+    wakeKeyPressed()
+    let token = wakeGeneration
+    DispatchQueue.main.asyncAfter(deadline: .now() + AIWakeGesture.holdDuration + 0.02) { [weak self] in
+      guard let self, self.wakeGeneration == token else { return }
+      self.wakeKeyReleased()
+    }
+  }
+
+  private func wakeKeyPressed() {
+    guard !(wakePanel != nil && wakeGesture.phase == .idle) else { return }
+    wakeGesture.press(at: CACurrentMediaTime())
+    if wakeGesture.phase == .idle { dismissWake(); return }
+    guard wakePanel == nil else { return }
+    guard let id = DisplaySupport.screenContainingPointer()?.todoIslandDisplayID ?? model.hostDisplayID,
+      let display = windows[id], let screen = DisplaySupport.screen(id: id),
+      !DisplaySupport.shouldHideFallbackInFullScreen(screen) else {
+      wakeGesture.reset()
+      return
+    }
+    wakeGeneration += 1
+    let token = wakeGeneration
+    let surface = display.transition.presentedSurfaceBounds ?? display.transition.bounds
+    let sourceFrame = display.panel.convertToScreen(display.transition.convert(surface, to: nil))
+    let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    let view = BlackHoleWakeView(size: surface.size,
+      radius: surface.height > 60 ? 36 : (screen.safeAreaInsets.top > 0 ? 14 : 18),
+      reduceMotion: reduced)
+    let panel = IslandPanel()
+    panel.title = L10n.text("wake.title")
+    panel.acceptsKeyInput = true
+    panel.level = .mainMenu + 4
+    panel.ignoresMouseEvents = true
+    // NSWindow resizes a newly assigned contentView to its current frame.
+    // Establish the envelope first; assigning it to a zero-sized panel would
+    // erase the view's geometry before the frame below could read it.
+    panel.setFrame(CGRect(x: sourceFrame.midX - view.bounds.width / 2,
+      y: sourceFrame.maxY - view.bounds.height, width: view.bounds.width, height: view.bounds.height),
+      display: false)
+    panel.contentView = view
+    panel.alphaValue = 0
+    wakeDisplayID = id
+    wakePanel = panel
+    wakeView = view
+    // Invalidate a pending visibility completion before hiding the source.
+    windows[id]?.visibilityGeneration += 1
+    display.panel.ignoresMouseEvents = true
+    panel.orderFrontRegardless()
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = reduced ? 0.1 : 0.2
+      panel.animator().alphaValue = 1
+      display.panel.animator().alphaValue = 0
+    } completionHandler: { [weak self] in
+      Task { @MainActor in
+        guard self?.wakeGeneration == token else { return }
+        display.panel.orderOut(nil)
+      }
+    }
+    view.begin()
+    wakeShortcut?.captureEscape(true)
+    Self.logLifecycle("wake charging display=\(id) width=\(surface.width)")
+    wakeTimer = Timer.scheduledTimer(withTimeInterval: AIWakeGesture.holdDuration, repeats: false) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self, self.wakeGeneration == token else { return }
+        self.wakeGesture.advance(to: CACurrentMediaTime())
+        if self.wakeGesture.phase == .awake {
+          self.wakeView?.awaken()
+          self.wakePanel?.makeKeyAndOrderFront(nil)
+          Self.logLifecycle("wake awake")
+        }
+      }
+    }
+  }
+
+  private func wakeKeyReleased() {
+    wakeTimer?.invalidate()
+    wakeTimer = nil
+    wakeGesture.release(at: CACurrentMediaTime())
+    if wakeGesture.phase == .idle { dismissWake() }
+    else if wakeGesture.phase == .awake {
+      wakeView?.awaken()
+      wakePanel?.makeKeyAndOrderFront(nil)
+    }
+  }
+
+  private func dismissWake() {
+    wakeGesture.cancel()
+    wakeTimer?.invalidate()
+    wakeTimer = nil
+    guard let panel = wakePanel else { return }
+    wakeGeneration += 1
+    let token = wakeGeneration
+    wakeView?.dismiss()
+    // Keep the source covered until the black core has nearly returned to
+    // its starting width. Status contents then reappear without a size jump.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+      guard let self, self.wakeGeneration == token else { return }
+      NSAnimationContext.runAnimationGroup { context in
+        context.duration = 0.2
+        panel.animator().alphaValue = 0
+        if let id = self.wakeDisplayID, let source = self.windows[id] {
+          let state = IslandRouting.effectiveState(global: self.model.islandState,
+            activeDisplayID: self.model.hostDisplayID, windowDisplayID: id)
+          source.panel.animator().alphaValue = self.shouldShowSurface(state: state) ? 1 : 0
+          source.panel.orderFrontRegardless()
+        }
+      } completionHandler: { [weak self] in
+        Task { @MainActor in
+          guard let self, self.wakeGeneration == token else { return }
+          self.finishWakeImmediately(resetInput: false)
+        }
+      }
+    }
+  }
+
+  private func finishWakeImmediately(resetInput: Bool = true) {
+    wakeGeneration += 1
+    wakeTimer?.invalidate()
+    wakeTimer = nil
+    if resetInput {
+      wakeGesture.reset()
+      wakeShortcut?.resetHeldKey()
+    } else { wakeGesture.cancel() }
+    wakeShortcut?.captureEscape(false)
+    guard let panel = wakePanel else { return }
+    panel.orderOut(nil)
+    panel.close()
+    wakePanel = nil
+    wakeView = nil
+    wakeDisplayID = nil
+    applyAll(state: model.islandState, activeDisplayID: model.hostDisplayID,
+      expandedContentHeight: model.expandedContentHeight, animated: false)
+    Self.logLifecycle("wake restored")
+  }
 
   func windowDidResignKey(_ notification: Notification) {
     // SwiftUI menus temporarily take key status from the panel. The pinned Island
