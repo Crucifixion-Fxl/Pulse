@@ -137,6 +137,50 @@ final class BlackHoleWakeViewTests: XCTestCase {
     XCTAssertEqual(panel.frame, frame)
   }
 
+  func testDarkHaloNeverDropsOutDuringChargeAndAwakening() async throws {
+    let view = BlackHoleWakeView(size: CGSize(width: 340, height: 32), radius: 18, reduceMotion: false)
+    let panel = IslandPanel()
+    panel.setFrame(CGRect(origin: CGPoint(x: 400, y: 600), size: view.bounds.size), display: false)
+    panel.contentView = view
+    panel.orderFrontRegardless()
+    defer { panel.close() }
+    // The first raster is the dark atmosphere, beneath the dust and white rim.
+    func atmosphere(in layer: CALayer) -> CALayer? {
+      if layer.contents != nil { return layer }
+      return layer.sublayers?.compactMap { atmosphere(in: $0) }.first
+    }
+    let halo = try XCTUnwrap(atmosphere(in: XCTUnwrap(view.layer)))
+    func presentedOpacity() -> Float {
+      var opacity: Float = 1
+      var node: CALayer? = halo
+      while let layer = node {
+        opacity *= (layer.presentation() ?? layer).opacity
+        node = layer.superlayer
+      }
+      return opacity
+    }
+    try await Task.sleep(for: .milliseconds(40))
+    view.begin()
+    var previous: Float = 0
+    for sample in 0..<100 {
+      try await Task.sleep(for: .milliseconds(20))
+      if sample == 34 { view.awaken() }
+      let opacity = presentedOpacity()
+      XCTAssertGreaterThanOrEqual(opacity, previous - 0.025,
+        "The black halo must reveal continuously, never blink off or pulse with particles (sample \(sample))")
+      previous = opacity
+    }
+    XCTAssertGreaterThan(previous, 0.99)
+    view.dismiss()
+    for _ in 0..<25 {
+      try await Task.sleep(for: .milliseconds(20))
+      let opacity = presentedOpacity()
+      XCTAssertLessThanOrEqual(opacity, previous + 0.025, "Dismissal must fade out without a second reveal")
+      previous = opacity
+    }
+    XCTAssertLessThan(previous, 0.01)
+  }
+
   func testReduceMotionOmitsContinuousParticleAnimations() async throws {
     let view = BlackHoleWakeView(size: CGSize(width: 340, height: 32), radius: 18, reduceMotion: true)
     view.begin()
