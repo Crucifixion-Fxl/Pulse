@@ -16,6 +16,7 @@ final class BlackHoleWakeView: NSView {
   }
   private let scene = CALayer()
   private let core = CALayer()
+  private let atmosphere = CALayer()
   private let stars = CALayer()
   private let particles = CALayer()
   private let silhouette = CAShapeLayer()
@@ -50,6 +51,9 @@ final class BlackHoleWakeView: NSView {
       radiusX: radius / initialScaleX, radiusY: radius / initialScaleY)
     core.mask = silhouette
     layer.addSublayer(scene)
+    atmosphere.frame = bounds
+    atmosphere.opacity = 0
+    scene.addSublayer(atmosphere)
     stars.frame = bounds
     stars.opacity = 0
     scene.addSublayer(stars)
@@ -67,14 +71,15 @@ final class BlackHoleWakeView: NSView {
 
   func begin() {
     animateScale(x: 1, y: 1, duration: reduceMotion ? 0.15 : AIWakeGesture.holdDuration)
-    fadeStars(to: 0.8, duration: reduceMotion ? 0.15 : 0.62)
+    fade(atmosphere, to: 1, duration: reduceMotion ? 0.15 : 0.3)
+    fade(stars, to: 0.8, duration: reduceMotion ? 0.15 : 0.62)
   }
 
   func awaken() {
     guard !isAwake else { return }
     isAwake = true
     setAccessibilityLabel(L10n.text("wake.awake"))
-    fadeStars(to: 1, duration: 0.3)
+    fade(stars, to: 1, duration: 0.3)
     guard !reduceMotion else { return }
     // A restrained sparkle in the particle cloud marks the completed hold.
     let ignition = CAKeyframeAnimation(keyPath: "opacity")
@@ -88,8 +93,8 @@ final class BlackHoleWakeView: NSView {
     animateScale(x: initialScaleX, y: initialScaleY, duration: reduceMotion ? 0.15 : 0.38)
     let visible = stars.presentation()?.opacity ?? stars.opacity
     stars.removeAnimation(forKey: "ignition")
-    stars.opacity = visible
-    fadeStars(to: 0, duration: 0.3)
+    fade(stars, to: 0, duration: 0.3, from: visible)
+    fade(atmosphere, to: 0, duration: 0.3)
   }
 
   /// Distance from an enclosing rounded core. The hidden upper half keeps the
@@ -127,7 +132,9 @@ final class BlackHoleWakeView: NSView {
       bed.frame = bounds
       bed.contents = mist.makeImage()
       bed.contentsScale = scale
-      stars.addSublayer(bed)
+      // The atmosphere is independent of dust shimmer and awakening ignition.
+      // Once revealed it remains fully present until explicit dismissal.
+      atmosphere.addSublayer(bed)
     }
 
     particles.frame = bounds
@@ -295,17 +302,17 @@ final class BlackHoleWakeView: NSView {
     CATransaction.commit()
   }
 
-  private func fadeStars(to opacity: Float, duration: TimeInterval) {
-    let from = stars.presentation()?.opacity ?? stars.opacity
+  private func fade(_ layer: CALayer, to opacity: Float, duration: TimeInterval, from explicitOpacity: Float? = nil) {
+    let from = explicitOpacity ?? layer.presentation()?.opacity ?? layer.opacity
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    stars.opacity = opacity
+    layer.opacity = opacity
     let animation = CABasicAnimation(keyPath: "opacity")
     animation.fromValue = from
     animation.toValue = opacity
     animation.duration = duration
     animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-    stars.add(animation, forKey: "reveal")
+    layer.add(animation, forKey: "reveal")
     CATransaction.commit()
   }
 
