@@ -1,0 +1,11 @@
+Pulse wake sound: Interface sci fi expand or zoom
+Source: Mixkit, sound effect 913
+Catalog: https://mixkit.co/free-sound-effects/sci-fi/
+Asset: https://assets.mixkit.co/active_storage/sfx/913/913.wav
+License: Mixkit Sound Effects Free License
+https://mixkit.co/license/#sfxFree
+
+This third-party sound is incorporated into the Pulse application as a wake cue.
+It is not covered by the repository's source-code license. Do not redistribute
+the sound separately, as stock, or with source files. The build fetches the
+original asset into DerivedData; the source repository contains no audio copy.

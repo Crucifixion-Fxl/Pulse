@@ -84,6 +84,7 @@
 				AA0000000000000000000080 /* Sources */,
 				AA0000000000000000000050 /* Frameworks */,
 				AA0000000000000000000090 /* Resources */,
+				AA0000000000000000000092 /* Bundle wake sound */,
 			);
 			buildRules = (
 			);
@@ -178,6 +179,20 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AA0000000000000000000092 /* Bundle wake sound */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ("$(SRCROOT)/scripts/bundle-voice-wake-sound.sh");
+			name = "Bundle wake sound";
+			outputPaths = ("$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/voice-wake-expand.wav");
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"${SRCROOT}/scripts/bundle-voice-wake-sound.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		AA0000000000000000000080 /* Sources */ = {

@@ -1,6 +1,7 @@
 # Xiaozhi voice on the Island
 
-Hold plain Space until the Island wakes. A soft macOS **Tink** cue plays once
+Hold plain Space until the Island wakes. **Interface sci fi expand or zoom**
+(Mixkit item 913, approximately 0.65 seconds) plays once
 through the current system output before the microphone opens. Speak when
 **Listening** appears. Short presses do not play the cue; Escape cancels both
 the cue and pending voice startup.
@@ -9,6 +10,13 @@ next turn: microphone upload pauses while Xiaozhi thinks or speaks, preventing
 background sound and playback echo from interrupting its reply. **Escape** (or another hold) ends
 capture, playback, and the network session. Short Space retains its normal action.
 The menu's **Start Voice Conversation** action invokes the same behavior.
+
+The Xcode build downloads and verifies the wake sound into DerivedData, then
+bundles it in the application. The first build needs access to assets.mixkit.co;
+subsequent builds reuse the verified cache. Playback needs no network access.
+The audio is excluded from the source repository because the Mixkit Sound Effects
+Free License permits use in an end product but prohibits redistribution with
+source files. See `TodoIsland/Resources/VOICE-WAKE-NOTICE.txt` for provenance.
 
 Audio input and output follow the macOS defaults independently, including headphones.
 Connecting, disconnecting, or choosing another default device during a conversation
