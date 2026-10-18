@@ -5,6 +5,11 @@ Release Space and continue the conversation. **Escape** (or another hold) ends
 capture, playback, and the network session. Short Space retains its normal action.
 The menu's **Start Voice Conversation** action invokes the same behavior.
 
+Audio input and output follow the macOS defaults independently, including headphones.
+Connecting, disconnecting, or choosing another default device during a conversation
+reopens the local audio streams and resamplers without reconnecting the cloud session.
+Saved device names from the standalone client do not override these defaults.
+
 The white rim responds to microphone and actual speaker PCM amplitude with a
 fast attack and soft release. The opaque black core, surrounding atmosphere,
 and particle flow retain their existing animation. Reduced Motion limits rim

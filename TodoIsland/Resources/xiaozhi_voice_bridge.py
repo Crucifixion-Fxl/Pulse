@@ -26,6 +26,39 @@ def normalized_level(rms):
     return min(1.0, max(0.0, (20 * math.log10(rms) + 50) / 35))
 
 
+def system_device_config(sd, make_config, frame_duration):
+    """Select live OS defaults after enumeration; never pin saved client names.
+
+    Input/output may be different devices and have different native rates (e.g.
+    a Bluetooth microphone at 24 kHz and its output at 48 kHz).
+    """
+    selected = {}
+    for kind in ('input', 'output'):
+        info = sd.query_devices(kind=kind)
+        channels = 1 if kind == 'input' else min(2, int(info['max_output_channels']))
+        rate = int(info['default_samplerate'])
+        if info['max_' + kind + '_channels'] < 1 or rate <= 0:
+            raise RuntimeError('No system default ' + kind + ' device')
+        selected.update({kind + '_device_id': info['index'], kind + '_sample_rate': rate,
+            kind + '_channels': channels, kind + '_frame_size': int(rate * frame_duration / 1000)})
+    return make_config(**selected)
+
+
+def system_device_manager(config):
+    from src.utils.audio_device import DeviceConfig
+    from src.constants.constants import AudioConfig
+    import sounddevice as sd
+
+    class SystemDefaultDevices:
+        def __init__(self):
+            self.config = config
+
+        def load_or_detect_devices(self):
+            return system_device_config(sd, DeviceConfig, AudioConfig.FRAME_DURATION)
+
+    return SystemDefaultDevices()
+
+
 async def run(runtime, data_dir):
     # Import only the transport and audio components, never the client's MCP or UI.
     sys.path.insert(0, str(runtime))
@@ -53,10 +86,29 @@ async def run(runtime, data_dir):
             self.output_rms = float(np.sqrt(np.mean(outdata * outdata)))
 
     stop = asyncio.Event()
+    route_changed = asyncio.Event()
+    command_buffer = bytearray()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
-    loop.add_reader(sys.stdin.fileno(), lambda: stop.set() if not os.read(sys.stdin.fileno(), 4096) else None)
+    def read_command():
+        chunk = os.read(sys.stdin.fileno(), 4096)
+        if not chunk:
+            stop.set()
+            return
+        command_buffer.extend(chunk)
+        if len(command_buffer) > 8192:
+            stop.set()
+            return
+        while b'\n' in command_buffer:
+            line, _, rest = command_buffer.partition(b'\n')
+            command_buffer[:] = rest
+            try:
+                if json.loads(line).get('type') == 'route_changed':
+                    route_changed.set()
+            except (ValueError, AttributeError):
+                continue
+    loop.add_reader(sys.stdin.fileno(), read_command)
     config = initialize_config()
     codec = None
     protocol = None
@@ -152,6 +204,35 @@ async def run(runtime, data_dir):
                 fail('idle_timeout')
             await asyncio.sleep(1 / 30)
 
+    def report_route():
+        import sounddevice as sd
+        devices = codec.device_config
+        emit('route', inputDevice=sd.query_devices(devices.input_device_id)['name'],
+            outputDevice=sd.query_devices(devices.output_device_id)['name'])
+
+    async def follow_audio_route():
+        nonlocal ready
+        while not stop.is_set():
+            await route_changed.wait()
+            route_changed.clear()
+            ready = False
+            codec.input_rms = codec.output_rms = 0.0
+            emit('state', state='switching')
+            while not outgoing.empty():
+                outgoing.get_nowait()
+            # reload_devices closes both streams before refreshing PortAudio's
+            # cached list, then rebuilds resamplers, Opus and AEC for the new rates.
+            ok = await codec.reload_devices(reenumerate=True)
+            if not ok and not stop.is_set():
+                await asyncio.sleep(.5)  # Bluetooth profile negotiation can lag.
+                ok = await codec.reload_devices(reenumerate=True)
+            if not ok:
+                fail('audio')
+                return
+            report_route()
+            ready = True
+            emit('state', state=state)
+
     async def setup():
         nonlocal codec, protocol, ready
         # Never create a replacement identity silently when setup is missing.
@@ -164,8 +245,10 @@ async def run(runtime, data_dir):
             fail('not_bound')
             return
         codec = MeteredCodec()
+        codec.device_manager = system_device_manager(config)
         codec.add_audio_listener(codec)
         await codec.initialize()
+        report_route()
         protocol = WebsocketProtocol()
         protocol.on_incoming_json(receive)
         protocol.on_incoming_audio(receive)
@@ -180,7 +263,7 @@ async def run(runtime, data_dir):
         ready = True
         codec.set_encoded_callback(lambda packet: loop.call_soon_threadsafe(enqueue_audio, packet))
         set_state('listening')
-        tasks.extend(asyncio.create_task(fn()) for fn in (consume, send_audio, meters))
+        tasks.extend(asyncio.create_task(fn()) for fn in (consume, send_audio, meters, follow_audio_route))
         for task in tasks:
             task.add_done_callback(lambda t: fail('audio') if not t.cancelled() and t.exception() else None)
 

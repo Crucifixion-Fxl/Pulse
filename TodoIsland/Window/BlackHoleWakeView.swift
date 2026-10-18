@@ -94,7 +94,7 @@ final class BlackHoleWakeView: NSView {
 
   func setVoiceState(_ state: XiaozhiVoiceSession.State) {
     let captions: [XiaozhiVoiceSession.State: String] = [
-      .connecting: L10n.text("voice.connecting"), .listening: L10n.text("voice.listening"),
+      .connecting: L10n.text("voice.connecting"), .switching: L10n.text("voice.switching"), .listening: L10n.text("voice.listening"),
       .thinking: L10n.text("voice.thinking"), .speaking: L10n.text("voice.speaking"), .stopped: L10n.text("voice.stopped")]
     showVoiceCaption(captions[state] ?? "")
   }

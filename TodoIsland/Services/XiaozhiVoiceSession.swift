@@ -6,13 +6,15 @@ import OSLog
 /// account remains in Application Support; no credentials cross the stdio pipe.
 @MainActor
 final class XiaozhiVoiceSession {
-  enum State: String, Decodable { case connecting, listening, thinking, speaking, stopped }
+  enum State: String, Decodable { case connecting, switching, listening, thinking, speaking, stopped }
   struct Event: Decodable {
     let type: String
     var state: State?
     var input: Double?
     var output: Double?
     var code: String?
+    var inputDevice: String?
+    var outputDevice: String?
   }
 
   var onState: ((State) -> Void)?
@@ -24,6 +26,7 @@ final class XiaozhiVoiceSession {
   private var buffer = Data()
   private var generation = 0
   private var active = false
+  private let audioRoutes = VoiceAudioRouteMonitor()
   private var startupTimeout: Task<Void, Never>?
   private static let log = Logger(subsystem: "com.fxl.TodoIsland", category: "Voice")
 
@@ -87,6 +90,12 @@ final class XiaozhiVoiceSession {
     output = stdout
     do {
       try child.run()
+      audioRoutes.start { [weak self] in
+        guard let self, self.generation == token, self.active,
+          let handle = self.input?.fileHandleForWriting else { return }
+        do { try handle.write(contentsOf: Data("{\"type\":\"route_changed\"}\n".utf8)) }
+        catch { self.fail("audio") }
+      }
       Self.log.info("Voice worker started pid=\(child.processIdentifier)")
       startupTimeout = Task { [weak self] in
         try? await Task.sleep(for: .seconds(30))
@@ -111,6 +120,8 @@ final class XiaozhiVoiceSession {
         if state == .stopped { stop(); return }
         Self.log.info("Voice state=\(state.rawValue, privacy: .public)")
         onState?(state)
+      case "route":
+        Self.log.info("Voice route input=\(event.inputDevice ?? "?", privacy: .private) output=\(event.outputDevice ?? "?", privacy: .private)")
       case "level":
         onLevel?(Self.clamp(event.input), Self.clamp(event.output))
       case "error":
@@ -133,6 +144,7 @@ final class XiaozhiVoiceSession {
   }
 
   func stop() {
+    audioRoutes.stop()
     generation += 1
     active = false
     startupTimeout?.cancel()
@@ -158,6 +170,7 @@ final class XiaozhiVoiceSession {
   }
 
   isolated deinit {
+    audioRoutes.stop()
     startupTimeout?.cancel()
     output?.fileHandleForReading.readabilityHandler = nil
     try? input?.fileHandleForWriting.close()
