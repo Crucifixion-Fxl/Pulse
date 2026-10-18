@@ -71,17 +71,20 @@ final class SidebarTransitionTests: XCTestCase {
     }.compactMap { $0.contentView as? IslandTransitionView }.first {
       $0.window?.screen?.todoIslandDisplayID == model.hostDisplayID
     })
+    func visibleWidth() throws -> CGFloat {
+      // During the closing spring, the window retains its expanded envelope.
+      // Measure the silhouette consistently before and after the next click.
+      if surface.layer?.mask == nil { return try XCTUnwrap(surface.window).frame.width }
+      return try XCTUnwrap(surface.presentedSurfaceBounds).width
+    }
     for cycle in 0..<8 {
-      let initialWidth = try XCTUnwrap(surface.window).frame.width
+      let initialWidth = try visibleWidth()
       var widths = [initialWidth]
       model.pinIslandForApproval()
       let start = CACurrentMediaTime()
       while CACurrentMediaTime() - start < 0.45 {
         try await Task.sleep(for: .milliseconds(8))
-        let width = surface.layer?.mask == nil
-          ? surface.window!.frame.width
-          : try XCTUnwrap(surface.presentedSurfaceBounds).width
-        widths.append(width)
+        widths.append(try visibleWidth())
       }
       var peak = initialWidth
       var largestRetraction: CGFloat = 0
