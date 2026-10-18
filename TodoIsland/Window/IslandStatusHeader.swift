@@ -82,11 +82,11 @@ final class IslandStatusHeader: NSView {
       frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
     }
     if weather != nil {
-      let width: CGFloat = keepAwakeEditing ? 28 : 116
+      let width: CGFloat = keepAwakeEditing ? 28 : 108
       frames.append(CGRect(x: botX - 8 - width, y: 0, width: width, height: barHeight))
     }
     if keepAwake != nil {
-      frames.append(CGRect(x: botX - (keepAwakeEditing ? 232 : 224), y: 0,
+      frames.append(CGRect(x: botX - (keepAwakeEditing ? 232 : 216), y: 0,
         width: keepAwakeEditing ? 188 : 100, height: barHeight))
     }
     for (item, destination) in zip(items, frames) {

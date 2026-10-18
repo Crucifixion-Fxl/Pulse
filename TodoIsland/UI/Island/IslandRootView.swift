@@ -334,7 +334,7 @@ struct IslandRootView: View {
               .frame(width: model.isKeepAwakeInputExpanded ? 188 : 100)
               .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 0)
             IslandStatusItemView(item: .weather, displayID: displayID)
-              .frame(width: model.isKeepAwakeInputExpanded ? 28 : 116).padding(.trailing, 8)
+              .frame(width: model.isKeepAwakeInputExpanded ? 28 : 108).padding(.trailing, 8)
             IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
           }
           .padding(.horizontal, 20)
