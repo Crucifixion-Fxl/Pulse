@@ -4,6 +4,7 @@ import SwiftUI
 struct WeatherStatusView: View {
   @ObservedObject var store: WeatherStore
   let isActive: Bool
+  var isCompact = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var showsDetails = false
 
@@ -17,25 +18,27 @@ struct WeatherStatusView: View {
           .font(.system(size: 18, weight: .medium))
           .frame(width: 24)
           .contentTransition(.symbolEffect(.replace))
-        if let weather = store.snapshot {
-          Text(weather.temperatureText)
-            .font(.system(size: 17, weight: .semibold, design: .rounded))
-            .monospacedDigit()
-            .contentTransition(.numericText())
-            .fixedSize()
-          VStack(alignment: .leading, spacing: 1) {
-            Text(weather.city).font(.system(size: 10, weight: .medium))
-            Text(L10n.text(store.isStale ? "weather.stale" : weather.conditionKey))
-              .font(.system(size: 9)).foregroundStyle(.white.opacity(0.48))
+        if !isCompact {
+          if let weather = store.snapshot {
+            Text(weather.temperatureText)
+              .font(.system(size: 17, weight: .semibold, design: .rounded))
+              .monospacedDigit()
+              .contentTransition(.numericText())
+              .fixedSize()
+            VStack(alignment: .leading, spacing: 1) {
+              Text(weather.city).font(.system(size: 10, weight: .medium))
+              Text(L10n.text(store.isStale ? "weather.stale" : weather.conditionKey))
+                .font(.system(size: 9)).foregroundStyle(.white.opacity(0.48))
+            }
+            .lineLimit(1)
+            .truncationMode(.tail)
+          } else {
+            VStack(alignment: .leading, spacing: 1) {
+              Text(L10n.text("weather.title")).font(.system(size: 11, weight: .medium))
+              Text(L10n.text(store.issue?.messageKey ?? "weather.locating"))
+                .font(.system(size: 9)).foregroundStyle(.white.opacity(0.5))
+            }.lineLimit(1)
           }
-          .lineLimit(1)
-          .truncationMode(.tail)
-        } else {
-          VStack(alignment: .leading, spacing: 1) {
-            Text(L10n.text("weather.title")).font(.system(size: 11, weight: .medium))
-            Text(L10n.text(store.issue?.messageKey ?? "weather.locating"))
-              .font(.system(size: 9)).foregroundStyle(.white.opacity(0.5))
-          }.lineLimit(1)
         }
       }
       .foregroundStyle(.white)

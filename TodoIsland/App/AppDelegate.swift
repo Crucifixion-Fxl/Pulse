@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     guard !Self.isRunningTests else { return }
+    model.keepAwakeStore.observe()
     // The agent-status socket must be listening before any CLI fires a
     // hook at it (upstream CodeIsland starts the server the same way).
     let server = AgentHookServer(store: agentStore)
@@ -96,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   func applicationWillTerminate(_ notification: Notification) {
     aiUsageTimer?.invalidate()
+    model.keepAwakeStore.shutdown()
   }
 
   /// A queued approval or question auto-expands the island onto the agents

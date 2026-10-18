@@ -118,6 +118,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         guard
           self?.model.islandState == .pinned,
           self?.model.isRequestingAccess == false,
+          self?.model.isKeepAwakeControlsPresented == false,
           // An approval-held panel outlives focus fights: the request
           // lands while the user is in another app, and the key-window
           // steal-and-return would otherwise collapse it instantly.
@@ -127,6 +128,15 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         self?.model.collapseIsland()
       }
     }
+
+    model.$isKeepAwakeInputExpanded.removeDuplicates()
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] editing in
+        guard let self else { return }
+        for window in self.windows.values {
+          window.transition.statusHeader?.setKeepAwakeEditing(editing)
+        }
+      }.store(in: &cancellables)
 
     // The pointer poll exists for one job now: auto-hide activation zones
     // on every display's settled bar. Hover on a visible bar arrives via
@@ -199,7 +209,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       }
       let header = IslandStatusHeader(quota: statusItem(.quota), bot: statusItem(.bot),
         additionalQuotas: statusItem(.additionalQuotas),
-        weather: statusItem(.weather),
+        weather: statusItem(.weather), keepAwake: statusItem(.keepAwake),
         barHeight: DisplayGeometryCalculator.statusHeaderHeight(for: DisplaySupport.metrics(for: screen)))
       let transition = IslandTransitionView(content: hostingView, statusHeader: header)
       panel.contentView = transition
