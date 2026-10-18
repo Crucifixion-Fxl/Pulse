@@ -98,7 +98,7 @@ final class KeepAwakeTests: XCTestCase {
     let header = IslandStatusHeader(quota: NSView(), bot: NSView(),
       additionalQuotas: NSView(), weather: weather, keepAwake: awake, barHeight: 32)
     header.settle(size: CGSize(width: 760, height: 400), state: .pinned)
-    XCTAssertEqual(awake.frame.maxX + 8, weather.frame.minX)
+    XCTAssertEqual(awake.frame.maxX, weather.frame.minX)
     XCTAssertGreaterThanOrEqual(awake.frame.minX, 479, "Clear the physical camera housing")
     XCTAssertEqual(awake.layer?.opacity, 1)
     header.setKeepAwakeEditing(true)
