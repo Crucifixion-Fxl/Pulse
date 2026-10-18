@@ -1,6 +1,9 @@
 # Xiaozhi voice on the Island
 
-Hold plain Space until the Island wakes, then speak when **Listening** appears.
+Hold plain Space until the Island wakes. A soft macOS **Tink** cue plays once
+through the current system output before the microphone opens. Speak when
+**Listening** appears. Short presses do not play the cue; Escape cancels both
+the cue and pending voice startup.
 Release Space and continue the conversation. Wait until **Listening** before the
 next turn: microphone upload pauses while Xiaozhi thinks or speaks, preventing
 background sound and playback echo from interrupting its reply. **Escape** (or another hold) ends

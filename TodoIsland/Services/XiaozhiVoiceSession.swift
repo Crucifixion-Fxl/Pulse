@@ -27,6 +27,8 @@ final class XiaozhiVoiceSession {
   private var generation = 0
   private var active = false
   private let audioRoutes = VoiceAudioRouteMonitor()
+  private let wakeSound = VoiceWakeSound()
+  private var activationTask: Task<Void, Never>?
   private var startupTimeout: Task<Void, Never>?
   private static let log = Logger(subsystem: "com.fxl.TodoIsland", category: "Voice")
 
@@ -36,7 +38,7 @@ final class XiaozhiVoiceSession {
     generation += 1
     let token = generation
     onState?(.connecting)
-    Task { [weak self] in
+    activationTask = Task { [weak self] in
       let allowed: Bool
       switch AVCaptureDevice.authorizationStatus(for: .audio) {
       case .authorized: allowed = true
@@ -45,6 +47,8 @@ final class XiaozhiVoiceSession {
       }
       guard let self, self.active, self.generation == token else { return }
       guard allowed else { self.fail("microphone"); return }
+      await self.wakeSound.play()
+      guard !Task.isCancelled, self.active, self.generation == token else { return }
       self.launch(token: token)
     }
   }
@@ -144,6 +148,9 @@ final class XiaozhiVoiceSession {
   }
 
   func stop() {
+    activationTask?.cancel()
+    activationTask = nil
+    wakeSound.stop()
     audioRoutes.stop()
     generation += 1
     active = false
@@ -170,6 +177,8 @@ final class XiaozhiVoiceSession {
   }
 
   isolated deinit {
+    activationTask?.cancel()
+    wakeSound.stop()
     audioRoutes.stop()
     startupTimeout?.cancel()
     output?.fileHandleForReading.readabilityHandler = nil
