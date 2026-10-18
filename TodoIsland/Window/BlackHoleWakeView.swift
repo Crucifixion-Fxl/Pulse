@@ -22,6 +22,7 @@ final class BlackHoleWakeView: NSView {
   private let silhouette = CAShapeLayer()
   private var voiceRims: [CAShapeLayer] = []
   private let voiceCaption = CATextLayer()
+  private var isDismissing = false
   private(set) var voiceEnergy: CGFloat = 0
   private let reduceMotion: Bool
   private var initialScaleX: CGFloat { originalSize.width / awakenedWidth }
@@ -113,6 +114,7 @@ final class BlackHoleWakeView: NSView {
   }
 
   private func showVoiceCaption(_ text: String) {
+    guard !isDismissing else { return }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     if voiceCaption.superlayer == nil {
@@ -152,6 +154,15 @@ final class BlackHoleWakeView: NSView {
   }
 
   func dismiss() {
+    // Captions belong to the live conversation, not the shrinking core.
+    // Clear immediately and ignore late transport callbacks during dismissal.
+    isDismissing = true
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    voiceCaption.string = nil
+    voiceCaption.isHidden = true
+    CATransaction.commit()
+    setAccessibilityLabel(nil)
     animateScale(x: initialScaleX, y: initialScaleY, duration: reduceMotion ? 0.15 : 0.38)
     let visible = stars.presentation()?.opacity ?? stars.opacity
     stars.removeAnimation(forKey: "ignition")
