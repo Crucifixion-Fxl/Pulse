@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline contract checks; no microphone capture or cloud requests."""
+import asyncio
 import importlib.util
 import json
 import math
@@ -56,6 +57,42 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual(json.loads(result.stdout), {'type': 'error', 'code': 'not_bound'})
             self.assertEqual(list(Path(directory).iterdir()), [])
+
+
+class TurnTakingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_reply_noise_and_previously_queued_audio_are_not_uploaded(self):
+        uplink = bridge.MicrophoneUplink()
+        sent = []
+        async def send(packet):
+            sent.append(packet)
+        worker = asyncio.create_task(uplink.forward(send))
+        uplink.set_enabled(True)
+        uplink.put(b'user-turn')
+        await asyncio.sleep(0)
+        self.assertEqual(sent, [b'user-turn'])
+        # The worker is waiting for its next packet. Disable/re-enable before it
+        # resumes: a packet already dequeued by Queue.get must also be rejected.
+        uplink.put(b'old-tail')
+        uplink.set_enabled(False)
+        uplink.put(b'background-during-reply')
+        uplink.set_enabled(True)
+        uplink.put(b'next-user-turn')
+        await asyncio.sleep(0)
+        self.assertEqual(sent, [b'user-turn', b'next-user-turn'])
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
+
+    async def test_listening_waits_for_resampler_and_bluetooth_playout(self):
+        codec = SimpleNamespace(_tts_fifo=SimpleNamespace(size=0),
+            converter=SimpleNamespace(_output_buffer=[]), playout_deadline=10.5)
+        self.assertTrue(bridge.playout_pending(codec, now=10.1),
+            'Empty PCM FIFO does not mean the Bluetooth output has played it')
+        self.assertFalse(bridge.playout_pending(codec, now=10.6))
+        codec.converter._output_buffer = [0.1]
+        self.assertTrue(bridge.playout_pending(codec, now=10.6))
+        codec.converter._output_buffer = []
+        codec._tts_fifo.size = 480
+        self.assertTrue(bridge.playout_pending(codec, now=10.6))
 
 
 if __name__ == '__main__':

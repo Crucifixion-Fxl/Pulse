@@ -1,7 +1,9 @@
 # Xiaozhi voice on the Island
 
 Hold plain Space until the Island wakes, then speak when **Listening** appears.
-Release Space and continue the conversation. **Escape** (or another hold) ends
+Release Space and continue the conversation. Wait until **Listening** before the
+next turn: microphone upload pauses while Xiaozhi thinks or speaks, preventing
+background sound and playback echo from interrupting its reply. **Escape** (or another hold) ends
 capture, playback, and the network session. Short Space retains its normal action.
 The menu's **Start Voice Conversation** action invokes the same behavior.
 
@@ -61,8 +63,11 @@ The current trial was verified with **湾湾小何** and **小智 Lite**.
   Credentials, conversation text, and raw audio are not written to Pulse logs.
 - No local network listener is opened. MCP advertises an empty tool list; camera,
   screenshot, file access, and remote tool execution are not exposed.
-- AEC enables simultaneous capture/playback. If AEC is unavailable, playback uses
-  half-duplex capture gating. Input network backlog is bounded to half a second.
+- AEC remains enabled for local audio processing. Conversation turns use server
+  automatic endpoint detection, with microphone upload gated during thinking and
+  playback. Queued microphone packets are invalidated at each turn boundary.
+  Listening resumes after decoded PCM, resampling buffers, and scheduled device
+  playback have drained. Input network backlog is bounded to half a second.
 - Escape, sleep, session lock, screen change, quit, parent-pipe closure, a network
   failure, or three minutes without a recognized turn ends the worker. A stuck
   worker is force-terminated two seconds after a user stop.

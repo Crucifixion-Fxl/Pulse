@@ -26,6 +26,46 @@ def normalized_level(rms):
     return min(1.0, max(0.0, (20 * math.log10(rms) + 50) / 35))
 
 
+class MicrophoneUplink:
+    """Keep reply-time audio out of the server's barge-in detector.
+
+    Generations also reject a packet already delivered to a waiting consumer
+    before capture was paused, even if the next user turn has since started.
+    """
+    def __init__(self):
+        self.enabled = False
+        self.generation = 0
+        self.queue = asyncio.Queue(maxsize=25)
+
+    def set_enabled(self, enabled):
+        if self.enabled == enabled:
+            return
+        self.enabled = enabled
+        self.generation += 1
+        while not self.queue.empty():
+            self.queue.get_nowait()
+
+    def put(self, packet):
+        if not self.enabled:
+            return
+        if self.queue.full():
+            self.queue.get_nowait()
+        self.queue.put_nowait((self.generation, packet))
+
+    async def forward(self, send):
+        while True:
+            generation, packet = await self.queue.get()
+            if self.enabled and generation == self.generation:
+                await send(packet)
+
+
+def playout_pending(codec, *, now):
+    # PortAudio's scheduled DAC time includes device/Bluetooth output latency;
+    # an empty decode FIFO alone says nothing about the last audible frame.
+    return bool(codec._tts_fifo.size or codec.converter._output_buffer
+        or now < codec.playout_deadline)
+
+
 def system_device_config(sd, make_config, frame_duration):
     """Select live OS defaults after enumeration; never pin saved client names.
 
@@ -76,6 +116,7 @@ async def run(runtime, data_dir):
     class MeteredCodec(AudioCodec):
         input_rms = 0.0
         output_rms = 0.0
+        playout_deadline = 0.0
 
         def on_audio_data(self, samples):
             self.input_rms = float(np.sqrt(np.mean(samples * samples)))
@@ -84,6 +125,11 @@ async def run(runtime, data_dir):
             super()._output_callback(outdata, frames, timing, status)
             # Meter the PCM actually being played, not network arrival bursts.
             self.output_rms = float(np.sqrt(np.mean(outdata * outdata)))
+            if self.output_rms > 0.000001:
+                delay = float(timing.outputBufferDacTime - timing.currentTime)
+                delay = min(2.0, max(0.0, delay)) if math.isfinite(delay) else 0.0
+                duration = frames / self.device_config.output_sample_rate
+                self.playout_deadline = time.monotonic() + delay + duration + 0.15
 
     stop = asyncio.Event()
     route_changed = asyncio.Event()
@@ -117,11 +163,12 @@ async def run(runtime, data_dir):
     ready = False
     shutting_down = False
     incoming = asyncio.Queue(maxsize=300)
-    outgoing = asyncio.Queue(maxsize=25)  # At most half a second of microphone data.
+    uplink = MicrophoneUplink()
     last_activity = time.monotonic()
 
     def set_state(value):
         nonlocal state
+        uplink.set_enabled(ready and value == 'listening')
         if state != value:
             state = value
             emit('state', state=value)
@@ -134,9 +181,7 @@ async def run(runtime, data_dir):
     def enqueue_audio(packet):
         if not ready or stop.is_set():
             return
-        if outgoing.full():
-            outgoing.get_nowait()
-        outgoing.put_nowait(packet)
+        uplink.put(packet)
 
     def receive(data):
         if incoming.full():
@@ -177,13 +222,15 @@ async def run(runtime, data_dir):
                     set_state('speaking')
                 elif message.get('state') == 'stop':
                     # Do not report listening until the final PCM is actually heard.
-                    deadline = time.monotonic() + 12
-                    while codec._tts_fifo.size and time.monotonic() < deadline and not stop.is_set():
+                    deadline = time.monotonic() + 30
+                    while playout_pending(codec, now=time.monotonic()) and not stop.is_set():
+                        if time.monotonic() > deadline:
+                            fail('playback')
+                            return
                         await asyncio.sleep(.02)
-                    await asyncio.sleep(.08)
                     if not stop.is_set():
+                        await protocol.send_start_listening(ListeningMode.AUTO_STOP)
                         set_state('listening')
-                        await protocol.send_start_listening(ListeningMode.REALTIME if codec.aec_active else ListeningMode.AUTO_STOP)
             elif kind in ('alert', 'error'):
                 # Server prose may contain private information; expose a stable UI code.
                 fail('server_alert')
@@ -191,11 +238,7 @@ async def run(runtime, data_dir):
                 fail('disconnected')
 
     async def send_audio():
-        while not stop.is_set():
-            packet = await outgoing.get()
-            # AEC is required for simultaneous mic + speaker; otherwise half-duplex.
-            if state == 'listening' or codec.aec_active:
-                await protocol.send_audio(packet)
+        await uplink.forward(protocol.send_audio)
 
     async def meters():
         while not stop.is_set():
@@ -216,10 +259,9 @@ async def run(runtime, data_dir):
             await route_changed.wait()
             route_changed.clear()
             ready = False
+            uplink.set_enabled(False)
             codec.input_rms = codec.output_rms = 0.0
             emit('state', state='switching')
-            while not outgoing.empty():
-                outgoing.get_nowait()
             # reload_devices closes both streams before refreshing PortAudio's
             # cached list, then rebuilds resamplers, Opus and AEC for the new rates.
             ok = await codec.reload_devices(reenumerate=True)
@@ -231,6 +273,7 @@ async def run(runtime, data_dir):
                 return
             report_route()
             ready = True
+            uplink.set_enabled(state == 'listening')
             emit('state', state=state)
 
     async def setup():
@@ -259,7 +302,7 @@ async def run(runtime, data_dir):
         if not await protocol.connect():
             fail('network')
             return
-        await protocol.send_start_listening(ListeningMode.REALTIME if codec.aec_active else ListeningMode.AUTO_STOP)
+        await protocol.send_start_listening(ListeningMode.AUTO_STOP)
         ready = True
         codec.set_encoded_callback(lambda packet: loop.call_soon_threadsafe(enqueue_audio, packet))
         set_state('listening')
@@ -288,6 +331,7 @@ async def run(runtime, data_dir):
     finally:
         shutting_down = True
         ready = False
+        uplink.set_enabled(False)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
