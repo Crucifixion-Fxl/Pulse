@@ -256,3 +256,13 @@ The Island shell is an independent implementation informed by boring.notch's pub
 5. Implement the SwiftUI collapsed, Preview, Pinned, calendar, and editor surfaces.
 6. Implement menu-bar, in-Island authorization, settings, launch at login, localization, accessibility, and artwork.
 7. Build, run automated tests, and perform real EventKit and display acceptance checks.
+
+## Timed Keep Awake
+
+The expanded header places a Keep Awake control left of local weather. It opens
+inline Days / Hours / Minutes pills, with a 1–1,440-minute duration, an animated
+eye and a hold-to-end ring adapted from Insomnia.
+Each session requires administrator authorization, verifies the system's
+`disablesleep` override, and displays a countdown. An independent launchd task
+restores sleep on expiry, explicit stop, app exit or low battery. Failures remain
+visible until restoration is confirmed. See [the recovery design](adr/0014-bounded-keep-awake-sessions.md).

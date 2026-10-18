@@ -10,18 +10,35 @@ final class IslandStatusHeader: NSView {
   let bot: NSView
   let additionalQuotas: NSView?
   let weather: NSView?
-  private var items: [NSView] { [quota, bot] + [additionalQuotas, weather].compactMap { $0 } }
+  let keepAwake: NSView?
+  private var items: [NSView] { [quota, bot] + [additionalQuotas, weather, keepAwake].compactMap { $0 } }
   private var isExpanded = false
+  private var keepAwakeEditing = false
+  private var surfaceSize = CGSize.zero
+  private var surfaceState: IslandPresentationState = .collapsed
+
+  func setKeepAwakeEditing(_ editing: Bool) {
+    guard keepAwakeEditing != editing else { return }
+    keepAwakeEditing = editing
+    let spring = CASpringAnimation()
+    spring.mass = 1
+    spring.stiffness = 380
+    spring.damping = 34
+    spring.duration = 0.38
+    move(to: surfaceSize, state: surfaceState,
+      spring: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : spring)
+  }
   var barHeight: CGFloat
 
   override var isFlipped: Bool { true }
 
   init(quota: NSView, bot: NSView, additionalQuotas: NSView? = nil,
-       weather: NSView? = nil, barHeight: CGFloat) {
+       weather: NSView? = nil, keepAwake: NSView? = nil, barHeight: CGFloat) {
     self.quota = quota
     self.bot = bot
     self.additionalQuotas = additionalQuotas
     self.weather = weather
+    self.keepAwake = keepAwake
     self.barHeight = barHeight
     super.init(frame: .zero)
     wantsLayer = true
@@ -50,6 +67,8 @@ final class IslandStatusHeader: NSView {
   }
 
   func move(to size: CGSize, state: IslandPresentationState, spring: CASpringAnimation?) {
+    surfaceSize = size
+    surfaceState = state
     isExpanded = state != .collapsed
     let inset: CGFloat = state == .collapsed ? 12 : 20
     let left = (bounds.width - size.width) / 2
@@ -63,7 +82,11 @@ final class IslandStatusHeader: NSView {
       frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
     }
     if weather != nil {
-      frames.append(CGRect(x: botX - 164, y: 0, width: 156, height: barHeight))
+      let width: CGFloat = keepAwakeEditing ? 28 : 116
+      frames.append(CGRect(x: botX - 8 - width, y: 0, width: width, height: barHeight))
+    }
+    if keepAwake != nil {
+      frames.append(CGRect(x: botX - 232, y: 0, width: keepAwakeEditing ? 188 : 100, height: barHeight))
     }
     for (item, destination) in zip(items, frames) {
       let start = item.layer?.position ?? .zero
@@ -77,7 +100,7 @@ final class IslandStatusHeader: NSView {
         layer.add(movement, forKey: "headerPosition")
       }
     }
-    for extra in [additionalQuotas, weather].compactMap({ $0 }) {
+    for extra in [additionalQuotas, weather, keepAwake].compactMap({ $0 }) {
       reveal(extra, state: state, spring: spring)
     }
   }
@@ -107,12 +130,15 @@ final class IslandStatusHeader: NSView {
     move(to: size, state: state, spring: nil)
   }
 
-  // Only the weather chip is interactive; the rest remains surface chrome.
+  // Header controls use the same live views throughout the spring animation.
   override func hitTest(_ point: NSPoint) -> NSView? {
     let localPoint = convert(point, from: superview)
-    guard isExpanded, let weather,
-      (weather.layer?.presentation()?.opacity ?? weather.layer?.opacity ?? 0) > 0.95,
-      weather.frame.contains(localPoint) else { return nil }
-    return weather.hitTest(localPoint)
+    guard isExpanded else { return nil }
+    for item in [keepAwake, weather].compactMap({ $0 }) {
+      guard (item.layer?.presentation()?.opacity ?? item.layer?.opacity ?? 0) > 0.95,
+        item.frame.contains(localPoint) else { continue }
+      return item.hitTest(localPoint)
+    }
+    return nil
   }
 }

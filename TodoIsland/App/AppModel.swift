@@ -13,6 +13,20 @@ enum ICloudSourceMenuState: Equatable, Sendable {
 final class AppModel: ObservableObject {
   /// Shared across display headers; created only when weather is mounted.
   lazy var weatherStore = WeatherStore()
+  lazy var keepAwakeStore = KeepAwakeStore()
+  @Published private(set) var isKeepAwakeControlsPresented = false
+  @Published private(set) var isKeepAwakeInputExpanded = false
+
+  func setKeepAwakeInputExpanded(_ expanded: Bool) {
+    guard isKeepAwakeInputExpanded != expanded else { return }
+    isKeepAwakeInputExpanded = expanded
+  }
+
+  func setKeepAwakeControlsPresented(_ presented: Bool) {
+    isKeepAwakeControlsPresented = presented
+    if presented { hoverTask?.cancel() }
+    else { schedulePointerExitCollapseIfNeeded() }
+  }
   @Published private(set) var authorization: ReminderAuthorization
   @Published private(set) var lists: [ReminderListSnapshot] = []
   @Published private(set) var reminders: [ReminderSnapshot] = []
@@ -1152,7 +1166,7 @@ final class AppModel: ObservableObject {
   }
 
   private func schedulePointerExitCollapseIfNeeded() {
-    guard !isPointerInsideIsland else { return }
+    guard !isPointerInsideIsland, !isKeepAwakeControlsPresented else { return }
 
     let delay: Duration
     switch islandState {
@@ -1171,7 +1185,7 @@ final class AppModel: ObservableObject {
       try? await Task.sleep(for: delay)
       guard
         !Task.isCancelled,
-        !isPointerInsideIsland
+        !isPointerInsideIsland, !isKeepAwakeControlsPresented
       else { return }
 
       switch islandState {
