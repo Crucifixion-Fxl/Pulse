@@ -1,6 +1,6 @@
 import Foundation
 
-/// A visual invocation, deliberately independent of agent sessions and microphone capture.
+/// Invocation timing, independent of the voice transport and agent-session panel.
 struct AIWakeGesture {
   enum Phase: Equatable { case idle, charging, awake }
   static let holdDuration: TimeInterval = 0.7

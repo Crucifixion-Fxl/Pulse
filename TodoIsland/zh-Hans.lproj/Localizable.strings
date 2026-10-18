@@ -228,11 +228,11 @@
 "weather.last-update" = "上次更新";
 "weather.location-settings" = "打开定位设置";
 "weather.refresh" = "刷新天气";
-"wake.menu" = "预览 AI 唤醒 · 长按空格";
+"wake.menu" = "开启语音对话 · 长按空格";
 "wake.enable-global" = "启用其他应用中的长按空格…";
 "wake.title" = "AI 唤醒";
 "wake.charging" = "AI 唤醒蓄力中";
-"wake.awake" = "AI 唤醒预览，按 Escape 退出";
+"wake.awake" = "AI 语音对话，按 Escape 退出";
 "wake.dismiss" = "ESC  退出";
 
 /* Timed keep-awake sessions */
@@ -275,3 +275,15 @@
 "awake.minute-field" = "分钟";
 "awake.hold-end" = "长按 0.6 秒结束清醒";
 "awake.status" = "清醒状态";
+
+/* Xiaozhi voice conversation */
+"voice.connecting" = "正在连接小智…";
+"voice.listening" = "在听 · Esc 结束";
+"voice.thinking" = "正在思考…";
+"voice.speaking" = "正在回复…";
+"voice.stopped" = "对话已结束";
+"voice.error.microphone" = "请在系统设置允许 Pulse 使用麦克风";
+"voice.error.setup" = "请先完成小智客户端绑定";
+"voice.ended" = "对话已结束 · Esc 返回";
+"voice.error.busy" = "小智正在使用中 · Esc 返回";
+"voice.error.connection" = "语音连接中断 · Esc 返回后重试";

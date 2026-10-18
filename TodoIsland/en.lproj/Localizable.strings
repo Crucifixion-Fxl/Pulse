@@ -228,11 +228,11 @@
 "weather.last-update" = "Last update";
 "weather.location-settings" = "Location settings";
 "weather.refresh" = "Refresh weather";
-"wake.menu" = "Preview AI Wake · Hold Space";
+"wake.menu" = "Start Voice Conversation · Hold Space";
 "wake.enable-global" = "Enable Hold Space in Other Apps…";
 "wake.title" = "AI Wake";
 "wake.charging" = "AI wake charging";
-"wake.awake" = "AI wake preview. Press Escape to close.";
+"wake.awake" = "AI voice conversation. Press Escape to close.";
 "wake.dismiss" = "ESC  TO  CLOSE";
 
 /* Timed keep-awake sessions */
@@ -275,3 +275,15 @@
 "awake.minute-field" = "Minutes";
 "awake.hold-end" = "Hold for 0.6 seconds to end";
 "awake.status" = "Session status";
+
+/* Xiaozhi voice conversation */
+"voice.connecting" = "Connecting to Xiaozhi…";
+"voice.listening" = "Listening · Esc to end";
+"voice.thinking" = "Thinking…";
+"voice.speaking" = "Speaking…";
+"voice.stopped" = "Conversation ended";
+"voice.error.microphone" = "Allow Pulse microphone access in System Settings";
+"voice.error.setup" = "Set up and bind the Xiaozhi client first";
+"voice.ended" = "Conversation ended · Esc to return";
+"voice.error.busy" = "Voice is already in use · Esc to return";
+"voice.error.connection" = "Voice disconnected · Esc to return and retry";

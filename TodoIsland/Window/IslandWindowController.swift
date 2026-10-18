@@ -30,6 +30,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   private var fullScreenTimer: Timer?
   private var wakeShortcut: AIWakeShortcut?
   private var wakeGesture = AIWakeGesture()
+  private let voiceSession = XiaozhiVoiceSession()
   private var wakeTimer: Timer?
   private var wakePanel: IslandPanel?
   private var wakeView: BlackHoleWakeView?
@@ -600,7 +601,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         guard let self, self.wakeGeneration == token else { return }
         self.wakeGesture.advance(to: CACurrentMediaTime())
         if self.wakeGesture.phase == .awake {
-          self.wakeView?.awaken()
+          self.activateWakeVoice()
           self.wakePanel?.makeKeyAndOrderFront(nil)
           Self.logLifecycle("wake awake")
         }
@@ -614,12 +615,24 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     wakeGesture.release(at: CACurrentMediaTime())
     if wakeGesture.phase == .idle { dismissWake() }
     else if wakeGesture.phase == .awake {
-      wakeView?.awaken()
+      activateWakeVoice()
       wakePanel?.makeKeyAndOrderFront(nil)
     }
   }
 
+  private func activateWakeVoice() {
+    guard let view = wakeView, !view.isAwake else { return }
+    view.awaken()
+    voiceSession.onState = { [weak view] in view?.setVoiceState($0) }
+    voiceSession.onLevel = { [weak view] in view?.setVoiceLevel(input: $0, output: $1) }
+    voiceSession.onError = { [weak view] in view?.setVoiceError($0) }
+    voiceSession.start()
+  }
+
+  func stopVoice() { voiceSession.stop() }
+
   private func dismissWake() {
+    voiceSession.stop()
     wakeGesture.cancel()
     wakeTimer?.invalidate()
     wakeTimer = nil
@@ -650,6 +663,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   }
 
   private func finishWakeImmediately(resetInput: Bool = true) {
+    voiceSession.stop()
     wakeGeneration += 1
     wakeTimer?.invalidate()
     wakeTimer = nil

@@ -34,6 +34,8 @@
 	<string>Pulse uses your current city to show local weather. Approximate coordinates are sent to Open-Meteo; precise location is not stored.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Pulse uses your current city to show local weather. Approximate coordinates are sent to Open-Meteo; precise location is not stored.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Pulse uses the microphone after Hold Space to talk to Xiaozhi. Audio is sent to the Xiaozhi service until you end the conversation.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSAppTransportSecurity</key>

@@ -17,7 +17,7 @@ This project was previously called Todo Island. Pulse keeps the existing app ide
 - **Day Schedule grouped by List** — same-List tasks stay together, ordered like the Lists themselves, with overdue items greeting today.
 - **Quick Add** — the Task Input creates a reminder on the selected day in any List; the first click on the hover preview pins the Island and puts the caret in the field.
 - **AI agent activity** — live coding-agent sessions and requests for attention.
-- **AI wake animation** — hold plain Space for about 0.8 seconds to unfold a deep-black core surrounded by a dense, flowing white particle cloud. Release early to cancel; after waking, Escape or another hold restores the original island. Short Space keeps text entry and playback controls. This is a visual preview; it does not record audio or call an AI model. Global use requires Accessibility permission via the menu's **Enable Hold Space in Other Apps…** action; in-app use and the menu preview work without it.
+- **AI wake animation** — hold plain Space for about 0.8 seconds to unfold a deep-black core surrounded by a dense, flowing white particle cloud. Release early to cancel; after waking, Escape or another hold restores the original island. Short Space keeps text entry and playback controls. With the [Xiaozhi voice runtime](docs/XIAOZHI-VOICE.md) installed and bound, waking starts a cloud voice conversation; the white rim follows microphone and speaker amplitude. Escape ends capture and playback. Global use requires Accessibility permission via the menu's **Enable Hold Space in Other Apps…** action; in-app use and the menu preview work without it.
 - **Clipboard history** — recent clipboard content in a dedicated panel.
 - **Timed Keep Awake** — an animated eye with inline duration pills to the left of weather keeps the Mac running with the lid closed for a chosen duration. Each session requests administrator authorization; an independent system job restores sleep at the deadline or after Pulse exits. [Behavior and recovery](docs/adr/0014-bounded-keep-awake-sessions.md).
 - **Local weather** — current-city conditions beside the bot, with a clickable detail panel.
@@ -68,7 +68,7 @@ xcodebuild \
 
 ## Privacy and source boundary
 
-iCloud Reminder content is accessed through EventKit. Pulse Local lists and reminders are stored in a sandboxed, versioned SwiftData store in Application Support with CloudKit synchronization disabled. Pulse has no backend, analytics SDK, or content logging.
+iCloud Reminder content is accessed through EventKit. Pulse Local lists and reminders are stored in a sandboxed, versioned SwiftData store in Application Support with CloudKit synchronization disabled. Pulse has no analytics SDK or content logging. Optional Xiaozhi voice sends microphone audio to the Xiaozhi cloud during an active voice session.
 
 The Island implementation is original code informed by the public architectural approach of boring.notch. No GPLv3 source or artwork from boring.notch is copied into this project.
 

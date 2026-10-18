@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   func applicationWillTerminate(_ notification: Notification) {
     aiUsageTimer?.invalidate()
+    islandController?.stopVoice()
     model.keepAwakeStore.shutdown()
   }
 

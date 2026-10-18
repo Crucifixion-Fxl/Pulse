@@ -20,6 +20,9 @@ final class BlackHoleWakeView: NSView {
   private let stars = CALayer()
   private let particles = CALayer()
   private let silhouette = CAShapeLayer()
+  private var voiceRims: [CAShapeLayer] = []
+  private let voiceCaption = CATextLayer()
+  private(set) var voiceEnergy: CGFloat = 0
   private let reduceMotion: Bool
   private var initialScaleX: CGFloat { originalSize.width / awakenedWidth }
   private var initialScaleY: CGFloat { originalSize.height / awakenedHeight }
@@ -87,6 +90,65 @@ final class BlackHoleWakeView: NSView {
     ignition.keyTimes = [0, 0.2, 0.55, 1]
     ignition.duration = 0.8
     stars.add(ignition, forKey: "ignition")
+  }
+
+  func setVoiceState(_ state: XiaozhiVoiceSession.State) {
+    let captions: [XiaozhiVoiceSession.State: String] = [
+      .connecting: L10n.text("voice.connecting"), .listening: L10n.text("voice.listening"),
+      .thinking: L10n.text("voice.thinking"), .speaking: L10n.text("voice.speaking"), .stopped: L10n.text("voice.stopped")]
+    showVoiceCaption(captions[state] ?? "")
+  }
+
+  func setVoiceError(_ code: String) {
+    let text: String
+    switch code {
+    case "microphone": text = L10n.text("voice.error.microphone")
+    case "not_installed", "not_bound": text = L10n.text("voice.error.setup")
+    case "idle_timeout": text = L10n.text("voice.ended")
+    case "busy": text = L10n.text("voice.error.busy")
+    default: text = L10n.text("voice.error.connection")
+    }
+    showVoiceCaption(text)
+    setVoiceLevel(input: 0, output: 0)
+  }
+
+  private func showVoiceCaption(_ text: String) {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    if voiceCaption.superlayer == nil {
+      voiceCaption.frame = CGRect(x: 18, y: awakenedHeight - 24, width: awakenedWidth - 36, height: 18)
+      voiceCaption.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+      voiceCaption.fontSize = 11
+      voiceCaption.alignmentMode = .center
+      voiceCaption.truncationMode = .end
+      voiceCaption.foregroundColor = NSColor(white: 0.78, alpha: 1).cgColor
+      voiceCaption.contentsScale = window?.backingScaleFactor ?? 2
+      core.addSublayer(voiceCaption)
+    }
+    voiceCaption.string = text
+    CATransaction.commit()
+    setAccessibilityLabel(text)
+  }
+
+  /// Only the white rim responds to sound. Dust, atmosphere, the opaque core,
+  /// and the native window retain their geometry and independent animations.
+  func setVoiceLevel(input: Double, output: Double) {
+    let target = CGFloat(max(XiaozhiVoiceSession.clamp(input), XiaozhiVoiceSession.clamp(output)))
+    let coefficient: CGFloat = target > voiceEnergy ? 0.48 : 0.14
+    voiceEnergy += (target - voiceEnergy) * coefficient
+    if voiceEnergy < 0.001 { voiceEnergy = 0 }
+    let energy = reduceMotion ? min(voiceEnergy, 0.25) : voiceEnergy
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    for (index, rim) in voiceRims.enumerated() {
+      let inner = index == 0
+      rim.lineWidth = (inner ? 2 : 2.2) + energy * (inner ? 2.4 : 3.5)
+      rim.shadowRadius = (inner ? 4 : 11) + energy * (inner ? 6 : 12)
+      rim.opacity = Float((inner ? 0.9 : 0.24) + energy * (inner ? 0.1 : 0.3))
+      // A soft outward breath, anchored at the notch's top edge.
+      rim.transform = CATransform3DMakeScale(1, 1 + energy * (reduceMotion ? 0 : 0.035), 1)
+    }
+    CATransaction.commit()
   }
 
   func dismiss() {
@@ -220,6 +282,8 @@ final class BlackHoleWakeView: NSView {
       (CGFloat(2.2), Float(0.24), CGFloat(11))] {
       let rim = CAShapeLayer()
       rim.frame = coreFrame
+      rim.anchorPoint = CGPoint(x: 0.5, y: 0)
+      rim.position = CGPoint(x: coreFrame.midX, y: 0)
       rim.path = path
       rim.fillColor = nil
       rim.strokeColor = NSColor.white.cgColor
@@ -230,6 +294,7 @@ final class BlackHoleWakeView: NSView {
       rim.shadowRadius = blur
       rim.shadowOffset = .zero
       stars.addSublayer(rim)
+      voiceRims.append(rim)
     }
   }
 
