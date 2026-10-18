@@ -127,6 +127,15 @@ struct AwakeEyeMarkView: View {
     private var state: BlinkState { BlinkState(progress: progress, reduceMotion: reduceMotion) }
     private var opening: Bool { progress > 0.5 }
 
+    private var verticalCenteringOffset: CGFloat {
+        let rect = CGRect(x: 0, y: 0, width: size, height: size)
+        // The lens is centered, but the one-sided lashes shift the visible
+        // silhouette. Center that silhouette, mirrored as the eye opens.
+        let closedBounds = AwakeEyeMarkGeometry.lens(in: rect).boundingBoxOfPath
+            .union(AwakeEyeMarkGeometry.lashes(in: rect, side: .below).boundingBoxOfPath)
+        return (rect.midY - closedBounds.midY) * (1 - 2 * min(max(progress, 0), 1))
+    }
+
     /// The pupil's scale for this state: full in the open eye, shrunk in
     /// the closed one, and never anything else under Reduce Motion. A frozen
     /// frame between the two is drawn part way, for previews.
@@ -148,6 +157,8 @@ struct AwakeEyeMarkView: View {
             .fill(.primary)
             .mask { layers }
             .frame(width: size, height: size)
+            .offset(y: verticalCenteringOffset)
+            .animation(AwakeMotion.blink(opening: opening, reduceMotion: reduceMotion), value: state)
     }
 
     private var layers: some View {
