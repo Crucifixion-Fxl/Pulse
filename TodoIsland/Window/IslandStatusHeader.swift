@@ -86,7 +86,8 @@ final class IslandStatusHeader: NSView {
       frames.append(CGRect(x: botX - 8 - width, y: 0, width: width, height: barHeight))
     }
     if keepAwake != nil {
-      frames.append(CGRect(x: botX - 232, y: 0, width: keepAwakeEditing ? 188 : 100, height: barHeight))
+      frames.append(CGRect(x: botX - (keepAwakeEditing ? 232 : 224), y: 0,
+        width: keepAwakeEditing ? 188 : 100, height: barHeight))
     }
     for (item, destination) in zip(items, frames) {
       let start = item.layer?.position ?? .zero
