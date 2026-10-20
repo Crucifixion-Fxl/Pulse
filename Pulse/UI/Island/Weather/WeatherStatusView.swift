@@ -11,7 +11,6 @@ struct WeatherStatusView: View {
   var body: some View {
     Button { showsDetails.toggle() } label: {
       HStack(spacing: 7) {
-        Spacer(minLength: 0)
         Image(systemName: store.snapshot?.symbol ?? "cloud.sun.fill")
           .symbolRenderingMode(.palette)
           .foregroundStyle(iconColor, .white.opacity(0.85))
@@ -42,7 +41,7 @@ struct WeatherStatusView: View {
         }
       }
       .foregroundStyle(.white)
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)

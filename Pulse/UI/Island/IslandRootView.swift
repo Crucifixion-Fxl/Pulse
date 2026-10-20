@@ -319,9 +319,9 @@ struct IslandRootView: View {
             Spacer(minLength: 0)
             IslandStatusItemView(item: .keepAwake, displayID: displayID)
               .frame(width: model.isKeepAwakeInputExpanded ? 188 : 100)
-              .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 0)
+              .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 6)
             IslandStatusItemView(item: .weather, displayID: displayID)
-              .frame(width: model.isKeepAwakeInputExpanded ? 28 : 108).padding(.trailing, 2)
+              .frame(width: model.isKeepAwakeInputExpanded ? 28 : 108).padding(.trailing, 8)
             ExtensionStoreButton(displayID: displayID)
             IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
           }
