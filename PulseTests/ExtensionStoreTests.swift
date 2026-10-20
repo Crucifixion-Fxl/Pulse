@@ -110,15 +110,20 @@ final class ExtensionStoreTests: XCTestCase {
     let store = NSButton(title: "Store", target: nil, action: nil)
     let bot = NSView()
     let header = IslandStatusHeader(quota: NSView(), bot: bot, store: store, barHeight: 30)
+    func hitStore() -> NSView? {
+      // hitTest takes a point in the superview/window coordinate system.
+      let center = CGPoint(x: store.frame.midX, y: store.frame.midY)
+      return header.hitTest(header.convert(center, to: header.superview))
+    }
     XCTAssertTrue(store.isHidden)
     header.settle(size: CGSize(width: 340, height: 30), state: .collapsed)
     XCTAssertTrue(store.isHidden)
-    XCTAssertNil(header.hitTest(CGPoint(x: store.frame.midX, y: store.frame.midY)))
+    XCTAssertNil(hitStore())
     header.settle(size: CGSize(width: 760, height: 460), state: .pinned)
     XCTAssertFalse(store.isHidden)
-    XCTAssertNotNil(header.hitTest(CGPoint(x: store.frame.midX, y: store.frame.midY)))
+    XCTAssertNotNil(hitStore())
     header.move(to: CGSize(width: 340, height: 30), state: .collapsed, spring: CASpringAnimation())
     XCTAssertTrue(store.isHidden, "Hide immediately when closing, including during the spring")
-    XCTAssertNil(header.hitTest(CGPoint(x: store.frame.midX, y: store.frame.midY)))
+    XCTAssertNil(hitStore())
   }
 }
