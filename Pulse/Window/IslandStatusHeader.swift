@@ -18,6 +18,16 @@ final class IslandStatusHeader: NSView {
   private var surfaceSize = CGSize.zero
   private var surfaceState: IslandPresentationState = .collapsed
 
+  func refreshWeatherLayout() {
+    guard surfaceSize != .zero, weather?.frame.width != weatherWidth else { return }
+    move(to: surfaceSize, state: surfaceState, spring: nil)
+  }
+
+  private var weatherWidth: CGFloat {
+    let idealWidth = weather?.intrinsicContentSize.width ?? 0
+    return keepAwakeEditing ? 28 : (idealWidth > 0 ? min(108, ceil(idealWidth)) : 108)
+  }
+
   func setKeepAwakeEditing(_ editing: Bool) {
     guard keepAwakeEditing != editing else { return }
     keepAwakeEditing = editing
@@ -86,12 +96,14 @@ final class IslandStatusHeader: NSView {
       frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
     }
     let storeWidth: CGFloat = store == nil || !isExpanded ? 0 : 28
+    // Use the text's ideal width so a short city name does not leave a
+    // blank tail between the weather and the store.
+    let weatherX = botX - storeWidth - 6 - weatherWidth
     if weather != nil {
-      let width: CGFloat = keepAwakeEditing ? 28 : 108
-      frames.append(CGRect(x: botX - storeWidth - 8 - width, y: 0, width: width, height: barHeight))
+      frames.append(CGRect(x: weatherX, y: 0, width: weatherWidth, height: barHeight))
     }
     if keepAwake != nil {
-      frames.append(CGRect(x: botX - storeWidth - (keepAwakeEditing ? 232 : 222), y: 0,
+      frames.append(CGRect(x: weatherX - (keepAwakeEditing ? 8 + 188 : 6 + 100), y: 0,
         width: keepAwakeEditing ? 188 : 100, height: barHeight))
     }
     if store != nil {

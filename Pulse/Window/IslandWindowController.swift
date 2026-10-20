@@ -145,6 +145,15 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         }
       }.store(in: &cancellables)
 
+    model.weatherStore.objectWillChange
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] in
+        guard let self else { return }
+        for window in self.windows.values {
+          window.transition.statusHeader?.refreshWeatherLayout()
+        }
+      }.store(in: &cancellables)
+
     // The pointer poll exists for one job now: auto-hide activation zones
     // on every display's settled bar. Hover on a visible bar arrives via
     // the surface's own .onHover.
@@ -211,7 +220,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       func statusItem(_ item: IslandStatusItem) -> NSView {
         let host = NSHostingView(rootView: IslandStatusItemView(item: item, displayID: id)
           .environmentObject(model).environmentObject(agentStore))
-        host.sizingOptions = []
+        host.sizingOptions = item == .weather ? [.intrinsicContentSize] : []
         return host
       }
       let header = IslandStatusHeader(quota: statusItem(.quota), bot: statusItem(.bot),

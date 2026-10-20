@@ -321,7 +321,9 @@ struct IslandRootView: View {
               .frame(width: model.isKeepAwakeInputExpanded ? 188 : 100)
               .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 6)
             IslandStatusItemView(item: .weather, displayID: displayID)
-              .frame(width: model.isKeepAwakeInputExpanded ? 28 : 108).padding(.trailing, 8)
+              .frame(maxWidth: model.isKeepAwakeInputExpanded ? 28 : 108)
+              .fixedSize(horizontal: true, vertical: false)
+              .padding(.trailing, 6)
             ExtensionStoreButton(displayID: displayID)
             IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
           }

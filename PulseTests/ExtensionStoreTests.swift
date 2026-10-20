@@ -125,7 +125,7 @@ final class ExtensionStoreTests: XCTestCase {
       let host = NSHostingView(rootView: IslandStatusItemView(item: item, displayID: nil)
         .environmentObject(model).environmentObject(agents)
         .environment(\.locale, Locale(identifier: "zh-Hans")))
-      host.sizingOptions = []
+      host.sizingOptions = item == .weather ? [.intrinsicContentSize] : []
       return host
     }
     let weather = status(.weather)
@@ -153,6 +153,8 @@ final class ExtensionStoreTests: XCTestCase {
       try XCTUnwrap(render(rect).representation(using: .png, properties: [:]))
     }
     XCTAssertEqual(weather.frame.minX - awake.frame.maxX, 6, accuracy: 0.5)
+    XCTAssertEqual(button.frame.minX - weather.frame.maxX, 6, accuracy: 0.5)
+    XCTAssertLessThan(weather.frame.width, 108, "Short weather text must not reserve a blank tail")
     // The weather glyph must occupy the leading 24pt, without a flexible spacer.
     let leading = try render(CGRect(x: weather.frame.minX, y: 0, width: 24, height: 32))
     var visiblePixels = 0
