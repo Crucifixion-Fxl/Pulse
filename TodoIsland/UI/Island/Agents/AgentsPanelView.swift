@@ -118,6 +118,7 @@ private struct SessionCard: View {
   let sessionID: String
   let session: AgentSessionSnapshot
   let type: AgentTypography
+  @State private var copyFeedbackID: UUID?
 
   var body: some View {
     HStack(alignment: .top, spacing: 10) {
@@ -200,24 +201,34 @@ private struct SessionCard: View {
         .foregroundStyle(.white.opacity(0.55))
         .fixedSize()
 
-      Menu { copySessionIDButton } label: {
-        Image(systemName: "ellipsis")
-          .foregroundStyle(.white.opacity(0.5))
-          .frame(width: 18, height: 18)
+      Button(action: copySessionID) {
+        Image(systemName: copyFeedbackID == nil ? "doc.on.doc" : "checkmark")
+          .foregroundStyle(copyFeedbackID == nil ? .white.opacity(0.5) : .green)
+          .frame(width: 24, height: 24)
+          .contentShape(Rectangle())
       }
-      .menuStyle(.borderlessButton)
-      .menuIndicator(.hidden)
-      .fixedSize()
-      .accessibilityLabel(Text("agents.session.actions"))
+      .buttonStyle(.plain)
+      .help(Text("agents.session.copy-id"))
+      .accessibilityLabel(Text("agents.session.copy-id"))
+      .accessibilityIdentifier("copy-session-\(sessionID)")
+      .task(id: copyFeedbackID) {
+        guard copyFeedbackID != nil else { return }
+        do { try await Task.sleep(for: .seconds(1.5)) } catch { return }
+        copyFeedbackID = nil
+      }
     }
   }
 
   private var copySessionIDButton: some View {
-    Button {
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(session.displaySessionId(sessionId: sessionID), forType: .string)
-    } label: {
+    Button(action: copySessionID) {
       Label("agents.session.copy-id", systemImage: "doc.on.doc")
+    }
+  }
+
+  private func copySessionID() {
+    NSPasteboard.general.clearContents()
+    if NSPasteboard.general.setString(session.displaySessionId(sessionId: sessionID), forType: .string) {
+      copyFeedbackID = UUID()
     }
   }
 
