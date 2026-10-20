@@ -25,6 +25,7 @@ final class BlackHoleWakeView: NSView {
   private var isDismissing = false
   private(set) var voiceEnergy: CGFloat = 0
   private let reduceMotion: Bool
+  let effect: WakeEffect
   private var initialScaleX: CGFloat { originalSize.width / awakenedWidth }
   private var initialScaleY: CGFloat { originalSize.height / awakenedHeight }
   private(set) var isAwake = false
@@ -34,11 +35,12 @@ final class BlackHoleWakeView: NSView {
 
   override var isFlipped: Bool { true }
 
-  init(size: CGSize, radius: CGFloat, reduceMotion: Bool) {
+  init(size: CGSize, radius: CGFloat, reduceMotion: Bool, effect: WakeEffect = .blackHole) {
     originalSize = size
     awakenedWidth = size.width + min(64, size.width * 0.14)
     awakenedHeight = size.height + 30
     self.reduceMotion = reduceMotion
+    self.effect = effect
     super.init(frame: CGRect(x: 0, y: 0,
       width: awakenedWidth + Self.sidePadding * 2,
       height: awakenedHeight + Self.bottomPadding))
@@ -61,8 +63,13 @@ final class BlackHoleWakeView: NSView {
     stars.frame = bounds
     stars.opacity = 0
     scene.addSublayer(stars)
-    addParticleCloud()
-    if !reduceMotion { addParticleFlow() }
+    switch effect {
+    case .blackHole:
+      addParticleCloud()
+      if !reduceMotion { addParticleFlow() }
+    case .aurora:
+      addAuroraWaves()
+    }
     addWhiteRim()
     scene.addSublayer(core)
     scene.transform = CATransform3DMakeScale(initialScaleX, initialScaleY, 1)
@@ -93,8 +100,8 @@ final class BlackHoleWakeView: NSView {
     stars.add(ignition, forKey: "ignition")
   }
 
-  func setVoiceState(_ state: XiaozhiVoiceSession.State) {
-    let captions: [XiaozhiVoiceSession.State: String] = [
+  func setVoiceState(_ state: VoiceSessionState) {
+    let captions: [VoiceSessionState: String] = [
       .connecting: L10n.text("voice.connecting"), .switching: L10n.text("voice.switching"), .listening: L10n.text("voice.listening"),
       .thinking: L10n.text("voice.thinking"), .speaking: L10n.text("voice.speaking"), .stopped: L10n.text("voice.stopped")]
     showVoiceCaption(captions[state] ?? "")
@@ -135,7 +142,7 @@ final class BlackHoleWakeView: NSView {
   /// Only the white rim responds to sound. Dust, atmosphere, the opaque core,
   /// and the native window retain their geometry and independent animations.
   func setVoiceLevel(input: Double, output: Double) {
-    let target = CGFloat(max(XiaozhiVoiceSession.clamp(input), XiaozhiVoiceSession.clamp(output)))
+    let target = CGFloat(max(VoiceAudioLevel.clamp(input), VoiceAudioLevel.clamp(output)))
     let coefficient: CGFloat = target > voiceEnergy ? 0.48 : 0.14
     voiceEnergy += (target - voiceEnergy) * coefficient
     if voiceEnergy < 0.001 { voiceEnergy = 0 }
@@ -281,6 +288,45 @@ final class BlackHoleWakeView: NSView {
         shimmer.timeOffset = Double(plane) * 0.7
         shimmer.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         dust.add(shimmer, forKey: "dustShimmer")
+      }
+    }
+  }
+
+  /// Broad, colored light waves offer a distinct alternative to the dust cloud.
+  /// Both effects share the same lifecycle, voice rim, cancellation and motion gate.
+  private func addAuroraWaves() {
+    for index in 0..<5 {
+      let spread = CGFloat(index * 6 + 4)
+      let wave = CAShapeLayer()
+      wave.frame = bounds
+      wave.path = CGPath(roundedRect: coreFrame.insetBy(dx: -spread, dy: -spread * 0.55),
+        cornerWidth: 26 + spread, cornerHeight: 26 + spread, transform: nil)
+      wave.fillColor = nil
+      let color = index.isMultiple(of: 2) ? NSColor.systemCyan : NSColor.systemPurple
+      wave.strokeColor = color.withAlphaComponent(0.8).cgColor
+      wave.lineWidth = 1.5 + CGFloat(index) * 0.5
+      wave.shadowColor = color.cgColor
+      wave.shadowRadius = 8 + spread / 2
+      wave.shadowOpacity = 0.8
+      wave.shadowOffset = .zero
+      wave.opacity = Float(0.7 - Double(index) * 0.1)
+      stars.addSublayer(wave)
+      if !reduceMotion {
+        let breathe = CABasicAnimation(keyPath: "opacity")
+        breathe.fromValue = 0.12
+        breathe.toValue = wave.opacity
+        breathe.duration = 1.4 + Double(index) * 0.2
+        breathe.autoreverses = true
+        breathe.repeatCount = .infinity
+        breathe.timeOffset = Double(index) * 0.4
+        wave.add(breathe, forKey: "auroraBreath")
+        wave.lineDashPattern = [80, 30]
+        let flow = CABasicAnimation(keyPath: "lineDashPhase")
+        flow.fromValue = 0
+        flow.toValue = 110
+        flow.duration = 3 + Double(index) * 0.3
+        flow.repeatCount = .infinity
+        wave.add(flow, forKey: "auroraFlow")
       }
     }
   }

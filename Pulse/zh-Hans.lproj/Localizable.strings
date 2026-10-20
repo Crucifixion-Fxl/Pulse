@@ -290,3 +290,31 @@
 "voice.switching" = "正在切换音频设备…";
 
 "ai.quota.stale" = "上次获取的额度，实时刷新暂不可用";
+
+// Extension store
+"store.open" = "打开扩展商店";
+"store.close" = "关闭扩展商店";
+"store.title" = "扩展商店";
+"store.subtitle" = "按喜好组合你的 Pulse";
+"store.bars" = "功能栏";
+"store.bars.note" = "至少保留一个功能栏。";
+"store.status" = "状态项";
+"store.status.note" = "机器人始终显示。";
+"store.status.quota" = "主要额度";
+"store.status.additionalQuotas" = "其他额度";
+"store.status.bot" = "机器人";
+"store.status.weather" = "天气";
+"store.status.keepAwake" = "保持唤醒";
+"store.bots" = "机器人造型";
+"store.bot.orb" = "圆球";
+"store.bot.robot" = "方块";
+"store.bot.cat" = "猫咪";
+"store.effects" = "唤醒效果";
+"store.effect.blackHole" = "黑洞粒子";
+"store.effect.aurora" = "极光";
+"store.effects.note" = "下次长按空格生效，两种效果均响应语音音量。";
+"store.providers" = "AI 接入";
+"store.installed" = "运行时已安装";
+"store.not-installed" = "未安装";
+"store.setup" = "安装与账号绑定 ↗";
+"store.providers.note" = "未安装运行时时保留唤醒动画，并显示安装提示。";

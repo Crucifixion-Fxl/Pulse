@@ -17,10 +17,6 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
   case agents
   case music
   case clipboard
-  case placeholder4
-  case placeholder5
-  case placeholder6
-  case placeholder7
 
   var id: Self { self }
 
@@ -30,8 +26,6 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
     case .agents: "sidebar.agents"
     case .music: "sidebar.music"
     case .clipboard: "sidebar.clipboard"
-    case .placeholder4, .placeholder5, .placeholder6, .placeholder7:
-      "sidebar.placeholder"
     }
   }
 
@@ -41,10 +35,6 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
     case .agents: "person.2.fill"
     case .music: "music.note"
     case .clipboard: "doc.on.clipboard"
-    case .placeholder4: "flag"
-    case .placeholder5: "clock"
-    case .placeholder6: "folder"
-    case .placeholder7: "chart.bar"
     }
   }
 
@@ -62,9 +52,6 @@ enum IslandSidebarItem: String, CaseIterable, Identifiable {
     // the island height stays uniform across features.
     case .music: MusicPanelView.Metrics.contentHeight
     case .clipboard: ClipboardPanelView.Metrics.contentHeight
-    // The stub pane is one centered line of text; keep the surface compact.
-    case .placeholder4, .placeholder5, .placeholder6, .placeholder7:
-      240
     }
   }
 }
@@ -291,12 +278,12 @@ struct IslandRootView: View {
               // click that pinned the Island is still in flight, the panel has
               // not become key yet and this request cannot land — the
               // taskInputFocusRequestID handler below re-issues it when it can.
-              if state == .pinned, selectedSidebarItem == .reminders, model.editingReminderID == nil {
+              if state == .pinned, !model.isExtensionStorePresented, selectedSidebarItem == .reminders, model.editingReminderID == nil {
                 newTaskFocused = true
               }
             }
             .onChange(of: model.taskInputFocusRequestID) { _, _ in
-              guard model.islandState == .pinned, selectedSidebarItem == .reminders,
+              guard model.islandState == .pinned, !model.isExtensionStorePresented, selectedSidebarItem == .reminders,
                 model.editingReminderID == nil else { return }
               // Pass through false first: the pin already left the state true,
               // and re-asserting true alone would not re-issue the focus request.
@@ -335,6 +322,7 @@ struct IslandRootView: View {
               .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 0)
             IslandStatusItemView(item: .weather, displayID: displayID)
               .frame(width: model.isKeepAwakeInputExpanded ? 28 : 108).padding(.trailing, 8)
+            ExtensionStoreButton(displayID: displayID)
             IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
           }
           .padding(.horizontal, 20)
@@ -357,7 +345,13 @@ struct IslandRootView: View {
       .onHover { hovering in
         model.setIslandHovered(hovering, on: displayID)
       }
-      .onAppear { syncRequestedSidebarItem() }
+      .onAppear { reconcileEnabledSidebar(); syncRequestedSidebarItem() }
+      .onChange(of: model.extensionPreferences.bars) { _, _ in reconcileEnabledSidebar() }
+      .onChange(of: model.isExtensionStorePresented) { _, _ in
+        newTaskFocused = false
+        updateExpandedContentHeight()
+        syncMusicPanelActivity()
+      }
       .onChange(of: model.requestedSidebarItem) { _, _ in syncRequestedSidebarItem() }
       .task {
         // Prewarm the panes once, invisibly, shortly after launch: the
@@ -492,14 +486,18 @@ struct IslandRootView: View {
 
   private var expandedContent: some View {
     HStack(spacing: 0) {
-      expandedSidebar
-        .frame(width: 28)
-        .frame(maxHeight: .infinity, alignment: .top)
+      if model.isExtensionStorePresented {
+        ExtensionStoreView()
+      } else {
+        expandedSidebar
+          .frame(width: 28)
+          .frame(maxHeight: .infinity, alignment: .top)
 
-      expandedFeatureContent
-        .font(.system(size: 14.04))
-        .controlSize(.mini)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        expandedFeatureContent
+          .font(.system(size: 14.04))
+          .controlSize(.mini)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+      }
     }
     .foregroundStyle(.white)
     // Wider than the shoulder inset so trailing content clears the concave
@@ -512,7 +510,7 @@ struct IslandRootView: View {
 
   private var expandedSidebar: some View {
     VStack(spacing: 3) {
-      ForEach(IslandSidebarItem.allCases) { item in
+      ForEach(enabledSidebarItems) { item in
         Button {
           selectSidebar(item)
         } label: {
@@ -549,6 +547,7 @@ struct IslandRootView: View {
       }
 
       Spacer(minLength: 0)
+      ExtensionStoreButton(displayID: displayID)
     }
     .padding(.top, 4)
     .padding(.bottom, 2)
@@ -562,6 +561,16 @@ struct IslandRootView: View {
   /// listener on the expanded-only branch misses requests that land while
   /// collapsed — exactly the first approval's situation — so the panel
   /// would open on whatever pane was last selected.
+  private var enabledSidebarItems: [IslandSidebarItem] {
+    IslandSidebarItem.allCases.filter { model.extensionPreferences.bars.contains($0.rawValue) }
+  }
+
+  private func reconcileEnabledSidebar() {
+    if !enabledSidebarItems.contains(selectedSidebarItem), let first = enabledSidebarItems.first {
+      selectSidebar(first)
+    }
+  }
+
   private func syncRequestedSidebarItem() {
     guard let item = model.requestedSidebarItem, item != selectedSidebarItem else { return }
     // selectSidebar (not a bare assignment) so auto-expansion flows get the
@@ -572,7 +581,7 @@ struct IslandRootView: View {
 
   /// Switches the active sidebar feature with the liquid transition.
   private func selectSidebar(_ item: IslandSidebarItem) {
-    guard selectedSidebarItem != item else { return }
+    guard enabledSidebarItems.contains(item), selectedSidebarItem != item else { return }
     selectedSidebarItem = item
     if item != .reminders { newTaskFocused = false }
     if item == .agents {
@@ -588,7 +597,7 @@ struct IslandRootView: View {
   /// shows the music panel. Re-selected items never re-fire selectSidebar
   /// on re-expansion, so every visibility input reconciles here instead.
   private func syncMusicPanelActivity() {
-    let active = model.islandState != .collapsed && selectedSidebarItem == .music
+    let active = !model.isExtensionStorePresented && model.islandState != .collapsed && selectedSidebarItem == .music
     model.setMusicPanelActive(active)
   }
 
@@ -618,8 +627,6 @@ struct IslandRootView: View {
         MusicPanelView().transition(.opacity)
       case .clipboard:
         ClipboardPanelView().transition(.opacity)
-      case .placeholder4, .placeholder5, .placeholder6, .placeholder7:
-        placeholderFeatureContent.transition(.opacity)
       }
     }
     // Only the indicator springs; content opacity settles without overshoot.
@@ -1087,13 +1094,16 @@ struct IslandRootView: View {
   /// pane height belongs to the calendar alone; other items use their
   /// declared height.
   private func updateExpandedContentHeight() {
+    if model.isExtensionStorePresented {
+      model.updateExpandedContentHeight(400)
+      return
+    }
     let contentHeight: CGFloat
     switch selectedSidebarItem {
     case .agents:
       contentHeight = model.canUseActiveList
         ? sharedPrimaryPaneHeight : AgentsPanelView.Metrics.contentHeight
-    case .music, .clipboard, .placeholder4,
-      .placeholder5, .placeholder6, .placeholder7:
+    case .music, .clipboard:
       contentHeight = selectedSidebarItem.preferredContentHeight
     case .reminders:
       if model.canUseActiveList {
@@ -1827,6 +1837,8 @@ struct IslandRootView: View {
   }
 
   private var collapsedBotFace: some View {
+    HStack(spacing: 6) {
+    ExtensionStoreButton(displayID: displayID)
     CollapsedBotFaceView(
       size: collapsedFaceSize,
       faceColor: model.collapsedQuotaVendor.accent,
@@ -1834,14 +1846,17 @@ struct IslandRootView: View {
       isHovered: model.isPointerInsideIsland,
       isAlert: agentStore.hasPending,
       activity: CollapsedBotState.activity(in: agentStore.sessions),
-      isAnimated: collapsedFaceIsAnimated)
+      isAnimated: collapsedFaceIsAnimated,
+      character: model.extensionPreferences.bot)
+    }
   }
 
   /// Quota chip at the collapsed bar's left end; the vendor is picked in
   /// the AI usage panel (Codex by default). Hidden until the first fetch.
   @ViewBuilder
   private var collapsedQuotaChip: some View {
-    if let subscription = model.aiUsage?.subscriptions.first(where: {
+    if model.extensionPreferences.statusItems.contains("quota"),
+      let subscription = model.aiUsage?.subscriptions.first(where: {
       $0.vendor == model.collapsedQuotaVendor
     }) {
       CollapsedQuotaChipView(subscription: subscription)
@@ -1945,6 +1960,10 @@ struct IslandRootView: View {
 
   private func handleKeyEvent(_ event: NSEvent) -> Bool {
     guard !AIWakeShortcut.defersIslandAction(event) else { return false }
+    if model.isExtensionStorePresented {
+      if event.keyCode == 53 { model.toggleExtensionStore(on: displayID); return true }
+      return false
+    }
     if IslandPlaybackShortcut.handle(event,
       isExpanded: effectiveState != .collapsed,
       isEditingReminder: model.editingReminderID != nil,

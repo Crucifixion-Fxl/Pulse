@@ -11,7 +11,8 @@ final class IslandStatusHeader: NSView {
   let additionalQuotas: NSView?
   let weather: NSView?
   let keepAwake: NSView?
-  private var items: [NSView] { [quota, bot] + [additionalQuotas, weather, keepAwake].compactMap { $0 } }
+  let store: NSView?
+  private var items: [NSView] { [quota, bot] + [additionalQuotas, weather, keepAwake, store].compactMap { $0 } }
   private var isExpanded = false
   private var keepAwakeEditing = false
   private var surfaceSize = CGSize.zero
@@ -33,12 +34,13 @@ final class IslandStatusHeader: NSView {
   override var isFlipped: Bool { true }
 
   init(quota: NSView, bot: NSView, additionalQuotas: NSView? = nil,
-       weather: NSView? = nil, keepAwake: NSView? = nil, barHeight: CGFloat) {
+       weather: NSView? = nil, keepAwake: NSView? = nil, store: NSView? = nil, barHeight: CGFloat) {
     self.quota = quota
     self.bot = bot
     self.additionalQuotas = additionalQuotas
     self.weather = weather
     self.keepAwake = keepAwake
+    self.store = store
     self.barHeight = barHeight
     super.init(frame: .zero)
     wantsLayer = true
@@ -81,13 +83,17 @@ final class IslandStatusHeader: NSView {
     if additionalQuotas != nil {
       frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
     }
+    let storeWidth: CGFloat = store == nil ? 0 : 28
     if weather != nil {
       let width: CGFloat = keepAwakeEditing ? 28 : 108
-      frames.append(CGRect(x: botX - 8 - width, y: 0, width: width, height: barHeight))
+      frames.append(CGRect(x: botX - storeWidth - 8 - width, y: 0, width: width, height: barHeight))
     }
     if keepAwake != nil {
-      frames.append(CGRect(x: botX - (keepAwakeEditing ? 232 : 216), y: 0,
+      frames.append(CGRect(x: botX - storeWidth - (keepAwakeEditing ? 232 : 216), y: 0,
         width: keepAwakeEditing ? 188 : 100, height: barHeight))
+    }
+    if store != nil {
+      frames.append(CGRect(x: botX - 28, y: 0, width: 24, height: barHeight))
     }
     for (item, destination) in zip(items, frames) {
       let start = item.layer?.position ?? .zero
@@ -134,8 +140,7 @@ final class IslandStatusHeader: NSView {
   // Header controls use the same live views throughout the spring animation.
   override func hitTest(_ point: NSPoint) -> NSView? {
     let localPoint = convert(point, from: superview)
-    guard isExpanded else { return nil }
-    for item in [keepAwake, weather].compactMap({ $0 }) {
+    for item in ([store] + (isExpanded ? [keepAwake, weather] : [])).compactMap({ $0 }) {
       guard (item.layer?.presentation()?.opacity ?? item.layer?.opacity ?? 0) > 0.95,
         item.frame.contains(localPoint) else { continue }
       return item.hitTest(localPoint)

@@ -94,6 +94,15 @@ final class AppModel: ObservableObject {
   @Published private(set) var taskInputFocusRequestID = UUID()
   /// Snapshot shown by the AI usage sidebar panel; nil renders the skeleton.
   @Published private(set) var aiUsage: AIUsageSnapshot?
+  @Published var extensionPreferences: ExtensionPreferences {
+    didSet { extensionPreferences.save(to: defaults) }
+  }
+  @Published private(set) var isExtensionStorePresented = false
+
+  func toggleExtensionStore(on displayID: String? = nil) {
+    isExtensionStorePresented.toggle()
+    pinIslandFromSurface(on: displayID)
+  }
   /// Latest Now Playing snapshot; nil renders the music panel's empty state.
   @Published private(set) var nowPlaying: NowPlayingTrack?
   @Published private(set) var lyricsState: LyricsState = .idle
@@ -197,6 +206,7 @@ final class AppModel: ObservableObject {
     self.completionFeedbackDuration = completionFeedbackDuration
     self.completionUndoDuration = completionUndoDuration
     self.defaults = defaults
+    self.extensionPreferences = ExtensionPreferences.load(from: defaults)
     self.aiUsageProvider = aiUsageProvider
     self.lyricsService = lyricsService
     self.nowPlayingController = nowPlayingController
@@ -878,6 +888,7 @@ final class AppModel: ObservableObject {
   }
 
   func collapseIsland() {
+    isExtensionStorePresented = false
     hoverTask?.cancel()
     isHeldForApproval = false
     suspendedEditingFocus = nil
@@ -1166,7 +1177,7 @@ final class AppModel: ObservableObject {
   }
 
   private func schedulePointerExitCollapseIfNeeded() {
-    guard !isPointerInsideIsland, !isKeepAwakeControlsPresented else { return }
+    guard !isPointerInsideIsland, !isKeepAwakeControlsPresented, !isExtensionStorePresented else { return }
 
     let delay: Duration
     switch islandState {
@@ -1185,7 +1196,7 @@ final class AppModel: ObservableObject {
       try? await Task.sleep(for: delay)
       guard
         !Task.isCancelled,
-        !isPointerInsideIsland, !isKeepAwakeControlsPresented
+        !isPointerInsideIsland, !isKeepAwakeControlsPresented, !isExtensionStorePresented
       else { return }
 
       switch islandState {

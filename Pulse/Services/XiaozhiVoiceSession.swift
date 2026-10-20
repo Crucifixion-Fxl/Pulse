@@ -5,8 +5,12 @@ import OSLog
 /// One wake invocation owns one child process and its audio devices. The bound
 /// account remains in Application Support; no credentials cross the stdio pipe.
 @MainActor
-final class XiaozhiVoiceSession {
-  enum State: String, Decodable { case connecting, switching, listening, thinking, speaking, stopped }
+final class XiaozhiVoiceSession: VoiceSessionProvider {
+  typealias State = VoiceSessionState
+  static var isInstalled: Bool {
+    FileManager.default.isExecutableFile(atPath: FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Application Support/PulseVoice/py-xiaozhi/.venv/bin/python").path)
+  }
   struct Event: Decodable {
     let type: String
     var state: State?
@@ -34,6 +38,7 @@ final class XiaozhiVoiceSession {
 
   func start() {
     guard !active else { return }
+    guard Self.isInstalled else { onError?("not_installed"); return }
     active = true
     generation += 1
     let token = generation
@@ -137,8 +142,7 @@ final class XiaozhiVoiceSession {
   }
 
   static func clamp(_ value: Double?) -> Double {
-    guard let value, value.isFinite else { return 0 }
-    return min(1, max(0, value))
+    VoiceAudioLevel.clamp(value)
   }
 
   private func fail(_ code: String) {

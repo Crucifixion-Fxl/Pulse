@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum IslandStatusItem: CaseIterable {
+enum IslandStatusItem: String, CaseIterable {
   case quota
   case additionalQuotas
   case bot
@@ -28,7 +28,8 @@ struct IslandStatusItemView: View {
 
   var body: some View {
     Group {
-      if model.canUseActiveList {
+      if model.canUseActiveList, model.extensionPreferences.statusItems.contains(item.rawValue),
+        !(isExpanded && model.isExtensionStorePresented) {
         switch item {
         case .quota:
           if let subscription = model.aiUsage?.subscriptions.first(where: {
@@ -57,7 +58,8 @@ struct IslandStatusItemView: View {
             isHovered: model.isPointerInsideIsland,
             isAlert: agentStore.hasPending,
             activity: CollapsedBotState.activity(in: agentStore.sessions),
-            isAnimated: !reduceMotion && (model.isCollapsedIslandVisible || isExpanded))
+            isAnimated: !reduceMotion && (model.isCollapsedIslandVisible || isExpanded),
+            character: model.extensionPreferences.bot)
         case .keepAwake:
           KeepAwakeStatusView(store: model.keepAwakeStore, isActive: isExpanded)
         case .weather:

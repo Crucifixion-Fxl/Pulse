@@ -30,7 +30,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   private var fullScreenTimer: Timer?
   private var wakeShortcut: AIWakeShortcut?
   private var wakeGesture = AIWakeGesture()
-  private let voiceSession = XiaozhiVoiceSession()
+  private var voiceSession: (any VoiceSessionProvider)?
   private var wakeTimer: Timer?
   private var wakePanel: IslandPanel?
   private var wakeView: BlackHoleWakeView?
@@ -120,6 +120,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
           self?.model.islandState == .pinned,
           self?.model.isRequestingAccess == false,
           self?.model.isKeepAwakeControlsPresented == false,
+          self?.model.isExtensionStorePresented == false,
           // An approval-held panel outlives focus fights: the request
           // lands while the user is in another app, and the key-window
           // steal-and-return would otherwise collapse it instantly.
@@ -211,6 +212,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       let header = IslandStatusHeader(quota: statusItem(.quota), bot: statusItem(.bot),
         additionalQuotas: statusItem(.additionalQuotas),
         weather: statusItem(.weather), keepAwake: statusItem(.keepAwake),
+        store: NSHostingView(rootView: ExtensionStoreButton(displayID: id).environmentObject(model)),
         barHeight: DisplayGeometryCalculator.statusHeaderHeight(for: DisplaySupport.metrics(for: screen)))
       let transition = IslandTransitionView(content: hostingView, statusHeader: header)
       panel.contentView = transition
@@ -562,7 +564,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     let view = BlackHoleWakeView(size: surface.size,
       radius: surface.height > 60 ? 36 : (screen.safeAreaInsets.top > 0 ? 14 : 18),
-      reduceMotion: reduced)
+      reduceMotion: reduced, effect: model.extensionPreferences.wakeEffect)
     let panel = IslandPanel()
     panel.title = L10n.text("wake.title")
     panel.acceptsKeyInput = true
@@ -623,16 +625,18 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   private func activateWakeVoice() {
     guard let view = wakeView, !view.isAwake else { return }
     view.awaken()
+    let voiceSession = VoiceProviderRegistry.provider(id: model.extensionPreferences.voiceProviderID).makeSession()
+    self.voiceSession = voiceSession
     voiceSession.onState = { [weak view] in view?.setVoiceState($0) }
     voiceSession.onLevel = { [weak view] in view?.setVoiceLevel(input: $0, output: $1) }
     voiceSession.onError = { [weak view] in view?.setVoiceError($0) }
     voiceSession.start()
   }
 
-  func stopVoice() { voiceSession.stop() }
+  func stopVoice() { voiceSession?.stop() }
 
   private func dismissWake() {
-    voiceSession.stop()
+    voiceSession?.stop()
     wakeGesture.cancel()
     wakeTimer?.invalidate()
     wakeTimer = nil
@@ -663,7 +667,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   }
 
   private func finishWakeImmediately(resetInput: Bool = true) {
-    voiceSession.stop()
+    voiceSession?.stop()
     wakeGeneration += 1
     wakeTimer?.invalidate()
     wakeTimer = nil

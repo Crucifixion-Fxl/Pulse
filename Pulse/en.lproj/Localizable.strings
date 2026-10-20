@@ -290,3 +290,31 @@
 "voice.switching" = "Switching audio device…";
 
 "ai.quota.stale" = "Last known quota — live refresh unavailable";
+
+// Extension store
+"store.open" = "Open extension store";
+"store.close" = "Close extension store";
+"store.title" = "Make Pulse yours";
+"store.subtitle" = "Built-in collection";
+"store.bars" = "BARS";
+"store.bars.note" = "Keep at least one bar enabled.";
+"store.status" = "STATUS ITEMS";
+"store.status.note" = "Your bot always stays visible.";
+"store.status.quota" = "Main quota";
+"store.status.additionalQuotas" = "Other quotas";
+"store.status.bot" = "Bot";
+"store.status.weather" = "Weather";
+"store.status.keepAwake" = "Keep awake";
+"store.bots" = "CHARACTERS";
+"store.bot.orb" = "Orb";
+"store.bot.robot" = "Robot";
+"store.bot.cat" = "Cat";
+"store.effects" = "WAKE EFFECT";
+"store.effect.blackHole" = "Black hole";
+"store.effect.aurora" = "Aurora";
+"store.effects.note" = "Applied on your next Space hold. Both respond to voice.";
+"store.providers" = "VOICE PROVIDER";
+"store.installed" = "Runtime installed";
+"store.not-installed" = "Not installed";
+"store.setup" = "Setup & account binding ↗";
+"store.providers.note" = "Without the runtime, wake remains visual and shows a setup hint.";

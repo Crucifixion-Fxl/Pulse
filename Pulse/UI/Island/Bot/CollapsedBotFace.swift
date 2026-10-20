@@ -300,6 +300,7 @@ struct CollapsedBotFaceView: View {
   /// false under Reduce Motion or while the surface is hidden — renders one
   /// static frame instead of subscribing to the 30 Hz timeline.
   let isAnimated: Bool
+  var character: BotCharacter = .orb
 
   static let eyeColor = Color(red: 0.090, green: 0.090, blue: 0.100)
   /// The alert flood that climbs the face while a request waits.
@@ -351,7 +352,15 @@ struct CollapsedBotFaceView: View {
   private func face(_ e: CollapsedBotFace.Expression, flood: CGFloat) -> some View {
     let m = Metrics(size: size)
     return ZStack {
-      Circle().fill(faceColor)
+      if character == .cat {
+        HStack {
+          TriangleEar().fill(faceColor)
+          Spacer()
+          TriangleEar().fill(faceColor)
+        }.frame(height: size * 0.38).offset(y: -size * 0.36)
+      }
+      RoundedRectangle(cornerRadius: character == .robot ? size * 0.22 : size / 2)
+        .fill(faceColor)
       alertFlood(flood)
       eye(e, side: -1, m: m, alert: flood)
       eye(e, side: 1, m: m, alert: flood)
@@ -367,7 +376,7 @@ struct CollapsedBotFaceView: View {
   /// state shows a seam.
   private func alertFlood(_ unit: CGFloat) -> some View {
     let melt = size * 0.16 * 4 * unit * (1 - unit)
-    return Circle()
+    return RoundedRectangle(cornerRadius: character == .robot ? size * 0.22 : size / 2)
       .fill(Self.alertRed)
       .mask(
         VStack(spacing: 0) {
@@ -421,5 +430,16 @@ struct CollapsedBotFaceView: View {
     var eyeCenterY: CGFloat { size * 0.48 }
     var glanceShift: CGFloat { size * 0.07 }
     var lookLift: CGFloat { size * 0.08 }
+  }
+}
+
+private struct TriangleEar: Shape {
+  func path(in rect: CGRect) -> Path {
+    Path { path in
+      path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+      path.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+      path.closeSubpath()
+    }
   }
 }
