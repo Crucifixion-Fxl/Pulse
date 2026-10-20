@@ -106,6 +106,82 @@ final class ExtensionStoreTests: XCTestCase {
   }
 
   @MainActor
+  func testStoreKeepsRenderedStatusHeaderAndUsesFilledGrid() async throws {
+    let suite = "StoreHeader-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults,
+      aiUsageProvider: SampleAIUsageProvider())
+    model.weatherStore = WeatherStore(defaults: defaults, loader: {
+      WeatherSnapshot(city: "北京市", temperature: 7, high: 12, low: 4,
+        code: 0, isDay: false, observedAt: Date(), fetchedAt: Date())
+    })
+    await model.weatherStore.refresh()
+    await model.reload()
+    model.pinIsland()
+    XCTAssertTrue(model.canUseActiveList)
+    let agents = AgentSessionStore()
+    func status(_ item: IslandStatusItem) -> NSView {
+      let host = NSHostingView(rootView: IslandStatusItemView(item: item, displayID: nil)
+        .environmentObject(model).environmentObject(agents)
+        .environment(\.locale, Locale(identifier: "zh-Hans")))
+      host.sizingOptions = []
+      return host
+    }
+    let weather = status(.weather)
+    let awake = status(.keepAwake)
+    let button = NSHostingView(rootView: ExtensionStoreButton().environmentObject(model))
+    button.sizingOptions = []
+    let header = IslandStatusHeader(quota: status(.quota), bot: status(.bot),
+      weather: weather, keepAwake: awake, store: button, barHeight: 32)
+    header.layer?.backgroundColor = NSColor.black.cgColor
+    let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 760, height: 32),
+      styleMask: .borderless, backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = header
+    defer { window.close() }
+    header.settle(size: CGSize(width: 760, height: 32), state: .pinned)
+    window.orderFront(nil)
+    try await Task.sleep(for: .milliseconds(150))
+    func render(_ rect: CGRect) throws -> NSBitmapImageRep {
+      header.layoutSubtreeIfNeeded()
+      let image = try XCTUnwrap(header.bitmapImageRepForCachingDisplay(in: rect))
+      header.cacheDisplay(in: rect, to: image)
+      return image
+    }
+    func png(_ rect: CGRect) throws -> Data {
+      try XCTUnwrap(render(rect).representation(using: .png, properties: [:]))
+    }
+    XCTAssertEqual(weather.frame.minX - awake.frame.maxX, 6, accuracy: 0.5)
+    // The weather glyph must occupy the leading 24pt, without a flexible spacer.
+    let leading = try render(CGRect(x: weather.frame.minX, y: 0, width: 24, height: 32))
+    var visiblePixels = 0
+    for y in 0..<leading.pixelsHigh {
+      for x in 0..<leading.pixelsWide {
+        if let color = leading.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+          max(color.redComponent, color.greenComponent, color.blueComponent) > 0.3 {
+          visiblePixels += 1
+        }
+      }
+    }
+    XCTAssertGreaterThan(visiblePixels, 100, "Weather icon must begin beside the eye")
+    let weatherBefore = try png(weather.frame)
+    let buttonBefore = try png(button.frame)
+    let framesBefore = header.presentedItemFrames
+    let preview = CGRect(x: awake.frame.maxX - 32, y: 0,
+      width: header.bounds.maxX - awake.frame.maxX + 32, height: 32)
+    try png(preview).write(to: URL(fileURLWithPath: "/tmp/pulse-header-normal.png"))
+
+    model.toggleExtensionStore()
+    try await Task.sleep(for: .milliseconds(150))
+    XCTAssertTrue(model.isExtensionStorePresented)
+    XCTAssertEqual(header.presentedItemFrames, framesBefore)
+    XCTAssertEqual(try png(weather.frame), weatherBefore, "Opening the store must preserve the live weather")
+    XCTAssertNotEqual(try png(button.frame), buttonBefore, "Selected grid must visibly change")
+    try png(preview).write(to: URL(fileURLWithPath: "/tmp/pulse-header-store.png"))
+  }
+
+  @MainActor
   func testStoreIsHiddenAndNotClickableWhenCollapsed() throws {
     let store = NSButton(title: "Store", target: nil, action: nil)
     let bot = NSView()

@@ -6,7 +6,7 @@ struct ExtensionStoreButton: View {
 
   var body: some View {
     Button { model.toggleExtensionStore(on: displayID) } label: {
-      Image(systemName: model.isExtensionStorePresented ? "xmark" : "square.grid.2x2")
+      Image(systemName: model.isExtensionStorePresented ? "square.grid.2x2.fill" : "square.grid.2x2")
         .font(.system(size: 16, weight: .semibold))
         .foregroundStyle(.white.opacity(0.8))
         .frame(width: 24, height: 26)
@@ -16,6 +16,7 @@ struct ExtensionStoreButton: View {
     .help(Text(model.isExtensionStorePresented ? "store.close" : "store.open"))
     .accessibilityLabel(Text(model.isExtensionStorePresented ? "store.close" : "store.open"))
     .accessibilityIdentifier("extension-store-toggle")
+    .accessibilityAddTraits(model.isExtensionStorePresented ? .isSelected : [])
   }
 }
 

@@ -28,8 +28,7 @@ struct IslandStatusItemView: View {
 
   var body: some View {
     Group {
-      if model.canUseActiveList, model.extensionPreferences.statusItems.contains(item.rawValue),
-        !(isExpanded && model.isExtensionStorePresented) {
+      if model.canUseActiveList, model.extensionPreferences.statusItems.contains(item.rawValue) {
         switch item {
         case .quota:
           if let subscription = model.aiUsage?.subscriptions.first(where: {

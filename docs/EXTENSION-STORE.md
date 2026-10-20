@@ -1,8 +1,9 @@
 # Extension store
 
 Open the grid button next to the weather in the expanded header. The collapsed
-bar and sidebar have no store icon. The store replaces the feature area and hides the normal
-status header. Its top-right close button (or Escape) restores the previous
+bar and sidebar have no store icon. The store replaces only the feature area;
+the status header stays visible in place. The grid icon becomes filled while
+selected. Clicking the same icon again (or Escape) restores the previous
 panel. If that panel was disabled, the first enabled panel opens instead.
 
 - Reminders, Agents, Music and Clipboard can be enabled independently. The last
