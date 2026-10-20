@@ -105,6 +105,7 @@ struct ExtensionStoreView: View {
     }
     .padding(.horizontal, 16)
     .foregroundStyle(.white)
+    .environment(\.colorScheme, .dark)
   }
 
   private func section<Content: View>(_ title: LocalizedStringKey,
