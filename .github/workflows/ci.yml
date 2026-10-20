@@ -16,6 +16,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: make build
       - run: make test
+      - name: Print test failure details
+        if: failure()
+        run: |
+          for result in /private/tmp/PulseDerivedData/Logs/Test/*.xcresult; do
+            test -d "$result" || continue
+            xcrun xcresulttool get test-results summary --path "$result"
+          done
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

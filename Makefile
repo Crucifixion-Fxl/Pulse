@@ -14,7 +14,7 @@ build:
 	xcodebuild -quiet $(XCODE_FLAGS) -configuration Debug $(LOCAL_SIGNING) build
 
 test:
-	xcodebuild -quiet $(XCODE_FLAGS) -configuration Debug $(LOCAL_SIGNING) test
+	xcodebuild -quiet $(XCODE_FLAGS) -configuration Debug $(LOCAL_SIGNING) -parallel-testing-enabled NO test
 	python3 scripts/test-keep-awake-watchdog.py
 	python3 scripts/test-xiaozhi-bridge.py
 	python3 scripts/test-bundled-helpers.py
