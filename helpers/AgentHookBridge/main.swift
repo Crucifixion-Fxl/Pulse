@@ -1,4 +1,4 @@
-// Ported from wxtsky/CodeIsland (MIT License) — see TodoIsland/ThirdParty/CODEISLAND-LICENSE.txt
+// Ported from wxtsky/CodeIsland (MIT License) — see Pulse/Resources/Licenses/CODEISLAND-LICENSE.txt
 // (Sources/CodeIslandBridge/main.swift + the CLIProcessResolver / EventNormalizer /
 // ProcArgsParser parts of CodeIslandCore, adapted for doisland)
 //
@@ -6,7 +6,7 @@
 // • Invoked directly as `<path>/agent-bridge [--source <source>] [--event <Event>]`
 //   — no codeisland-hook.sh nc wrapper.
 // • Socket: $DOISLAND_AGENTS_SOCKET_PATH, else /tmp/doisland-agents-<uid>.sock
-//   (mirrors TodoIsland/Agents/Core/AgentSocketPath.swift).
+//   (mirrors Pulse/Domain/Agents/AgentSocketPath.swift).
 // • Skip env renamed CODEISLAND_SKIP → DOISLAND_AGENTS_SKIP.
 // • Dropped upstream integrations that doisland has no counterpart for: Grok /
 //   Hermes / Antigravity / cmux / Herdr / Superset / Orca payloads, the Antigravity
@@ -164,7 +164,7 @@ enum ProcArgsParser {
 
 // MARK: - CLI source resolution (trimmed CLIProcessResolver)
 //
-// Mirrors the doisland source list in TodoIsland/Agents/Core/AgentSessionSnapshot.swift;
+// Mirrors the doisland source list in Pulse/Domain/Agents/AgentSessionSnapshot.swift;
 // the bridge is a standalone binary, so it carries its own reduced copy.
 
 enum CLIProcessResolver {
@@ -470,7 +470,7 @@ func recvAll(_ sock: Int32) -> Data {
 let env = ProcessInfo.processInfo.environment
 let args = CommandLine.arguments
 
-// Socket path — same resolution as TodoIsland/Agents/Core/AgentSocketPath.swift
+// Socket path — same resolution as Pulse/Domain/Agents/AgentSocketPath.swift
 let socketPath = env["DOISLAND_AGENTS_SOCKET_PATH"] ?? "/tmp/doisland-agents-\(getuid()).sock"
 
 // Parse --source flag (e.g. --source codex)

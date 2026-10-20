@@ -8,7 +8,7 @@ For each command, the helper now resolves the current Now Playing PID. If its bu
 
 The Control-menu approach was independently implemented after consulting the [CloudMusicFocus design description](https://github.com/eruimisshy/CloudMusicFocus#工作原理); no source code was copied.
 
-The helper source lives at `helpers/MediaRemoteHelper.swift`. Rebuild it with `scripts/build-media-helper.sh`; the resulting dylib in `TodoIsland/Resources/` is committed with its source. The app is ad-hoc signed without App Sandbox; EventKit retains its normal TCC authorization.
+The helper source lives at `helpers/MediaRemoteHelper.swift`. Rebuild it with `scripts/build-media-helper.sh`; the resulting dylib in `Pulse/Resources/` is committed with its source. The app is ad-hoc signed without App Sandbox; EventKit retains its normal TCC authorization.
 
 ## Playback regression verification
 

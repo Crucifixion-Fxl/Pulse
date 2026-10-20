@@ -30,8 +30,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "AA0000000000000000000021"
-               BuildableName = "TodoIslandTests.xctest"
-               BlueprintName = "TodoIslandTests"
+               BuildableName = "PulseTests.xctest"
+               BlueprintName = "PulseTests"
                ReferencedContainer = "container:Pulse.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -48,8 +48,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "AA0000000000000000000021"
-               BuildableName = "TodoIslandTests.xctest"
-               BlueprintName = "TodoIslandTests"
+               BuildableName = "PulseTests.xctest"
+               BlueprintName = "PulseTests"
                ReferencedContainer = "container:Pulse.xcodeproj">
             </BuildableReference>
          </TestableReference>

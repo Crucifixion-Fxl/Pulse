@@ -1,0 +1,454 @@
+import XCTest
+
+@testable import Pulse
+
+final class LocalSourceAppModelTests: XCTestCase {
+  @MainActor
+  func testMonthNavigationCrossesYearsWithoutMovingSelection() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults)
+    await model.start()
+    let calendar = Calendar.current
+    func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+      calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    model.selectDay(date(2026, 10, 16))
+    model.shiftMonth(by: -1)
+    XCTAssertEqual(model.calendarMonth, date(2026, 9, 1))
+    XCTAssertEqual(model.selectedDay, date(2026, 10, 16))
+    model.shiftMonth(by: 1)
+    model.shiftMonth(by: 1)
+    XCTAssertEqual(model.calendarMonth, date(2026, 11, 1))
+    XCTAssertEqual(model.selectedDay, date(2026, 10, 16))
+    XCTAssertFalse(MonthCalendar(containing: model.calendarMonth).days.contains {
+      calendar.isDate($0.date, inSameDayAs: model.selectedDay)
+    })
+
+    model.selectDay(date(2026, 12, 31))
+    model.shiftMonth(by: 1)
+    XCTAssertEqual(model.calendarMonth, date(2027, 1, 1))
+    model.shiftMonth(by: -1)
+    XCTAssertEqual(model.calendarMonth, date(2026, 12, 1))
+    XCTAssertEqual(model.selectedDay, date(2026, 12, 31))
+    model.shiftMonth(by: 2)
+    XCTAssertEqual(model.calendarMonth, date(2027, 2, 1))
+    model.selectDay(date(2028, 3, 31))
+    model.shiftMonth(by: -1)
+    XCTAssertEqual(model.calendarMonth, date(2028, 2, 1))
+    XCTAssertEqual(model.selectedDay, date(2028, 3, 31))
+    model.selectDay(date(2028, 2, 29))
+    XCTAssertEqual(model.calendarMonth, model.selectedDay)
+  }
+
+  @MainActor
+  func testMonthNavigationLoadsTheNewMonthsReminders() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    let listID = try XCTUnwrap(model.activeListID)
+    let calendar = Calendar.current
+    let october = calendar.date(from: DateComponents(year: 2026, month: 10, day: 16))!
+    try await store.createReminder(
+      title: "November task", in: listID,
+      dueComponents: DateComponents(year: 2026, month: 11, day: 16)
+    )
+    model.selectDay(october)
+    await model.reload()
+    XCTAssertTrue(model.monthReminders.isEmpty)
+
+    model.shiftMonth(by: 1)
+    for _ in 0..<100 where model.calendarReminders.isEmpty {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(model.calendarReminders.map(\.title), ["November task"])
+    XCTAssertEqual(model.selectedDay, october)
+    XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
+    model.shiftMonth(by: -1)
+    for _ in 0..<100 where !model.calendarReminders.isEmpty {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(model.selectedDay, october)
+    XCTAssertTrue(model.calendarReminders.isEmpty)
+    model.shiftMonth(by: 1)
+    model.selectDay(october)
+    XCTAssertEqual(model.calendarMonth, october)
+  }
+
+  func testSwitchingListCreationSourcePreservesEnteredName() {
+    XCTAssertFalse(
+      ListCreationDraftPolicy.shouldResetName(
+        previousSource: .iCloud,
+        newSource: .local
+      ))
+    XCTAssertFalse(
+      ListCreationDraftPolicy.shouldResetName(
+        previousSource: .local,
+        newSource: .iCloud
+      ))
+  }
+
+  func testOpeningListCreationFormStartsWithAnEmptyName() {
+    XCTAssertTrue(
+      ListCreationDraftPolicy.shouldResetName(
+        previousSource: nil,
+        newSource: .iCloud
+      ))
+  }
+
+  @MainActor
+  func testDeniedICloudAuthorizationStillLoadsAndMutatesLocalSource() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+
+    XCTAssertEqual(model.authorization, .denied)
+    XCTAssertEqual(model.activeList?.source, .local)
+    XCTAssertTrue(model.canUseActiveList)
+
+    let listID = try XCTUnwrap(model.activeListID)
+    try await store.createReminder(title: "Local task", in: listID, dueComponents: nil)
+    await model.reload()
+
+    XCTAssertEqual(model.reminders.map(\.title), ["Local task"])
+    XCTAssertEqual(store.createdReminderTitles, ["Local task"])
+  }
+
+  @MainActor
+  func testUndatedReminderJoinsDayScheduleUndatedSection() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+
+    let listID = try XCTUnwrap(model.activeListID)
+    try await store.createReminder(title: "Undated task", in: listID, dueComponents: nil)
+    await model.reload()
+
+    XCTAssertTrue(model.monthReminders.isEmpty)
+    XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
+    XCTAssertEqual(model.undatedReminders.map(\.title), ["Undated task"])
+    XCTAssertEqual(model.visibleScheduleReminders.map(\.title), ["Undated task"])
+  }
+
+  @MainActor
+  func testOverduePendingRemindersFlowIntoTodaySchedule() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    let listID = try XCTUnwrap(model.activeListID)
+
+    let calendar = Calendar.current
+    let oldDate = calendar.date(byAdding: .month, value: -1, to: model.selectedDay)!
+    try await store.createReminder(
+      title: "Old task",
+      in: listID,
+      dueComponents: calendar.dateComponents([.year, .month, .day], from: oldDate)
+    )
+    await model.reload()
+
+    XCTAssertTrue(model.monthReminders.isEmpty)
+    XCTAssertEqual(model.overdueReminders.map(\.title), ["Old task"])
+    XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["Old task"])
+    XCTAssertEqual(model.visibleScheduleReminders.map(\.title), ["Old task"])
+  }
+
+  @MainActor
+  func testTaskInputCreatesReminderDueOnTheSelectedDay() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    let listID = try XCTUnwrap(model.activeListID)
+
+    let calendar = Calendar.current
+    // A target later today but inside the loaded month — a plain +3 days
+    // crosses into the next month near the month's end and the month-scoped
+    // fetch would never return it. On the month's last day the fallback
+    // lands before today, where the task intentionally greets as overdue.
+    let monthEnd = calendar.dateInterval(of: .month, for: model.selectedDay)!.end
+    let lastDayInMonth = calendar.startOfDay(for: monthEnd.addingTimeInterval(-1))
+    var target = calendar.date(byAdding: .day, value: 1, to: model.selectedDay)!
+    if calendar.startOfDay(for: target) > lastDayInMonth {
+      target = calendar.date(byAdding: .day, value: -3, to: model.selectedDay)!
+    }
+    let targetIsFuture =
+      calendar.startOfDay(for: target) > calendar.startOfDay(for: model.selectedDay)
+    XCTAssertNotEqual(
+      calendar.startOfDay(for: target),
+      calendar.startOfDay(for: model.selectedDay)
+    )
+    model.createTask("Planned task", on: target, in: listID)
+    try await Task.sleep(for: .milliseconds(50))
+
+    let created = try XCTUnwrap(model.monthReminders.first)
+    XCTAssertEqual(created.title, "Planned task")
+    XCTAssertEqual(created.dueDateComponents?.year, calendar.component(.year, from: target))
+    XCTAssertEqual(created.dueDateComponents?.month, calendar.component(.month, from: target))
+    XCTAssertEqual(created.dueDateComponents?.day, calendar.component(.day, from: target))
+    XCTAssertNil(created.dueDateComponents?.hour)
+    // The task lands on its own day; a future one never reaches today's
+    // schedule, while a past-date fallback greets today as overdue.
+    let targetSchedule = ReminderSchedule.schedule(on: target, in: model.monthReminders)
+    XCTAssertEqual(targetSchedule.pending.map(\.title), ["Planned task"])
+    if targetIsFuture {
+      XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
+    } else {
+      XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["Planned task"])
+    }
+  }
+
+  @MainActor
+  func testCompletingDayItemMarksItCompletedInSchedule() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    guard let listID = model.activeListID else {
+      return XCTFail("Expected an Active List")
+    }
+
+    try await store.createReminder(
+      title: "Dated task",
+      in: listID,
+      dueComponents: Calendar.current.dateComponents([.year, .month, .day], from: model.selectedDay)
+    )
+    await model.reload()
+    let reminder = try XCTUnwrap(model.monthReminders.first)
+    XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["Dated task"])
+
+    model.complete(reminder)
+
+    // Mid-celebration: the row is still pending while the confetti plays.
+    try await Task.sleep(for: .milliseconds(400))
+    XCTAssertEqual(try XCTUnwrap(model.monthReminders.first).isCompleted, false)
+
+    try await Task.sleep(for: .milliseconds(550))
+    XCTAssertEqual(try XCTUnwrap(model.monthReminders.first).isCompleted, true)
+    XCTAssertTrue(model.selectedDaySchedule.pending.isEmpty)
+    XCTAssertEqual(model.selectedDaySchedule.completed.map(\.title), ["Dated task"])
+  }
+
+  @MainActor
+  func testDeniedICloudAuthorizationOffersRecoveryWhileLocalListIsActive() async {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults)
+    await model.start()
+
+    XCTAssertEqual(model.activeList?.source, .local)
+    XCTAssertEqual(model.iCloudSourceMenuState, .authorizationRequired)
+  }
+
+  @MainActor
+  func testDefaultLocalListIsCreatedOnlyOnFirstUse() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defaults.set(
+      CollapsedIslandVisibility.alwaysVisible.rawValue,
+      forKey: "collapsed-island-visibility"
+    )
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore(startsEmpty: true)
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+
+    await model.useLocal()
+    XCTAssertEqual(store.createdListTitles, ["Pulse"])
+    XCTAssertEqual(model.activeList?.source, .local)
+
+    store.removeAllLists()
+    await model.reload()
+    await model.useLocal()
+
+    XCTAssertEqual(store.createdListTitles, ["Pulse"])
+    XCTAssertEqual(model.requestedListCreationSource, .local)
+  }
+
+  @MainActor
+  func testDeletingLastLocalListShowsLocalEmptyStateWithoutRecreatingDefault() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defaults.set(
+      CollapsedIslandVisibility.alwaysVisible.rawValue,
+      forKey: "collapsed-island-visibility"
+    )
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    let list = try XCTUnwrap(model.activeList)
+
+    await model.prepareListDeletion(list)
+    let candidate = try XCTUnwrap(model.listDeletionCandidate)
+    await model.confirmListDeletion(candidate)
+
+    XCTAssertNil(model.activeList)
+    XCTAssertEqual(model.preferredEmptySource, .local)
+    XCTAssertEqual(store.createdListTitles, [])
+
+    await model.useLocal()
+    XCTAssertEqual(store.createdListTitles, [])
+    XCTAssertEqual(model.requestedListCreationSource, .local)
+  }
+
+  @MainActor
+  func testConfirmationDialogDismissalDoesNotCancelListDeletion() async throws {
+    let defaults = UserDefaults(suiteName: #function)!
+    defaults.removePersistentDomain(forName: #function)
+    defer { defaults.removePersistentDomain(forName: #function) }
+
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.start()
+    let list = try XCTUnwrap(model.activeList)
+
+    await model.prepareListDeletion(list)
+    let candidate = try XCTUnwrap(model.listDeletionCandidate)
+    model.cancelListDeletion()
+    await model.confirmListDeletion(candidate)
+
+    let remainingLists = try await store.fetchLists()
+    XCTAssertFalse(remainingLists.contains(where: { $0.id == list.id }))
+  }
+}
+
+@MainActor
+final class LocalOnlyTestReminderStore: ReminderStore {
+  var onStoreChanged: (() -> Void)?
+  private var lists: [ReminderListSnapshot]
+  private var reminders: [ReminderSnapshot] = []
+  private(set) var createdListTitles: [String] = []
+  private(set) var createdReminderTitles: [String] = []
+
+  init(startsEmpty: Bool = false) {
+    lists = startsEmpty
+      ? []
+      : [
+        ReminderListSnapshot(
+          id: "local:test-list",
+          title: "Local",
+          accent: .fallback,
+          source: .local
+        )
+      ]
+  }
+
+  func authorizationStatus() -> ReminderAuthorization { .denied }
+  func requestFullAccess() async throws -> Bool { false }
+  func fetchLists() async throws -> [ReminderListSnapshot] { lists }
+  func fetchPendingReminders(in listID: String) async throws -> [ReminderSnapshot] {
+    reminders.filter { $0.listID == listID }
+  }
+
+  func fetchReminders(dueFrom: Date, through: Date) async throws -> [ReminderSnapshot] {
+    reminders.filter { reminder in
+      guard let due = reminder.dueDateComponents.flatMap({ Calendar.current.date(from: $0) }) else {
+        return false
+      }
+      return due >= dueFrom && due <= through
+    }
+  }
+
+  func fetchUndatedPendingReminders() async throws -> [ReminderSnapshot] {
+    reminders.filter { $0.dueDateComponents == nil }
+  }
+
+  func fetchOverduePendingReminders(before date: Date) async throws -> [ReminderSnapshot] {
+    reminders.filter { reminder in
+      guard !reminder.isCompleted,
+        let due = reminder.dueDateComponents.flatMap({ Calendar.current.date(from: $0) })
+      else { return false }
+      return due < date
+    }
+  }
+
+  func fetchCompletedReminders(completedFrom date: Date) async throws -> [ReminderSnapshot] {
+    []
+  }
+
+  func createReminder(
+    title: String,
+    in listID: String,
+    dueComponents: DateComponents?
+  ) async throws {
+    createdReminderTitles.append(title)
+    reminders.append(
+      ReminderSnapshot(
+        id: "local:reminder-\(reminders.count)",
+        listID: listID,
+        source: .local,
+        title: title,
+        dueDateComponents: dueComponents,
+        priority: .none,
+        isRecurring: false
+      ))
+  }
+
+  func updateReminder(id: String, from draft: ReminderDraft) async throws {}
+  func deleteReminder(id: String) async throws {}
+
+  func setCompleted(_ completed: Bool, reminderID: String) async throws {
+    guard let index = reminders.firstIndex(where: { $0.id == reminderID }) else { return }
+    reminders[index].isCompleted = completed
+  }
+
+  func createList(title: String, source: ReminderSource) async throws -> ReminderListSnapshot {
+    createdListTitles.append(title)
+    let list = ReminderListSnapshot(
+      id: "local:created-\(createdListTitles.count)",
+      title: title,
+      accent: .fallback,
+      source: .local
+    )
+    lists.append(list)
+    return list
+  }
+
+  func deletionSummary(forListID id: String) async throws -> ReminderListDeletionSummary {
+    guard let list = lists.first(where: { $0.id == id }) else {
+      throw ReminderStoreError.listNotFound
+    }
+    return ReminderListDeletionSummary(
+      list: list,
+      pendingCount: reminders.filter { $0.listID == id }.count,
+      completedCount: 0
+    )
+  }
+
+  func deleteList(id: String) async throws {
+    lists.removeAll { $0.id == id }
+    reminders.removeAll { $0.listID == id }
+  }
+
+  func removeAllLists() {
+    lists = []
+    reminders = []
+  }
+}

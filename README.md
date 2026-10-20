@@ -74,4 +74,4 @@ The Island implementation is original code informed by the public architectural 
 
 The Keep Awake eye geometry, blink timing and hold-to-end interaction are adapted
 from [Insomnia](https://github.com/krishhgg/Insomnia) (MIT, © 2026 Krish Garg).
-The [license](TodoIsland/Resources/INSOMNIA-LICENSE.txt) is included in the app.
+The [license](Pulse/Resources/Licenses/INSOMNIA-LICENSE.txt) is included in the app.

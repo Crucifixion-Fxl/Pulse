@@ -12,7 +12,7 @@ import unittest
 from types import SimpleNamespace
 sys.dont_write_bytecode = True
 
-BRIDGE = Path(__file__).resolve().parents[1] / 'TodoIsland/Resources/xiaozhi_voice_bridge.py'
+BRIDGE = Path(__file__).resolve().parents[1] / 'helpers/voice/xiaozhi_voice_bridge.py'
 spec = importlib.util.spec_from_file_location('bridge', BRIDGE)
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)

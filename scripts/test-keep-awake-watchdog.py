@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-SOURCE = Path(__file__).resolve().parents[1] / 'TodoIsland/Resources/KeepAwakeWatchdog.sh'
+SOURCE = Path(__file__).resolve().parents[1] / 'helpers/keep-awake/KeepAwakeWatchdog.sh'
 
 
 class WatchdogTests(unittest.TestCase):

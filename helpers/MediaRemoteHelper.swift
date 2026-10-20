@@ -78,7 +78,7 @@ private var mediaKeyStore: MediaKeyStore?
 // user re-seeding after every app launch.
 private func templatesFileURL() -> URL {
   FileManager.default.homeDirectoryForCurrentUser
-    .appendingPathComponent("Library/Application Support/TodoIsland/media-keys.json")
+    .appendingPathComponent("Library/Application Support/Pulse/media-keys.json")
 }
 
 private func fieldsSnapshot(_ event: CGEvent) -> [String: Int64] {

@@ -16,7 +16,7 @@ bundles it in the application. The first build needs access to assets.mixkit.co;
 subsequent builds reuse the verified cache. Playback needs no network access.
 The audio is excluded from the source repository because the Mixkit Sound Effects
 Free License permits use in an end product but prohibits redistribution with
-source files. See `TodoIsland/Resources/VOICE-WAKE-NOTICE.txt` for provenance.
+source files. See `Pulse/Resources/Licenses/VOICE-WAKE-NOTICE.txt` for provenance.
 
 Audio input and output follow the macOS defaults independently, including headphones.
 Connecting, disconnecting, or choosing another default device during a conversation
@@ -91,10 +91,10 @@ The current trial was verified with **湾湾小何** and **小智 Lite**.
 python3 scripts/test-xiaozhi-bridge.py
 xcodebuild -project Pulse.xcodeproj -scheme Pulse -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
-  -only-testing:TodoIslandTests/VoiceWakeTests \
-  -only-testing:TodoIslandTests/AIWakeGestureTests \
-  -only-testing:TodoIslandTests/BlackHoleWakeViewTests \
-  -only-testing:TodoIslandTests/AIWakeShortcutTests test
+  -only-testing:PulseTests/VoiceWakeTests \
+  -only-testing:PulseTests/AIWakeGestureTests \
+  -only-testing:PulseTests/BlackHoleWakeViewTests \
+  -only-testing:PulseTests/AIWakeShortcutTests test
 ```
 
 Also test a real voice round trip, repeated wake/exit, and verify no worker remains

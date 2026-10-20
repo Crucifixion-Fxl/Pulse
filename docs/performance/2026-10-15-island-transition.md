@@ -38,18 +38,18 @@ cost, GPU utilization, frame rate, energy use, or battery life.
 Reproduce from the repository root:
 
 ```sh
-git show 8b5a7ad:TodoIsland/Window/IslandFrameSpring.swift > /tmp/IslandFrameSpring-before.swift
+git show 8b5a7ad:Pulse/Window/IslandFrameSpring.swift > /tmp/IslandFrameSpring-before.swift
 xcrun swiftc -O -parse-as-library -DLEGACY \
-  TodoIsland/Domain/IslandState.swift \
-  TodoIsland/Window/IslandSurfaceShape.swift \
+  Pulse/Domain/IslandState.swift \
+  Pulse/UI/Island/IslandSurfaceShape.swift \
   /tmp/IslandFrameSpring-before.swift scripts/probe-island-transition.swift \
   -o /tmp/island-transition-old
 /tmp/island-transition-old
 
 xcrun swiftc -O -parse-as-library \
-  TodoIsland/Domain/IslandState.swift \
-  TodoIsland/Window/IslandSurfaceShape.swift \
-  TodoIsland/Window/IslandTransitionView.swift scripts/probe-island-transition.swift \
+  Pulse/Domain/IslandState.swift \
+  Pulse/UI/Island/IslandSurfaceShape.swift \
+  Pulse/Window/IslandTransitionView.swift scripts/probe-island-transition.swift \
   -o /tmp/island-transition-new
 /tmp/island-transition-new
 ```

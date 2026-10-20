@@ -1,4 +1,4 @@
-// swiftc TodoIsland/UI/Island/VinylRecordView.swift scripts/probe-vinyl-record.swift -o /tmp/vinyl-probe
+// swiftc Pulse/UI/Island/Music/VinylRecordView.swift scripts/probe-vinyl-record.swift -o /tmp/vinyl-probe
 import AppKit
 
 @main @MainActor struct Probe {

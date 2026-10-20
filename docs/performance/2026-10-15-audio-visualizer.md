@@ -43,7 +43,7 @@ From the repository root:
 
 ```sh
 xcrun swiftc -O -parse-as-library \
-  TodoIsland/UI/Island/AudioVisualizer.swift \
+  Pulse/UI/Island/Music/AudioVisualizer.swift \
   scripts/probe-audio-visualizer.swift -o /tmp/doisland-audio-probe
 /tmp/doisland-audio-probe
 ```
@@ -55,8 +55,8 @@ The probe uses only its own window and no music, reminders or user settings.
 ```sh
 xcodebuild test -project TodoIsland.xcodeproj -scheme TodoIsland \
   -destination 'platform=macOS,arch=arm64' \
-  -only-testing:TodoIslandTests/AudioVisualizerTests \
-  -only-testing:TodoIslandTests/MusicTests CODE_SIGNING_ALLOWED=NO
+  -only-testing:PulseTests/AudioVisualizerTests \
+  -only-testing:PulseTests/MusicTests CODE_SIGNING_ALLOWED=NO
 ```
 
 ## Rejected experiment
