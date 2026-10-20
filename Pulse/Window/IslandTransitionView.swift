@@ -47,23 +47,23 @@ final class IslandTransitionView: NSView {
 
   required init?(coder: NSCoder) { nil }
 
-  /// Model publishers deliver in willSet. Defer all animated window/view
+  /// Model publishers deliver in willSet. Defer publisher-driven window/view
   /// mutations until the new state is readable; even setFrame can synchronously
   /// lay out SwiftUI and publish a height back into the model.
   func transition(
     to frame: CGRect, state: IslandPresentationState,
-    collapsedRadius: CGFloat, animated: Bool
+    collapsedRadius: CGFloat, animated: Bool, deferUntilNextRunLoop: Bool = false
   ) {
     requestGeneration += 1
     let request = requestGeneration
-    hasPendingRequest = animated
-    if animated {
+    hasPendingRequest = animated || deferUntilNextRunLoop
+    if hasPendingRequest {
       DispatchQueue.main.async { [weak self] in
         guard let self, self.requestGeneration == request else { return }
         self.hasPendingRequest = false
         self.beginTransition(
           to: frame, state: state,
-          collapsedRadius: collapsedRadius, animated: true)
+          collapsedRadius: collapsedRadius, animated: animated)
       }
     } else {
       beginTransition(to: frame, state: state, collapsedRadius: collapsedRadius, animated: false)

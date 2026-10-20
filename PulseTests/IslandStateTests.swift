@@ -35,7 +35,8 @@ final class IslandStateTests: XCTestCase {
     )
     defer { defaults.removePersistentDomain(forName: #function) }
     let model = AppModel(store: HoverTestReminderStore(), defaults: defaults)
-    let controller = IslandWindowController(model: model)
+    // Reduced Motion still must defer layout until @Published finishes willSet.
+    let controller = IslandWindowController(model: model, reduceMotion: { true })
 
     model.pinIsland()
     model.updateExpandedContentHeight(310.2)
@@ -360,7 +361,7 @@ final class IslandStateTests: XCTestCase {
     defer { defaults.removePersistentDomain(forName: #function) }
 
     let model = AppModel(store: HoverTestReminderStore(), defaults: defaults)
-    let controller = IslandWindowController(model: model)
+    let controller = IslandWindowController(model: model, reduceMotion: { true })
 
     model.pinIsland()
     XCTAssertEqual(model.islandState, .pinned)

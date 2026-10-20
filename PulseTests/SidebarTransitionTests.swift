@@ -132,7 +132,8 @@ final class SidebarTransitionTests: XCTestCase {
       aiUsageProvider: SampleAIUsageProvider())
     await model.reload()
     let existing = Set(NSApp.windows.map(\.windowNumber))
-    let controller = IslandWindowController(model: model)
+    // Exercise the animated path regardless of the runner's accessibility settings.
+    let controller = IslandWindowController(model: model, reduceMotion: { false })
     defer { withExtendedLifetime(controller) {} }
     // Open shortly before the controller's one-second full-screen poll.
     // This uses the actual SwiftUI content and production subscriptions.
@@ -179,6 +180,18 @@ final class SidebarTransitionTests: XCTestCase {
     window.orderFront(nil)
     try await Task.sleep(for: .milliseconds(300))
     let activeFrames = recorder.frames
+    let animationsEnabled = AgentMascotAnimationGate.shouldAnimate(
+      reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+      lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled)
+    if !animationsEnabled {
+      XCTAssertEqual(activeFrames, 1, "Accessibility and power settings must keep a static frame")
+      host.rootView = view.environment(\.agentPanelActive, false)
+      try await Task.sleep(for: .milliseconds(300))
+      host.rootView = view.environment(\.agentPanelActive, true)
+      try await Task.sleep(for: .milliseconds(300))
+      XCTAssertEqual(recorder.frames, activeFrames, "Panel changes must not bypass the motion gate")
+      return
+    }
     XCTAssertGreaterThan(activeFrames, 2)
     host.rootView = view.environment(\.agentPanelActive, false)
     try await Task.sleep(for: .milliseconds(100))

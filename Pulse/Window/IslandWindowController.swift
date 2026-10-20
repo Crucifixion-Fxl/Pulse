@@ -18,6 +18,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
 
   private let model: AppModel
   private let agentStore: AgentSessionStore
+  private let reduceMotion: () -> Bool
   private var windows: [String: DisplayWindow] = [:]
   private(set) var appliedState: IslandPresentationState?
   private(set) var appliedExpandedContentHeight: CGFloat?
@@ -38,9 +39,13 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
   private var wakeGeneration = 0
   private var wakeObservers: [NSObjectProtocol] = []
 
-  init(model: AppModel, agentStore: AgentSessionStore = AgentSessionStore()) {
+  init(
+    model: AppModel, agentStore: AgentSessionStore = AgentSessionStore(),
+    reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+  ) {
     self.model = model
     self.agentStore = agentStore
+    self.reduceMotion = reduceMotion
     super.init()
 
     syncWindows()
@@ -322,7 +327,8 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     window.transition.transition(
       to: frame, state: state,
       collapsedRadius: metrics.hasPhysicalNotch ? 14 : 18,
-      animated: animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+      animated: animated && !reduceMotion(),
+      deferUntilNextRunLoop: animated)
 
     if state != .pinned {
       panel.orderFrontRegardless()
