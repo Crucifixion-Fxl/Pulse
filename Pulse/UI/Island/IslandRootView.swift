@@ -1837,8 +1837,6 @@ struct IslandRootView: View {
   }
 
   private var collapsedBotFace: some View {
-    HStack(spacing: 6) {
-    ExtensionStoreButton(displayID: displayID)
     CollapsedBotFaceView(
       size: collapsedFaceSize,
       faceColor: model.collapsedQuotaVendor.accent,
@@ -1848,7 +1846,6 @@ struct IslandRootView: View {
       activity: CollapsedBotState.activity(in: agentStore.sessions),
       isAnimated: collapsedFaceIsAnimated,
       character: model.extensionPreferences.bot)
-    }
   }
 
   /// Quota chip at the collapsed bar's left end; the vendor is picked in

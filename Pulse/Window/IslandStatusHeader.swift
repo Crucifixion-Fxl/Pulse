@@ -41,6 +41,7 @@ final class IslandStatusHeader: NSView {
     self.weather = weather
     self.keepAwake = keepAwake
     self.store = store
+    store?.isHidden = true
     self.barHeight = barHeight
     super.init(frame: .zero)
     wantsLayer = true
@@ -72,6 +73,7 @@ final class IslandStatusHeader: NSView {
     surfaceSize = size
     surfaceState = state
     isExpanded = state != .collapsed
+    store?.isHidden = !isExpanded
     let inset: CGFloat = state == .collapsed ? 12 : 20
     let left = (bounds.width - size.width) / 2
     let faceSize = min(26, max(18, barHeight - 6)).rounded()
@@ -83,7 +85,7 @@ final class IslandStatusHeader: NSView {
     if additionalQuotas != nil {
       frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
     }
-    let storeWidth: CGFloat = store == nil ? 0 : 28
+    let storeWidth: CGFloat = store == nil || !isExpanded ? 0 : 28
     if weather != nil {
       let width: CGFloat = keepAwakeEditing ? 28 : 108
       frames.append(CGRect(x: botX - storeWidth - 8 - width, y: 0, width: width, height: barHeight))
@@ -140,7 +142,7 @@ final class IslandStatusHeader: NSView {
   // Header controls use the same live views throughout the spring animation.
   override func hitTest(_ point: NSPoint) -> NSView? {
     let localPoint = convert(point, from: superview)
-    for item in ([store] + (isExpanded ? [keepAwake, weather] : [])).compactMap({ $0 }) {
+    for item in (isExpanded ? [store, keepAwake, weather] : []).compactMap({ $0 }) {
       guard (item.layer?.presentation()?.opacity ?? item.layer?.opacity ?? 0) > 0.95,
         item.frame.contains(localPoint) else { continue }
       return item.hitTest(localPoint)

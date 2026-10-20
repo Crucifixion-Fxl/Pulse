@@ -106,12 +106,19 @@ final class ExtensionStoreTests: XCTestCase {
   }
 
   @MainActor
-  func testCollapsedStoreHasClickableFrameBeforeBot() throws {
+  func testStoreIsHiddenAndNotClickableWhenCollapsed() throws {
     let store = NSButton(title: "Store", target: nil, action: nil)
     let bot = NSView()
     let header = IslandStatusHeader(quota: NSView(), bot: bot, store: store, barHeight: 30)
+    XCTAssertTrue(store.isHidden)
     header.settle(size: CGSize(width: 340, height: 30), state: .collapsed)
-    XCTAssertLessThanOrEqual(store.frame.maxX, bot.frame.minX)
+    XCTAssertTrue(store.isHidden)
+    XCTAssertNil(header.hitTest(CGPoint(x: store.frame.midX, y: store.frame.midY)))
+    header.settle(size: CGSize(width: 760, height: 460), state: .pinned)
+    XCTAssertFalse(store.isHidden)
     XCTAssertNotNil(header.hitTest(CGPoint(x: store.frame.midX, y: store.frame.midY)))
+    header.move(to: CGSize(width: 340, height: 30), state: .collapsed, spring: CASpringAnimation())
+    XCTAssertTrue(store.isHidden, "Hide immediately when closing, including during the spring")
+    XCTAssertNil(header.hitTest(CGPoint(x: store.frame.midX, y: store.frame.midY)))
   }
 }
