@@ -86,6 +86,8 @@ final class IslandTransitionView: NSView {
     let token = generation
     let previousState = targetState
     let previousSize = content.bounds.size
+    let isContentResize = previousState != .collapsed && state != .collapsed
+      && previousSize.width == frame.width
     targetFrame = frame
     targetState = state
     self.collapsedRadius = collapsedRadius
@@ -101,7 +103,7 @@ final class IslandTransitionView: NSView {
     let fromPath = silhouette.presentation()?.path ?? silhouette.path
       ?? path(size: previousSize, state: previousState, envelope: oldEnvelope)
     let outgoingOpacity = isRunning ? (live.layer?.presentation()?.opacity ?? 0) : 1
-    if outgoingOpacity > 0.001 {
+    if outgoingOpacity > 0.001, !isContentResize {
       guard let image = snapshot() else {
         finish(frame: frame)
         return
@@ -146,7 +148,9 @@ final class IslandTransitionView: NSView {
     let startPath = fromPath.copy(using: &shift)
     statusHeader?.prepare(envelope: envelope, shiftX: dx)
     live.layer?.removeAllAnimations()
-    live.layer?.opacity = 0
+    // Height-only changes keep the live hierarchy visible. The store owns
+    // its crossfade; snapshotting here would freeze or restart that fade.
+    live.layer?.opacity = isContentResize ? 1 : 0
     layer?.mask = silhouette
     layer?.backgroundColor = NSColor.black.cgColor
     overlay.isHidden = false
@@ -165,13 +169,14 @@ final class IslandTransitionView: NSView {
       guard let self, self.generation == token else { return }
       self.content.layoutSubtreeIfNeeded()
       guard self.generation == token else { return }
-      self.animate(from: startPath, frame: frame, state: state, token: token)
+      self.animate(from: startPath, frame: frame, state: state, token: token,
+        preserveLiveContent: isContentResize)
     }
   }
 
   private func animate(
     from: CGPath?, frame: CGRect,
-    state: IslandPresentationState, token: Int
+    state: IslandPresentationState, token: Int, preserveLiveContent: Bool
   ) {
     let motion = state.motionProfile
     let spring = CASpringAnimation(keyPath: "path")
@@ -195,7 +200,7 @@ final class IslandTransitionView: NSView {
     for outgoing in images {
       fade(outgoing, from: outgoing.opacity, to: 0, duration: 0.12 / contentSpeed)
     }
-    if let incoming = live.layer {
+    if let incoming = live.layer, !preserveLiveContent {
       // Give the silhouette a head start so text does not appear inside a
       // narrow slit, then reveal the live controls as the shoulders unfold.
       fade(incoming, from: 0, to: 1,

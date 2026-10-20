@@ -6,9 +6,11 @@ the status header stays visible in place. The grid icon becomes filled while
 selected. Clicking the same icon again (or Escape) restores the previous
 panel. If that panel was disabled, the first enabled panel opens instead.
 Weather uses its natural text width, with 6pt gaps to Keep Awake and the store.
-The store crossfades within the current panel height, retaining the underlying
-panel and store scroll positions. Reduce Motion switches the content immediately;
+The store crossfades while the panel expands to its measured content height,
+without an internal scroll area. The underlying panel stays mounted.
+Reduce Motion switches the content immediately;
 hidden panels do not receive pointer or accessibility input.
+The store is hidden and cannot be opened from the reminder authorization screen.
 
 - Reminders, Agents, Music and Clipboard can be enabled independently. The last
   enabled bar cannot be disabled.

@@ -240,7 +240,7 @@ final class ExtensionStoreTests: XCTestCase {
   }
 
   @MainActor
-  func testStoreSwitchKeepsWindowGeometryWithoutColdLayoutStall() async throws {
+  func testStoreExpandsWithoutSnapshotsOrColdLayoutStall() async throws {
     let suite = "StoreTransition-\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -257,7 +257,8 @@ final class ExtensionStoreTests: XCTestCase {
         $0.window?.screen?.todoIslandDisplayID == model.hostDisplayID
       })
     let frame = try XCTUnwrap(surface.window).frame
-    let height = model.expandedContentHeight
+    let header = try XCTUnwrap(surface.statusHeader)
+    let headerFrames = header.presentedItemFrames
     var maxima: [Double] = []
     for _ in 0..<6 {
       var last = CACurrentMediaTime()
@@ -272,10 +273,19 @@ final class ExtensionStoreTests: XCTestCase {
         XCTAssertEqual(surface.presentedContentOpacity, 1, accuracy: 0.01,
           "Store crossfade must keep the live content visible")
         XCTAssertEqual(surface.snapshotCount, 0)
-        XCTAssertEqual(surface.window?.frame, frame)
-        XCTAssertEqual(model.expandedContentHeight, height)
+        XCTAssertEqual(surface.window?.frame.width, frame.width)
+        XCTAssertEqual(surface.window?.frame.maxY, frame.maxY)
+        XCTAssertEqual(header.presentedItemFrames.map(\.origin.x), headerFrames.map(\.origin.x))
       }
       maxima.append(gaps.max() ?? 0)
+      if model.isExtensionStorePresented {
+        XCTAssertGreaterThan(model.expandedContentHeight ?? 0, 350,
+          "Store must expand to fit its complete content")
+        let bitmap = try XCTUnwrap(surface.bitmapImageRepForCachingDisplay(in: surface.bounds))
+        surface.cacheDisplay(in: surface.bounds, to: bitmap)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+          .write(to: URL(fileURLWithPath: "/tmp/pulse-expanded-store.png"))
+      }
     }
     print("Store main-thread gaps (ms): \(maxima)")
     let warm = maxima.dropFirst().sorted()

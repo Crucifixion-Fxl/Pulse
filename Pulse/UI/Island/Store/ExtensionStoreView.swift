@@ -1,5 +1,12 @@
 import SwiftUI
 
+struct ExtensionStoreHeightKey: PreferenceKey {
+  static var defaultValue: CGFloat { 0 }
+  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+    value = max(value, nextValue())
+  }
+}
+
 /// Keep both destinations mounted for the expanded session. Only their
 /// opacity animates; controls, scroll position and layout survive a toggle.
 struct ExtensionStoreTransition<Panel: View, Store: View>: View {
@@ -58,82 +65,86 @@ struct ExtensionStoreView: View {
         Text("store.title").font(.system(size: 21, weight: .semibold))
         Text("store.subtitle").font(.system(size: 11)).foregroundStyle(.secondary)
       }
-      ScrollView {
-        HStack(alignment: .top, spacing: 14) {
-          VStack(alignment: .leading, spacing: 14) {
-            section("store.bars") {
-              ForEach(IslandSidebarItem.allCases) { item in
-                Toggle(isOn: Binding(get: { model.extensionPreferences.bars.contains(item.rawValue) },
-                  set: { model.extensionPreferences.setBar(item.rawValue, enabled: $0) })) {
-                    Label(item.title, systemImage: item.symbol)
-                  }
-                  .disabled(model.extensionPreferences.bars == [item.rawValue])
-                  .accessibilityIdentifier("store-bar-\(item.rawValue)")
-              }
-              Text("store.bars.note").font(.system(size: 10)).foregroundStyle(.secondary)
+      HStack(alignment: .top, spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
+          section("store.bars") {
+            ForEach(IslandSidebarItem.allCases) { item in
+              Toggle(isOn: Binding(get: { model.extensionPreferences.bars.contains(item.rawValue) },
+                set: { model.extensionPreferences.setBar(item.rawValue, enabled: $0) })) {
+                  Label(item.title, systemImage: item.symbol)
+                }
+                .disabled(model.extensionPreferences.bars == [item.rawValue])
+                .accessibilityIdentifier("store-bar-\(item.rawValue)")
             }
-            section("store.status") {
-              ForEach(ExtensionPreferences.availableStatusItems, id: \.self) { item in
-                Toggle(LocalizedStringKey("store.status." + item), isOn: Binding(
-                  get: { model.extensionPreferences.statusItems.contains(item) },
-                  set: { model.extensionPreferences.setStatusItem(item, enabled: $0) }))
-                  .disabled(item == "bot")
-                  .accessibilityIdentifier("store-status-\(item)")
-              }
-              Text("store.status.note").font(.system(size: 10)).foregroundStyle(.secondary)
-            }
+            Text("store.bars.note").font(.system(size: 10)).foregroundStyle(.secondary)
           }
-          VStack(alignment: .leading, spacing: 14) {
-            section("store.bots") {
-              HStack(spacing: 8) {
-                ForEach(BotCharacter.allCases) { bot in
-                  Button { model.extensionPreferences.bot = bot } label: {
-                    VStack(spacing: 6) {
-                      CollapsedBotFaceView(size: 28, isPlaying: false, isHovered: false,
-                        isAnimated: false, character: bot)
-                      Text(LocalizedStringKey(bot.titleKey)).font(.system(size: 10))
-                    }
-                    .frame(maxWidth: .infinity).padding(.vertical, 9)
-                    .background(model.extensionPreferences.bot == bot ? .white.opacity(0.16) : .white.opacity(0.04),
-                      in: RoundedRectangle(cornerRadius: 10))
-                  }
-                  .buttonStyle(.plain)
-                  .accessibilityLabel(Text(LocalizedStringKey(bot.titleKey)))
-                  .accessibilityAddTraits(model.extensionPreferences.bot == bot ? .isSelected : [])
-                }
-              }
+          section("store.status") {
+            ForEach(ExtensionPreferences.availableStatusItems, id: \.self) { item in
+              Toggle(LocalizedStringKey("store.status." + item), isOn: Binding(
+                get: { model.extensionPreferences.statusItems.contains(item) },
+                set: { model.extensionPreferences.setStatusItem(item, enabled: $0) }))
+                .disabled(item == "bot")
+                .accessibilityIdentifier("store-status-\(item)")
             }
-            section("store.effects") {
-              Picker("store.effects", selection: $model.extensionPreferences.wakeEffect) {
-                ForEach(WakeEffect.allCases) { effect in
-                  Text(LocalizedStringKey(effect.titleKey)).tag(effect)
-                }
-              }.labelsHidden().pickerStyle(.segmented)
-              Text("store.effects.note").font(.system(size: 10)).foregroundStyle(.secondary)
-            }
-            section("store.providers") {
-              ForEach(VoiceProviderRegistry.providers) { provider in
-                HStack {
-                  Button { model.extensionPreferences.voiceProviderID = provider.id } label: {
-                    Label(provider.title, systemImage: model.extensionPreferences.voiceProviderID == provider.id
-                      ? "checkmark.circle.fill" : "circle")
-                  }.buttonStyle(.plain)
-                  Spacer()
-                  Text(provider.isInstalled() ? "store.installed" : "store.not-installed")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                }
-                Link("store.setup", destination: provider.setupURL).font(.system(size: 11))
-              }
-              Text("store.providers.note").font(.system(size: 10)).foregroundStyle(.secondary)
-            }
+            Text("store.status.note").font(.system(size: 10)).foregroundStyle(.secondary)
           }
         }
-        .toggleStyle(.checkbox)
-        .font(.system(size: 12))
-        .padding(.bottom, 8)
+        VStack(alignment: .leading, spacing: 14) {
+          section("store.bots") {
+            HStack(spacing: 8) {
+              ForEach(BotCharacter.allCases) { bot in
+                Button { model.extensionPreferences.bot = bot } label: {
+                  VStack(spacing: 6) {
+                    CollapsedBotFaceView(size: 28, isPlaying: false, isHovered: false,
+                      isAnimated: false, character: bot)
+                    Text(LocalizedStringKey(bot.titleKey)).font(.system(size: 10))
+                  }
+                  .frame(maxWidth: .infinity).padding(.vertical, 9)
+                  .background(model.extensionPreferences.bot == bot ? .white.opacity(0.16) : .white.opacity(0.04),
+                    in: RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(LocalizedStringKey(bot.titleKey)))
+                .accessibilityAddTraits(model.extensionPreferences.bot == bot ? .isSelected : [])
+              }
+            }
+          }
+          section("store.effects") {
+            Picker("store.effects", selection: $model.extensionPreferences.wakeEffect) {
+              ForEach(WakeEffect.allCases) { effect in
+                Text(LocalizedStringKey(effect.titleKey)).tag(effect)
+              }
+            }.labelsHidden().pickerStyle(.segmented)
+            Text("store.effects.note").font(.system(size: 10)).foregroundStyle(.secondary)
+          }
+          section("store.providers") {
+            ForEach(VoiceProviderRegistry.providers) { provider in
+              HStack {
+                Button { model.extensionPreferences.voiceProviderID = provider.id } label: {
+                  Label(provider.title, systemImage: model.extensionPreferences.voiceProviderID == provider.id
+                    ? "checkmark.circle.fill" : "circle")
+                }.buttonStyle(.plain)
+                Spacer()
+                Text(provider.isInstalled() ? "store.installed" : "store.not-installed")
+                  .font(.system(size: 10)).foregroundStyle(.secondary)
+              }
+              Link("store.setup", destination: provider.setupURL).font(.system(size: 11))
+            }
+            Text("store.providers.note").font(.system(size: 10)).foregroundStyle(.secondary)
+          }
+        }
       }
+      .toggleStyle(.checkbox)
+      .font(.system(size: 12))
+      .padding(.bottom, 8)
     }
     .padding(.horizontal, 16)
+    .fixedSize(horizontal: false, vertical: true)
+    .background {
+      GeometryReader { geometry in
+        Color.clear.preference(key: ExtensionStoreHeightKey.self, value: geometry.size.height)
+      }
+    }
     .foregroundStyle(.white)
     .environment(\.colorScheme, .dark)
   }

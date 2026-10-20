@@ -138,6 +138,7 @@ struct IslandRootView: View {
   /// Natural height of the month-calendar pane as measured in layout; drives
   /// the window height so the heatmap never clips and never leaves slack.
   @State private var calendarPaneIdealHeight: CGFloat = 0
+  @State private var storeContentHeight: CGFloat = 400
   /// Shared geometry space for the liquid sidebar indicator.
   @Namespace private var sidebarNS
   /// Heatmap cell (grid column, weekday row) currently under the pointer.
@@ -307,6 +308,11 @@ struct IslandRootView: View {
               calendarPaneIdealHeight = height
             }
             .onChange(of: calendarPaneIdealHeight) { _, _ in updateExpandedContentHeight() }
+            .onPreferenceChange(ExtensionStoreHeightKey.self) { height in
+              guard height.isFinite, height > 0, storeContentHeight != ceil(height) else { return }
+              storeContentHeight = ceil(height)
+            }
+            .onChange(of: storeContentHeight) { _, _ in updateExpandedContentHeight() }
         }
       }
       .frame(width: surfaceSize.width, height: surfaceSize.height, alignment: .top)
@@ -1100,8 +1106,7 @@ struct IslandRootView: View {
   /// declared height.
   private func updateExpandedContentHeight() {
     if model.isExtensionStorePresented {
-      // The store scrolls inside the current panel. A second window resize
-      // would snapshot and hide the live content during its crossfade.
+      model.updateExpandedContentHeight(storeContentHeight)
       return
     }
     let contentHeight: CGFloat
