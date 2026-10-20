@@ -23,7 +23,9 @@ struct ExtensionStoreTransition<Panel: View, Store: View>: View {
         .allowsHitTesting(!isPresented)
         .accessibilityElement(children: .contain)
         .accessibilityHidden(isPresented)
-      store()
+      // An overlay does not contribute its ideal height to the parent.
+      // The hidden full-height store must not stretch the authorization pane.
+      Color.clear.overlay(alignment: .top) { store() }
         .transaction { $0.animation = nil }
         .opacity(isPresented ? 1 : 0)
         .allowsHitTesting(isPresented)

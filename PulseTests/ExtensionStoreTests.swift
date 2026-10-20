@@ -185,6 +185,33 @@ final class ExtensionStoreTests: XCTestCase {
   }
 
   @MainActor
+  func testHiddenStoreDoesNotExpandShortAuthorizationPanel() async throws {
+    var measuredHeight: CGFloat = 0
+    let host = NSHostingView(rootView: ExtensionStoreTransition(isPresented: false, reduceMotion: true) {
+      Color.red.frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+          GeometryReader { geometry in
+            Color.clear.onAppear { measuredHeight = geometry.size.height }
+              .onChange(of: geometry.size.height) { _, height in measuredHeight = height }
+          }
+        }
+    } store: {
+      Color.blue.frame(height: 500).fixedSize(horizontal: false, vertical: true)
+    }.frame(width: 760, height: 220))
+    host.sizingOptions = []
+    let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 760, height: 220),
+      styleMask: .borderless, backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    defer { window.close() }
+    window.orderFront(nil)
+    try await Task.sleep(for: .milliseconds(150))
+    host.layoutSubtreeIfNeeded()
+    XCTAssertEqual(measuredHeight, 220, accuracy: 0.5,
+      "The invisible store must not enlarge or crop the permission panel")
+  }
+
+  @MainActor
   func testStoreCrossfadeRetainsBothPanesAndSupportsReducedMotion() async throws {
     for reduced in [false, true] {
       var panelAppearances = 0

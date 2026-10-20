@@ -13,6 +13,15 @@ final class AuthorizationFlowTests: XCTestCase {
     let existing = Set(NSApp.windows.map(\.windowNumber))
     let controller = IslandWindowController(model: model)
     defer { withExtendedLifetime(controller) {} }
+    try await Task.sleep(for: .seconds(1))
+    let surface = try XCTUnwrap(NSApp.windows.filter { !existing.contains($0.windowNumber) }
+      .compactMap { $0.contentView as? IslandTransitionView }.first {
+        $0.window?.screen?.todoIslandDisplayID == model.hostDisplayID
+      })
+    let bitmap = try XCTUnwrap(surface.bitmapImageRepForCachingDisplay(in: surface.bounds))
+    surface.cacheDisplay(in: surface.bounds, to: bitmap)
+    try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+      .write(to: URL(fileURLWithPath: "/tmp/pulse-authorization-layout.png"))
     let header = try XCTUnwrap(NSApp.windows.filter { !existing.contains($0.windowNumber) }
       .compactMap { ($0.contentView as? IslandTransitionView)?.statusHeader }.first)
     let store = try XCTUnwrap(header.store)
