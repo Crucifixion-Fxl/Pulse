@@ -7,7 +7,7 @@ struct ExtensionStoreButton: View {
   var body: some View {
     Button { model.toggleExtensionStore(on: displayID) } label: {
       Image(systemName: model.isExtensionStorePresented ? "xmark" : "square.grid.2x2")
-        .font(.system(size: 12, weight: .semibold))
+        .font(.system(size: 16, weight: .semibold))
         .foregroundStyle(.white.opacity(0.8))
         .frame(width: 24, height: 26)
         .contentShape(Rectangle())

@@ -1,7 +1,7 @@
 # Extension store
 
-Open the grid button in the expanded header or at the bottom of the expanded
-sidebar. The collapsed bar has no store icon. The store replaces the feature area and hides the normal
+Open the grid button next to the weather in the expanded header. The collapsed
+bar and sidebar have no store icon. The store replaces the feature area and hides the normal
 status header. Its top-right close button (or Escape) restores the previous
 panel. If that panel was disabled, the first enabled panel opens instead.
 

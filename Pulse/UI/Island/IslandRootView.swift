@@ -547,7 +547,6 @@ struct IslandRootView: View {
       }
 
       Spacer(minLength: 0)
-      ExtensionStoreButton(displayID: displayID)
     }
     .padding(.top, 4)
     .padding(.bottom, 2)
