@@ -33,7 +33,7 @@
 Requires **macOS 14+ on Apple Silicon**. Builds are ad-hoc signed, not Apple-notarized; macOS may require approval in **System Settings → Privacy & Security** on first launch. To verify the download, place its `.sha256` file beside the DMG and run:
 
 ```sh
-shasum -a 256 -c Pulse-1.6.0-arm64.dmg.sha256
+shasum -a 256 -c Pulse-1.6.1-arm64.dmg.sha256
 ```
 
 ## Build and test

@@ -33,7 +33,7 @@
 需要 **Apple Silicon Mac 和 macOS 14+**。构建使用 ad-hoc 签名，未经 Apple 公证；首次启动时，macOS 可能要求在**系统设置 → 隐私与安全性**中批准。将 `.sha256` 文件与 DMG 放在同一目录后，可验证下载完整性：
 
 ```sh
-shasum -a 256 -c Pulse-1.6.0-arm64.dmg.sha256
+shasum -a 256 -c Pulse-1.6.1-arm64.dmg.sha256
 ```
 
 ## 构建与测试
