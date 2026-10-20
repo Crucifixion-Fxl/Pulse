@@ -67,6 +67,11 @@ struct CollapsedQuotaChipView: View {
             .monospacedDigit()
             .foregroundStyle(.white)
             .contentTransition(.numericText())
+          if subscription.isStale {
+            Image(systemName: "clock.arrow.circlepath")
+              .font(.system(size: 8))
+              .help(Text("ai.quota.stale"))
+          }
           if showsSampleBadge, subscription.isSample {
             Text("island.quota.demo")
               .font(.system(size: 7, weight: .medium))
@@ -86,6 +91,6 @@ struct CollapsedQuotaChipView: View {
           format: L10n.text("island.quota.accessibility"),
           vendorLabel,
           Int((subscription.quota.fraction * 100).rounded()))))
-    .accessibilityValue(showsSampleBadge && subscription.isSample ? L10n.text("ai.sample-data") : "")
+    .accessibilityValue(subscription.isStale ? L10n.text("ai.quota.stale") : (showsSampleBadge && subscription.isSample ? L10n.text("ai.sample-data") : ""))
   }
 }

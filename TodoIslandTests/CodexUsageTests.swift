@@ -5,6 +5,42 @@ import XCTest
 /// Codex rollout parsing: filename dating, tail token_count extraction,
 /// lane-classified windows, and the snapshot aggregation — pure functions.
 final class CodexUsageTests: XCTestCase {
+  func testOfflineRetainsLiveQuotaAcrossRestartAndRecovers() async throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let sessions = home.appendingPathComponent(".codex/sessions")
+    try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+    let stamp = DateFormatter()
+    stamp.dateFormat = "yyyy-MM-dd'T'HH-mm-ss"
+    let rollout = sessions.appendingPathComponent("rollout-\(stamp.string(from: Date()))-test.jsonl")
+    try Data(#"{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":50}},"rate_limits":{"primary":{"used_percent":20,"window_minutes":10080,"resets_at":2000000000}}}}"#.utf8).write(to: rollout)
+    let source = QuotaSequence()
+    let provider = CodexAIUsageProvider(homeDirectory: home, loadWindows: { _ in try await source.next() })
+    let live = try await provider.fetchUsage()
+    XCTAssertEqual(live.subscriptions.first?.quota.used, 22)
+    XCTAssertFalse(live.subscriptions[0].isStale)
+    let offline = try await provider.fetchUsage()
+    XCTAssertEqual(offline.subscriptions.first?.quota.used, 22, "must not revert to rollout's 20")
+    XCTAssertTrue(offline.subscriptions[0].isStale)
+    XCTAssertEqual(offline.today?.inputTokens, 50, "local tokens still refresh offline")
+    let restarted = CodexAIUsageProvider(homeDirectory: home, loadWindows: { _ in throw URLError(.notConnectedToInternet) })
+    let persisted = try await restarted.fetchUsage()
+    XCTAssertEqual(persisted.subscriptions.first?.quota.used, 22)
+    XCTAssertTrue(persisted.subscriptions[0].isStale)
+    let recovered = try await provider.fetchUsage()
+    XCTAssertEqual(recovered.subscriptions.first?.quota.used, 28)
+    XCTAssertFalse(recovered.subscriptions[0].isStale)
+  }
+
+  private actor QuotaSequence {
+    var calls = 0
+    func next() throws -> CodexAIUsageProvider.Windows {
+      calls += 1
+      if calls == 2 { throw URLError(.notConnectedToInternet) }
+      return (nil, CodexRateWindow(usedPercent: calls == 1 ? 22 : 28, windowMinutes: 10080, resetsAt: Date()))
+    }
+  }
+
   private let calendar = Calendar.current
 
   private func fixedNow() -> Date {

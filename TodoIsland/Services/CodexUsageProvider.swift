@@ -12,7 +12,7 @@ struct CodexTokenUsage: Equatable, Sendable {
 /// CodexBar does it — providers hand the two windows back in either slot,
 /// so 300-minute and 10080-minute classification is more reliable than the
 /// primary/secondary field order.
-struct CodexRateWindow: Equatable, Sendable {
+struct CodexRateWindow: Codable, Equatable, Sendable {
   enum Lane: Equatable, Sendable {
     case session
     case weekly
@@ -313,6 +313,7 @@ enum CodexOAuthUsage {
       default: break
       }
     }
+    guard sessionWindow != nil || weekly != nil else { throw URLError(.cannotParseResponse) }
     return (sessionWindow, weekly)
   }
 }
@@ -320,15 +321,59 @@ enum CodexOAuthUsage {
 /// Real Codex usage: live quota windows from the ChatGPT backend (OAuth
 /// credentials from `~/.codex/auth.json`) plus per-day tokens parsed from
 /// `~/.codex/sessions` rollouts.
-struct CodexAIUsageProvider: AIUsageProvider {
+actor CodexAIUsageProvider: AIUsageProvider {
   private static let dayWindow = 15
 
-  var homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+  typealias Windows = (session: CodexRateWindow?, weekly: CodexRateWindow?)
+  private struct Cache: Codable {
+    var accountID: String?
+    var session: CodexRateWindow?
+    var weekly: CodexRateWindow?
+  }
+  private let homeDirectory: URL
+  private let loadWindows: @Sendable (URL) async throws -> Windows
+  private var lastLive: Cache?
+
+  init(
+    homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+    loadWindows: @escaping @Sendable (URL) async throws -> Windows = {
+      try await CodexOAuthUsage.fetchWindows(homeDirectory: $0)
+    }
+  ) {
+    self.homeDirectory = homeDirectory
+    self.loadWindows = loadWindows
+  }
+
+  private var cacheURL: URL {
+    homeDirectory.appendingPathComponent("Library/Caches/Pulse/codex-quota.json")
+  }
 
   func fetchUsage() async throws -> AIUsageSnapshot {
     // Independent sources: live windows work with zero recent sessions,
     // and day tokens still render when the backend is unreachable.
-    let windows = try? await CodexOAuthUsage.fetchWindows(homeDirectory: homeDirectory)
+    let auth = try? Data(contentsOf: homeDirectory.appendingPathComponent(".codex/auth.json"))
+    let accountID = auth.flatMap { try? JSONDecoder().decode(CodexOAuthUsage.Credentials.self, from: $0) }?.tokens?.account_id
+    if lastLive == nil, let data = try? Data(contentsOf: cacheURL) {
+      lastLive = try? JSONDecoder().decode(Cache.self, from: data)
+    }
+    // Never carry one account's quota into a different account.
+    if lastLive?.accountID != accountID { lastLive = nil }
+    var isStale = false
+    let windows: Windows?
+    do {
+      let live = try await loadWindows(homeDirectory)
+      guard live.session != nil || live.weekly != nil else { throw URLError(.cannotParseResponse) }
+      windows = live
+      let cache = Cache(accountID: accountID, session: live.session, weekly: live.weekly)
+      lastLive = cache
+      if let data = try? JSONEncoder().encode(cache) {
+        try? FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: cacheURL, options: .atomic)
+      }
+    } catch {
+      isStale = true
+      windows = lastLive.map { ($0.session, $0.weekly) }
+    }
 
     let sessionsRoot = homeDirectory.appendingPathComponent(".codex/sessions")
     var parsed: [(date: Date, usage: CodexTokenUsage, rateWindow: CodexRateWindow?)] = []
@@ -360,7 +405,9 @@ struct CodexAIUsageProvider: AIUsageProvider {
     guard windows?.session != nil || windows?.weekly != nil || !parsed.isEmpty else {
       throw URLError(.cannotParseResponse)
     }
-    return CodexUsageParser.buildSnapshot(sessions: parsed, liveWindows: windows)
+    var snapshot = CodexUsageParser.buildSnapshot(sessions: parsed, liveWindows: windows)
+    for index in snapshot.subscriptions.indices { snapshot.subscriptions[index].isStale = isStale }
+    return snapshot
   }
 
   /// The final `length` bytes of an open file, or everything when shorter.

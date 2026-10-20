@@ -288,3 +288,5 @@
 "voice.error.busy" = "小智正在使用中 · Esc 返回";
 "voice.error.connection" = "语音连接中断 · Esc 返回后重试";
 "voice.switching" = "正在切换音频设备…";
+
+"ai.quota.stale" = "上次获取的额度，实时刷新暂不可用";

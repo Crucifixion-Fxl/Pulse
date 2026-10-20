@@ -105,6 +105,8 @@ struct AISubscription: Hashable, Sendable, Identifiable {
   /// True while this card's numbers are fabricated; real providers clear
   /// it so the per-card sample marker disappears.
   var isSample = false
+  /// Last known quota while the live backend is unavailable.
+  var isStale = false
 }
 
 /// Everything the AI usage panel renders for one fetch.

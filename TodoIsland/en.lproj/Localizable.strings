@@ -288,3 +288,5 @@
 "voice.error.busy" = "Voice is already in use · Esc to return";
 "voice.error.connection" = "Voice disconnected · Esc to return and retry";
 "voice.switching" = "Switching audio device…";
+
+"ai.quota.stale" = "Last known quota — live refresh unavailable";
