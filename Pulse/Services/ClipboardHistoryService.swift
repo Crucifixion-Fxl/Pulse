@@ -31,7 +31,7 @@ final class ClipboardHistoryService {
     storeDirectory =
       directory
       ?? FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/Pulse/Clipboard")
+        .appendingPathComponent("Library/Application Support/TodoIsland/Clipboard")
     lastChangeCount = pasteboard.changeCount
     loadPersisted()
   }

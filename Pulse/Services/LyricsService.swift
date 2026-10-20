@@ -269,7 +269,7 @@ actor FavoritePlaylistStore {
 
   private var fileURL: URL {
     FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent("Library/Application Support/Pulse/favorites.json")
+      .appendingPathComponent("Library/Application Support/TodoIsland/favorites.json")
   }
 
   func tracks(playlistID: Int) async -> [FavoriteTrack]? {

@@ -26,7 +26,7 @@ final class KeepAwakeService: KeepAwakeControlling {
   static let maximumSeconds = 24 * 3600
   private let uid = getuid()
   private var requestURL: URL?
-  private var base: String { "/Library/Application Support/Pulse/KeepAwake-\(uid)" }
+  private var base: String { "/Library/Application Support/TodoIsland/KeepAwake-\(uid)" }
   private var label: String { "com.fxl.Pulse.KeepAwake.\(uid)" }
 
   func begin(seconds: Int) async throws -> Date {
