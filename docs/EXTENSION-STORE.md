@@ -5,6 +5,10 @@ bar and sidebar have no store icon. The store replaces only the feature area;
 the status header stays visible in place. The grid icon becomes filled while
 selected. Clicking the same icon again (or Escape) restores the previous
 panel. If that panel was disabled, the first enabled panel opens instead.
+Weather uses its natural text width, with 6pt gaps to Keep Awake and the store.
+The store crossfades within the current panel height, retaining the underlying
+panel and store scroll positions. Reduce Motion switches the content immediately;
+hidden panels do not receive pointer or accessibility input.
 
 - Reminders, Agents, Music and Clipboard can be enabled independently. The last
   enabled bar cannot be disabled.

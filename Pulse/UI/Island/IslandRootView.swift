@@ -481,16 +481,15 @@ struct IslandRootView: View {
       remindersFeatureContent
       AgentsPanelView()
         .environment(\.agentPanelActive, false)
+      ExtensionStoreView()
     }
     .frame(width: 760, height: 380, alignment: .top)
     .clipped()
   }
 
   private var expandedContent: some View {
-    HStack(spacing: 0) {
-      if model.isExtensionStorePresented {
-        ExtensionStoreView()
-      } else {
+    ExtensionStoreTransition(isPresented: model.isExtensionStorePresented, reduceMotion: reduceMotion) {
+      HStack(spacing: 0) {
         expandedSidebar
           .frame(width: 28)
           .frame(maxHeight: .infinity, alignment: .top)
@@ -500,6 +499,8 @@ struct IslandRootView: View {
           .controlSize(.mini)
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
       }
+    } store: {
+      ExtensionStoreView()
     }
     .foregroundStyle(.white)
     // Wider than the shoulder inset so trailing content clears the concave
@@ -617,7 +618,7 @@ struct IslandRootView: View {
             .accessibilityElement(children: .contain)
             .accessibilityHidden(selectedSidebarItem != .reminders)
           AgentsPanelView()
-            .environment(\.agentPanelActive, selectedSidebarItem == .agents)
+            .environment(\.agentPanelActive, selectedSidebarItem == .agents && !model.isExtensionStorePresented)
             .transaction { $0.animation = nil }
             .opacity(selectedSidebarItem == .agents ? 1 : 0)
             .allowsHitTesting(selectedSidebarItem == .agents)
@@ -1096,7 +1097,8 @@ struct IslandRootView: View {
   /// declared height.
   private func updateExpandedContentHeight() {
     if model.isExtensionStorePresented {
-      model.updateExpandedContentHeight(400)
+      // The store scrolls inside the current panel. A second window resize
+      // would snapshot and hide the live content during its crossfade.
       return
     }
     let contentHeight: CGFloat

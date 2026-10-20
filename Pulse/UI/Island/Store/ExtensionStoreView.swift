@@ -1,5 +1,32 @@
 import SwiftUI
 
+/// Keep both destinations mounted for the expanded session. Only their
+/// opacity animates; controls, scroll position and layout survive a toggle.
+struct ExtensionStoreTransition<Panel: View, Store: View>: View {
+  let isPresented: Bool
+  let reduceMotion: Bool
+  @ViewBuilder var panel: () -> Panel
+  @ViewBuilder var store: () -> Store
+
+  var body: some View {
+    ZStack(alignment: .top) {
+      panel()
+        .transaction { $0.animation = nil }
+        .opacity(isPresented ? 0 : 1)
+        .allowsHitTesting(!isPresented)
+        .accessibilityElement(children: .contain)
+        .accessibilityHidden(isPresented)
+      store()
+        .transaction { $0.animation = nil }
+        .opacity(isPresented ? 1 : 0)
+        .allowsHitTesting(isPresented)
+        .accessibilityElement(children: .contain)
+        .accessibilityHidden(!isPresented)
+    }
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isPresented)
+  }
+}
+
 struct ExtensionStoreButton: View {
   @EnvironmentObject private var model: AppModel
   var displayID: String?

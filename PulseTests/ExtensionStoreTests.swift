@@ -184,6 +184,104 @@ final class ExtensionStoreTests: XCTestCase {
   }
 
   @MainActor
+  func testStoreCrossfadeRetainsBothPanesAndSupportsReducedMotion() async throws {
+    for reduced in [false, true] {
+      var panelAppearances = 0
+      var storeAppearances = 0
+      func content(_ presented: Bool) -> some View {
+        ExtensionStoreTransition(isPresented: presented, reduceMotion: reduced) {
+          Color.red.onAppear { panelAppearances += 1 }
+        } store: {
+          Color.blue.onAppear { storeAppearances += 1 }
+        }
+      }
+      let host = NSHostingView(rootView: content(false))
+      host.sizingOptions = []
+      let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 100, height: 100),
+        styleMask: .borderless, backing: .buffered, defer: false)
+      window.isReleasedWhenClosed = false
+      window.contentView = host
+      defer { window.close() }
+      window.orderFront(nil)
+      try await Task.sleep(for: .milliseconds(100))
+      func pixel() throws -> NSColor {
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        return try XCTUnwrap(bitmap.colorAt(x: bitmap.pixelsWide / 2,
+          y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB))
+      }
+      XCTAssertGreaterThan(try pixel().redComponent, 0.9)
+      host.rootView = content(true)
+      try await Task.sleep(for: .milliseconds(80))
+      let middle = try pixel()
+      if reduced {
+        XCTAssertGreaterThan(middle.blueComponent, 0.9)
+        XCTAssertLessThan(middle.redComponent, 0.1)
+      } else {
+        XCTAssertGreaterThan(middle.redComponent, 0.1, "Outgoing panel must remain during the fade")
+        XCTAssertGreaterThan(middle.blueComponent, 0.1, "Incoming store must already be appearing")
+      }
+      try await Task.sleep(for: .milliseconds(220))
+      XCTAssertGreaterThan(try pixel().blueComponent, 0.9)
+      for _ in 0..<3 {
+        host.rootView = content(false)
+        try await Task.sleep(for: .milliseconds(40))
+        host.rootView = content(true)
+        try await Task.sleep(for: .milliseconds(40))
+      }
+      host.rootView = content(false)
+      try await Task.sleep(for: .milliseconds(250))
+      XCTAssertGreaterThan(try pixel().redComponent, 0.9)
+      XCTAssertEqual(panelAppearances, 1, "Toggling must retain the existing panel")
+      XCTAssertEqual(storeAppearances, 1, "Toggling must retain the existing store")
+    }
+  }
+
+  @MainActor
+  func testStoreSwitchKeepsWindowGeometryWithoutColdLayoutStall() async throws {
+    let suite = "StoreTransition-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults,
+      aiUsageProvider: SampleAIUsageProvider())
+    await model.reload()
+    let existing = Set(NSApp.windows.map(\.windowNumber))
+    let controller = IslandWindowController(model: model, reduceMotion: { false })
+    defer { withExtendedLifetime(controller) {} }
+    model.pinIslandForApproval()
+    try await Task.sleep(for: .seconds(2))
+    let surface = try XCTUnwrap(NSApp.windows.filter { !existing.contains($0.windowNumber) }
+      .compactMap { $0.contentView as? IslandTransitionView }.first {
+        $0.window?.screen?.todoIslandDisplayID == model.hostDisplayID
+      })
+    let frame = try XCTUnwrap(surface.window).frame
+    let height = model.expandedContentHeight
+    var maxima: [Double] = []
+    for _ in 0..<6 {
+      var last = CACurrentMediaTime()
+      let start = last
+      model.toggleExtensionStore()
+      var gaps: [Double] = []
+      while CACurrentMediaTime() - start < 0.35 {
+        try await Task.sleep(for: .milliseconds(8))
+        let now = CACurrentMediaTime()
+        gaps.append((now - last) * 1000)
+        last = now
+        XCTAssertFalse(surface.isRunning, "Store crossfade must not start a window transition")
+        XCTAssertEqual(surface.snapshotCount, 0)
+        XCTAssertEqual(surface.window?.frame, frame)
+        XCTAssertEqual(model.expandedContentHeight, height)
+      }
+      maxima.append(gaps.max() ?? 0)
+    }
+    print("Store main-thread gaps (ms): \(maxima)")
+    let warm = maxima.dropFirst().sorted()
+    XCTAssertLessThanOrEqual(maxima[0], warm[warm.count / 2] * 1.5 + 8,
+      "First store entry must not pay a separate cold layout cost: \(maxima)")
+  }
+
+  @MainActor
   func testStoreIsHiddenAndNotClickableWhenCollapsed() throws {
     let store = NSButton(title: "Store", target: nil, action: nil)
     let bot = NSView()
