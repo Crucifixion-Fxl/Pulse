@@ -1,0 +1,58 @@
+name: Release DMG
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Apple Silicon runner
+        run: |
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+      - name: Resolve release version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF_TYPE" == tag ]]; then
+            [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use vMAJOR.MINOR.PATCH tags'; exit 1; }
+            echo "PULSE_VERSION=${REF_NAME#v}" >> "$GITHUB_ENV"
+          fi
+      - name: Build and package
+        run: make dmg VERSION="${PULSE_VERSION:-}"
+      - name: Verify checksum and mounted contents
+        run: |
+          cd dist
+          shasum -a 256 -c ./*.sha256
+          mkdir -p /tmp/pulse-release-mount
+          hdiutil attach ./*.dmg -readonly -nobrowse -mountpoint /tmp/pulse-release-mount
+          trap 'hdiutil detach /tmp/pulse-release-mount' EXIT
+          test -x /tmp/pulse-release-mount/Pulse.app/Contents/MacOS/Pulse
+          test "$(readlink /tmp/pulse-release-mount/Applications)" = /Applications
+          codesign --verify --deep --strict /tmp/pulse-release-mount/Pulse.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pulse-arm64
+          path: dist/*
+          if-no-files-found: error
+      - name: Publish release assets
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --title "Pulse ${RELEASE_TAG#v}" --generate-notes
+          fi
+          gh release upload "$RELEASE_TAG" dist/*.dmg dist/*.sha256 --clobber

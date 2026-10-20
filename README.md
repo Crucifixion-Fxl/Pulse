@@ -1,77 +1,83 @@
-# Pulse
+<p align="center">
+  <img src="docs/images/pulse-icon.png" width="120" alt="Pulse icon">
+</p>
+<h1 align="center">Pulse</h1>
+<p align="center">Your reminders, agents, music and everyday tools — one native macOS island.</p>
+<p align="center">
+  <a href="https://github.com/Crucifixion-Fxl/Pulse/releases/latest"><img src="https://img.shields.io/github/v/release/Crucifixion-Fxl/Pulse" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-black" alt="macOS 14 or later">
+  <img src="https://img.shields.io/badge/Apple_Silicon-arm64-black" alt="Apple Silicon arm64">
+  <img src="https://img.shields.io/badge/UI-SwiftUI-orange" alt="SwiftUI">
+</p>
+<p align="center"><strong><a href="https://github.com/Crucifixion-Fxl/Pulse/releases/latest">Download the latest DMG</a></strong></p>
+<p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
 
-Pulse is a native macOS 14+ workspace in the menu bar: reminders, AI agent activity and usage, music, clipboard history, and local weather, gathered in a Dynamic Island-style surface that follows the display you are working on.
+<p align="center"><img src="docs/images/extension-store.png" width="900" alt="Pulse extension store with bars, characters, status items, wake effects and voice providers"></p>
 
-## Download
+## Highlights
 
-Download available builds from [GitHub Releases](https://github.com/Crucifixion-Fxl/Pulse/releases/latest). New builds produce **Pulse.app**; older releases may still be named **TodoIsland.app**. Drag the app into **Applications** to install.
+- **An island that follows you.** A compact menu-bar surface expands into a workspace on the display you are using, with notch-aware geometry and keyboard shortcuts.
+- **Reminders at a glance.** Month calendar, completion heatmap, grouped day schedule, quick entry and undo. Use Apple Reminders or a private local source.
+- **Agents and quotas.** Live coding sessions, attention requests and one-click session ID copying. Codex reads live quotas and local token usage, retaining the last successful quota offline and across restarts. Other vendors are labeled sample data.
+- **Make it yours.** The [extension store](docs/EXTENSION-STORE.md) controls Reminders, Agents, Music and Clipboard bars, status items, three bot characters and two voice-reactive wake effects.
+- **Music and clipboard.** System Now Playing, playback controls, synced lyrics and recent clipboard history.
+- **Small daily helpers.** Local weather and timed [Keep Awake](docs/adr/0014-bounded-keep-awake-sessions.md).
+- **Hold Space to wake.** Black hole particles or Aurora light waves; optional [Xiaozhi voice](docs/XIAOZHI-VOICE.md). Escape ends the session. Voice runtime installation and account binding are separate.
 
-This project was previously called Todo Island. Pulse keeps the existing app identity and local data locations, so existing reminders, settings and agent integrations continue to work after upgrading.
+## Download and install
 
-## Features
+1. Download `Pulse-{version}-arm64.dmg` from [Releases](https://github.com/Crucifixion-Fxl/Pulse/releases/latest).
+2. Open the image and drag **Pulse.app** onto **Applications**.
+3. Launch Pulse and allow Reminders access, or choose the local reminder source.
 
-- **Dynamic Island surface** — a collapsed bar in the menu-bar/notch area, a hover preview, and a pinned expanded surface, following the display the pointer works on (notch-aware on built-in displays).
-- **Month calendar + completion heatmap** — a six-week grid with per-List accent dots under each date (one dot per List with pending items; gray means only completed ones remain) and a 24-week completion heatmap.
-- **Liquid interactions** — the date-selection bead slides between days, the sidebar indicator flows between icons, and switching happens on hover.
-- **Completion feedback** — the circle fills and the checkmark draws in, the title fades, and the row closes smoothly without recentering the list. Successful completions can be undone in reverse order for eight seconds; text editing keeps its own undo.
-- **Day Schedule grouped by List** — same-List tasks stay together, ordered like the Lists themselves, with overdue items greeting today.
-- **Quick Add** — the Task Input creates a reminder on the selected day in any List; the first click on the hover preview pins the Island and puts the caret in the field.
-- **AI agent activity** — live coding-agent sessions and requests for attention.
-- **AI wake animation** — hold plain Space for about 0.8 seconds to unfold a deep-black core surrounded by a dense, flowing white particle cloud. Release early to cancel; after waking, Escape or another hold restores the original island. Short Space keeps text entry and playback controls. With the [Xiaozhi voice runtime](docs/XIAOZHI-VOICE.md) installed and bound, waking starts a cloud voice conversation; the white rim follows microphone and speaker amplitude. Escape ends capture and playback. Global use requires Accessibility permission via the menu's **Enable Hold Space in Other Apps…** action; in-app use and the menu preview work without it.
-- **Clipboard history** — recent clipboard content in a dedicated panel.
-- **Timed Keep Awake** — an animated eye with inline duration pills to the left of weather keeps the Mac running with the lid closed for a chosen duration. Each session requests administrator authorization; an independent system job restores sleep at the deadline or after Pulse exits. [Behavior and recovery](docs/adr/0014-bounded-keep-awake-sessions.md).
-- **Local weather** — current-city conditions beside the bot, with a clickable detail panel.
-- **AI usage dashboard** — today's tokens with an input/output/cache split, a fifteen-day trend, and per-subscription weekly quota cards (sample data until real providers land).
-- **Music panel** — the system Now Playing (any player, e.g. NetEase Cloud Music) with artwork, progress, and controls on the left; time-synced lyrics with translations on the right, fetched from NetEase with an LRCLIB fallback.
-- **List management** — iCloud Reminders plus a private local source with per-List accents, renaming, and deletion summaries.
-- **Keyboard support** — arrows move the selection or shift the day, Return edits, Space completes, ⌘N focuses the Task Input, ESC dismisses.
-- **Stay modes** — always visible or auto-hide with a notch activation zone; configurable in Settings.
-
-## Open and run
-
-1. Open `Pulse.xcodeproj` in Xcode 26 or newer.
-2. Select the `Pulse` scheme and **My Mac** destination.
-3. Run the application.
-4. Pick the Collapsed Island stay mode in **Settings → Island** (defaults to always visible).
-5. Grant Reminders access for iCloud or choose **Use Local** to work without that permission.
-
-The checked-in project uses `Sign to Run Locally`, the bundle identifier `com.fxl.TodoIsland`, the App Sandbox, and the Reminders calendar entitlement. Configure a Personal Team or Developer ID only when distributing to another Mac.
-
-## Build from Terminal
+Requires **macOS 14+ on Apple Silicon**. Builds are ad-hoc signed, not Apple-notarized; macOS may require approval in **System Settings → Privacy & Security** on first launch. To verify the download, place its `.sha256` file beside the DMG and run:
 
 ```sh
-xcodebuild \
-  -project Pulse.xcodeproj \
-  -scheme Pulse \
-  -configuration Debug \
-  -derivedDataPath /tmp/PulseDerivedData \
-  build
+shasum -a 256 -c Pulse-1.6.0-arm64.dmg.sha256
 ```
 
-## Test
+## Build and test
+
+Install Xcode 26 or newer, select its developer tools, then run:
 
 ```sh
-xcodebuild \
-  -project Pulse.xcodeproj \
-  -scheme Pulse \
-  -configuration Debug \
-  -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath /tmp/PulseDerivedData \
-  test
+make build    # Debug app, local ad-hoc signing
+make test     # macOS behavior tests and helper-script tests
+make release  # Release app, ad-hoc signing and signature verification
+make dmg      # dist/Pulse-{version}-arm64.dmg + .dmg.sha256
 ```
 
-## Documentation
+Builds use `/private/tmp/PulseDerivedData`; override with `DERIVED_DATA=/path`.
+The first build downloads a checksum-pinned wake sound. Optional voice dependencies
+are not bundled. Open `Pulse.xcodeproj` and choose the **Pulse / My Mac** scheme
+for interactive development. The terminal targets need no developer certificate.
 
-- [`CONTEXT.md`](CONTEXT.md) defines the product language.
-- [`docs/PRODUCT-SPEC.md`](docs/PRODUCT-SPEC.md) contains the accepted product specification.
-- [`docs/adr`](docs/adr) records architectural decisions.
+## Automated releases
 
-## Privacy and source boundary
+Push a `vMAJOR.MINOR.PATCH` tag to build and publish the matching DMG and checksum.
+The [release workflow](.github/workflows/release.yml) uses an Apple Silicon macOS
+runner and the same `make dmg` path as local builds, then mounts the image to
+verify its app, signature and Applications link. Manual workflow runs produce
+artifacts without publishing. Main/PR builds run `make build` and `make test`.
+See [release instructions](docs/RELEASING.md).
 
-iCloud Reminder content is accessed through EventKit. Pulse Local lists and reminders are stored in a sandboxed, versioned SwiftData store in Application Support with CloudKit synchronization disabled. Pulse has no analytics SDK or content logging. Optional Xiaozhi voice sends microphone audio to the Xiaozhi cloud during an active voice session.
+## Documentation and compatibility
 
-The Island implementation is original code informed by the public architectural approach of boring.notch. No GPLv3 source or artwork from boring.notch is copied into this project.
+[Product language](CONTEXT.md) · [Product spec](docs/PRODUCT-SPEC.md) ·
+[Source layout](docs/SOURCE-LAYOUT.md) · [Architecture decisions](docs/adr)
 
-The Keep Awake eye geometry, blink timing and hold-to-end interaction are adapted
-from [Insomnia](https://github.com/krishhgg/Insomnia) (MIT, © 2026 Krish Garg).
-The [license](Pulse/Resources/Licenses/INSOMNIA-LICENSE.txt) is included in the app.
+Pulse was previously Todo Island. The bundle identifier `com.fxl.TodoIsland`
+and existing data/integration locations stay unchanged, so upgrades retain
+reminders, preferences and agent integrations.
+
+## Privacy and credits
+
+Reminder data uses EventKit or local SwiftData. Clipboard history stays on the
+Mac. There is no analytics SDK. Optional voice sends microphone audio to the
+selected service during an active conversation. Global hold-Space requires
+Accessibility permission; in-app use does not.
+
+The island implementation is original, informed by boring.notch's public
+architecture; no GPLv3 code or artwork was copied. Keep Awake eye geometry and
+motion are adapted from [Insomnia](https://github.com/krishhgg/Insomnia) (MIT).
+Bundled notices are in [Pulse/Resources/Licenses](Pulse/Resources/Licenses).

@@ -11,3 +11,6 @@ default.profraw
 .claude/
 .codex/
 .cursor/
+
+# Release artifacts
+dist/
