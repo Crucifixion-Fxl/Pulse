@@ -25,3 +25,22 @@ checks the app and helper architectures. See [GitHub runner specifications](http
 Builds are ad-hoc signed and not notarized. The app keeps its existing bundle ID
 and storage paths. Optional Xiaozhi runtime/configuration remains on the user's
 Mac and is not included in the DMG. The release does not include credentials.
+
+## Local updates and macOS permissions
+
+Ad-hoc signatures identify a particular binary hash. Rebuilding can therefore
+invalidate previously granted Accessibility, Reminders or microphone access.
+For repeated local updates, use the same available Apple Development or
+Developer ID signing identity:
+
+```sh
+security find-identity -v -p codesigning
+make release RELEASE_SIGN_IDENTITY="YOUR_CERTIFICATE_SHA1"
+```
+
+To retain this choice on one workstation, put
+`RELEASE_SIGN_IDENTITY = YOUR_CERTIFICATE_SHA1` in `.pulse-build.local.mk`
+(ignored by Git). CI continues to use ad-hoc signing unless explicitly configured.
+Switching from ad-hoc to certificate signing requires granting the new identity
+access once; keep using that certificate for subsequent local updates.
+This does not notarize the app or change its bundle ID.

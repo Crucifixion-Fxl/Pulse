@@ -1,3 +1,5 @@
+-include .pulse-build.local.mk
+
 PROJECT := Pulse.xcodeproj
 SCHEME := Pulse
 DERIVED_DATA ?= /private/tmp/PulseDerivedData
@@ -7,6 +9,7 @@ VERSION ?=
 VERSION_FLAG := $(if $(VERSION),MARKETING_VERSION=$(VERSION),)
 XCODE_FLAGS := -project "$(PROJECT)" -scheme "$(SCHEME)" -destination "$(DESTINATION)" -derivedDataPath "$(DERIVED_DATA)" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
 LOCAL_SIGNING := CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
+RELEASE_SIGN_IDENTITY ?= -
 
 .PHONY: build test release dmg
 
@@ -21,7 +24,7 @@ test:
 
 release:
 	xcodebuild -quiet $(XCODE_FLAGS) -configuration Release CODE_SIGNING_ALLOWED=NO $(VERSION_FLAG) build
-	/usr/bin/codesign --force --deep --sign - --entitlements config/Pulse.entitlements "$(APP_BUNDLE)"
+	/usr/bin/codesign --force --deep --sign "$(RELEASE_SIGN_IDENTITY)" --entitlements config/Pulse.entitlements "$(APP_BUNDLE)"
 	/usr/bin/codesign --verify --deep --strict "$(APP_BUNDLE)"
 
 dmg: release

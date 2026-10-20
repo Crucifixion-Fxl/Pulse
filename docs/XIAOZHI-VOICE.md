@@ -11,6 +11,14 @@ background sound and playback echo from interrupting its reply. **Escape** (or a
 capture, playback, and the network session. Short Space retains its normal action.
 The menu's **Start Voice Conversation** action invokes the same behavior.
 
+Global Space needs macOS Accessibility permission for the installed Pulse app.
+Use the menu's **Enable Global Hold Space** action to request it. After replacing
+an ad-hoc build, an old permission entry may no longer match the new signature;
+re-add the current `/Applications/Pulse.app` in Privacy & Security → Accessibility.
+Local Space inside Pulse and the menu action remain available without this global
+permission. Keep a stable signing identity for local updates as described in
+[the release guide](RELEASING.md#local-updates-and-macos-permissions).
+
 The Xcode build downloads and verifies the wake sound into DerivedData, then
 bundles it in the application. The first build needs access to assets.mixkit.co;
 subsequent builds reuse the verified cache. Playback needs no network access.

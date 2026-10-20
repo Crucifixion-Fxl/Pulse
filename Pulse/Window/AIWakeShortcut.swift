@@ -25,6 +25,7 @@ final class AIWakeShortcut {
   // Ordinary typing must not cause a flash. The remaining charge starts here.
   static let intentDelay: TimeInterval = 0.12
   var isRegistered: Bool { eventTap != nil }
+  var hasGlobalPermission: Bool { AXIsProcessTrusted() }
 
   init(registerGlobally: Bool = true) {
     Self.installed = true

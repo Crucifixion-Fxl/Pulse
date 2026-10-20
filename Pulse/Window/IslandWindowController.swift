@@ -546,7 +546,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     shortcut.onRelease = { [weak self] in self?.wakeKeyReleased() }
     shortcut.onCancel = { [weak self] in self?.dismissWake() }
     wakeShortcut = shortcut
-    Self.logLifecycle("wake shortcut registered=\(shortcut.isRegistered)")
+    Self.logLifecycle("wake shortcut registered=\(shortcut.isRegistered) accessibility=\(shortcut.hasGlobalPermission)")
     for name in [NSWorkspace.willSleepNotification, NSWorkspace.screensDidSleepNotification,
                  NSWorkspace.sessionDidResignActiveNotification] {
       wakeObservers.append(NSWorkspace.shared.notificationCenter.addObserver(
@@ -557,7 +557,11 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
     }
   }
 
-  func refreshWakeShortcut() { wakeShortcut?.retryGlobalRegistration() }
+  func refreshWakeShortcut() {
+    guard let shortcut = wakeShortcut else { return }
+    shortcut.retryGlobalRegistration()
+    Self.logLifecycle("wake shortcut registered=\(shortcut.isRegistered) accessibility=\(shortcut.hasGlobalPermission)")
+  }
   func enableGlobalWakeShortcut() { wakeShortcut?.requestGlobalAccess() }
 
   /// A discoverable preview is also available without keyboard permissions.
