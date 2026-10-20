@@ -16,7 +16,7 @@ class BundledHelperTests(unittest.TestCase):
     def test_helpers_target_macos_14_and_arm64(self):
         for name in ('AgentHookBridge', 'MediaRemoteHelper.dylib'):
             binary = str(HELPERS / name)
-            subprocess.run(['lipo', '-verify_arch', 'arm64', binary], check=True)
+            subprocess.run(['lipo', binary, '-verify_arch', 'arm64'], check=True)
             info = subprocess.check_output(['xcrun', 'vtool', '-show-build', binary], text=True)
             self.assertIn('minos 14.0', info)
             subprocess.run(['codesign', '--verify', '--strict', binary], check=True)

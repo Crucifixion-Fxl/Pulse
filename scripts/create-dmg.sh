@@ -15,7 +15,7 @@ executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")
   echo 'Expected an arm64-only app' >&2; exit 1;
 }
 for helper in AgentHookBridge MediaRemoteHelper.dylib; do
-  /usr/bin/lipo -verify_arch arm64 "$app_bundle/Contents/Resources/$helper"
+  /usr/bin/lipo "$app_bundle/Contents/Resources/$helper" -verify_arch arm64
 done
 for binary in "$app_bundle/Contents/MacOS/$executable" "$app_bundle/Contents/Resources/AgentHookBridge" "$app_bundle/Contents/Resources/MediaRemoteHelper.dylib"; do
   minimum=$(/usr/bin/xcrun vtool -show-build "$binary" | /usr/bin/awk '$1 == "minos" { print $2 }')
