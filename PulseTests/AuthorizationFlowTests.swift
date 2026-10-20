@@ -4,6 +4,34 @@ import XCTest
 
 final class AuthorizationFlowTests: XCTestCase {
   @MainActor
+  func testAuthorizationScreenHidesStoreUntilAListIsAvailable() async throws {
+    let suite = "StoreAuthorization-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(store: AuthorizationFlowReminderStore(
+      authorization: .notDetermined, requestedAuthorization: .fullAccess), defaults: defaults)
+    let existing = Set(NSApp.windows.map(\.windowNumber))
+    let controller = IslandWindowController(model: model)
+    defer { withExtendedLifetime(controller) {} }
+    let header = try XCTUnwrap(NSApp.windows.filter { !existing.contains($0.windowNumber) }
+      .compactMap { ($0.contentView as? IslandTransitionView)?.statusHeader }.first)
+    let store = try XCTUnwrap(header.store)
+    header.settle(size: CGSize(width: 760, height: 300), state: .pinned)
+    XCTAssertTrue(store.isHidden)
+    let center = CGPoint(x: store.frame.midX, y: store.frame.midY)
+    XCTAssertNil(header.hitTest(header.convert(center, to: header.superview)))
+    model.toggleExtensionStore()
+    XCTAssertFalse(model.isExtensionStorePresented, "The authorization screen cannot open the store")
+    await model.requestAccess()
+    try await Task.sleep(for: .milliseconds(100))
+    header.settle(size: CGSize(width: 760, height: 400), state: .pinned)
+    XCTAssertTrue(model.canUseActiveList)
+    XCTAssertFalse(store.isHidden, "The store becomes available after setup succeeds")
+    model.toggleExtensionStore()
+    XCTAssertTrue(model.isExtensionStorePresented)
+  }
+
+  @MainActor
   func testNotDeterminedAccessStartsPinnedAndClearsObsoleteOnboardingPreferences() {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)

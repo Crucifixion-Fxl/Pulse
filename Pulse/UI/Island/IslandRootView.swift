@@ -349,6 +349,9 @@ struct IslandRootView: View {
       }
       .onAppear { reconcileEnabledSidebar(); syncRequestedSidebarItem() }
       .onChange(of: model.extensionPreferences.bars) { _, _ in reconcileEnabledSidebar() }
+      .onChange(of: model.canUseActiveList) { _, available in
+        if !available, model.isExtensionStorePresented { model.toggleExtensionStore(on: displayID) }
+      }
       .onChange(of: model.isExtensionStorePresented) { _, _ in
         newTaskFocused = false
         updateExpandedContentHeight()

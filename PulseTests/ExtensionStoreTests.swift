@@ -83,7 +83,8 @@ final class ExtensionStoreTests: XCTestCase {
     let suite = "ExtensionStore-\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
-    let model = AppModel(defaults: defaults)
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults)
+    await model.reload()
     model.toggleExtensionStore()
     model.setIslandHovered(false)
     try await Task.sleep(for: .milliseconds(350))
@@ -190,9 +191,9 @@ final class ExtensionStoreTests: XCTestCase {
       var storeAppearances = 0
       func content(_ presented: Bool) -> some View {
         ExtensionStoreTransition(isPresented: presented, reduceMotion: reduced) {
-          Color.red.onAppear { panelAppearances += 1 }
+          Color(.sRGB, red: 1, green: 0, blue: 0, opacity: 1).onAppear { panelAppearances += 1 }
         } store: {
-          Color.blue.onAppear { storeAppearances += 1 }
+          Color(.sRGB, red: 0, green: 0, blue: 1, opacity: 1).onAppear { storeAppearances += 1 }
         }
       }
       let host = NSHostingView(rootView: content(false))
@@ -268,7 +269,8 @@ final class ExtensionStoreTests: XCTestCase {
         let now = CACurrentMediaTime()
         gaps.append((now - last) * 1000)
         last = now
-        XCTAssertFalse(surface.isRunning, "Store crossfade must not start a window transition")
+        XCTAssertEqual(surface.presentedContentOpacity, 1, accuracy: 0.01,
+          "Store crossfade must keep the live content visible")
         XCTAssertEqual(surface.snapshotCount, 0)
         XCTAssertEqual(surface.window?.frame, frame)
         XCTAssertEqual(model.expandedContentHeight, height)

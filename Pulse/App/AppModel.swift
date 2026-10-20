@@ -100,6 +100,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var isExtensionStorePresented = false
 
   func toggleExtensionStore(on displayID: String? = nil) {
+    guard isExtensionStorePresented || canUseActiveList else { return }
     isExtensionStorePresented.toggle()
     pinIslandFromSurface(on: displayID)
   }

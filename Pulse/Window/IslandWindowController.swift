@@ -154,6 +154,15 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         }
       }.store(in: &cancellables)
 
+    model.objectWillChange
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] in
+        guard let self else { return }
+        for window in self.windows.values {
+          window.transition.statusHeader?.setStoreAvailable(self.model.canUseActiveList)
+        }
+      }.store(in: &cancellables)
+
     // The pointer poll exists for one job now: auto-hide activation zones
     // on every display's settled bar. Hover on a visible bar arrives via
     // the surface's own .onHover.
@@ -229,6 +238,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         store: NSHostingView(rootView: ExtensionStoreButton(displayID: id).environmentObject(model)),
         barHeight: DisplayGeometryCalculator.statusHeaderHeight(for: DisplaySupport.metrics(for: screen)))
       let transition = IslandTransitionView(content: hostingView, statusHeader: header)
+      header.setStoreAvailable(model.canUseActiveList)
       panel.contentView = transition
       let initiallyVisible = model.islandState != .collapsed || model.isCollapsedIslandVisible
       panel.alphaValue = initiallyVisible ? 1 : 0

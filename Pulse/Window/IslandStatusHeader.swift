@@ -14,9 +14,16 @@ final class IslandStatusHeader: NSView {
   let store: NSView?
   private var items: [NSView] { [quota, bot] + [additionalQuotas, weather, keepAwake, store].compactMap { $0 } }
   private var isExpanded = false
+  private var isStoreAvailable = true
   private var keepAwakeEditing = false
   private var surfaceSize = CGSize.zero
   private var surfaceState: IslandPresentationState = .collapsed
+
+  func setStoreAvailable(_ available: Bool) {
+    guard isStoreAvailable != available else { return }
+    isStoreAvailable = available
+    store?.isHidden = !isExpanded || !available
+  }
 
   func refreshWeatherLayout() {
     guard surfaceSize != .zero, weather?.frame.width != weatherWidth else { return }
@@ -83,7 +90,7 @@ final class IslandStatusHeader: NSView {
     surfaceSize = size
     surfaceState = state
     isExpanded = state != .collapsed
-    store?.isHidden = !isExpanded
+    store?.isHidden = !isExpanded || !isStoreAvailable
     let inset: CGFloat = state == .collapsed ? 12 : 20
     let left = (bounds.width - size.width) / 2
     let faceSize = min(26, max(18, barHeight - 6)).rounded()
@@ -156,6 +163,7 @@ final class IslandStatusHeader: NSView {
     let localPoint = convert(point, from: superview)
     for item in (isExpanded ? [store, keepAwake, weather] : []).compactMap({ $0 }) {
       guard (item.layer?.presentation()?.opacity ?? item.layer?.opacity ?? 0) > 0.95,
+        !item.isHidden,
         item.frame.contains(localPoint) else { continue }
       return item.hitTest(localPoint)
     }
