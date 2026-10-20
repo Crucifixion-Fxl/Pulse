@@ -17,6 +17,13 @@ executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")
 for helper in AgentHookBridge MediaRemoteHelper.dylib; do
   /usr/bin/lipo -verify_arch arm64 "$app_bundle/Contents/Resources/$helper"
 done
+for binary in "$app_bundle/Contents/MacOS/$executable" "$app_bundle/Contents/Resources/AgentHookBridge" "$app_bundle/Contents/Resources/MediaRemoteHelper.dylib"; do
+  minimum=$(/usr/bin/xcrun vtool -show-build "$binary" | /usr/bin/awk '$1 == "minos" { print $2 }')
+  [ "$minimum" = 14.0 ] || { echo "Unexpected deployment target $minimum: $binary" >&2; exit 1; }
+done
+/usr/bin/file "$app_bundle/Contents/Resources/MediaRemoteHelper.dylib" | /usr/bin/grep -q 'dynamically linked shared library' || {
+  echo 'MediaRemoteHelper must be a loadable dylib' >&2; exit 1;
+}
 /usr/bin/codesign --verify --deep --strict "$app_bundle"
 mkdir -p "$output_dir"
 output_dir=$(cd "$output_dir" && pwd)

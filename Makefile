@@ -17,6 +17,7 @@ test:
 	xcodebuild -quiet $(XCODE_FLAGS) -configuration Debug $(LOCAL_SIGNING) test
 	python3 scripts/test-keep-awake-watchdog.py
 	python3 scripts/test-xiaozhi-bridge.py
+	python3 scripts/test-bundled-helpers.py
 
 release:
 	xcodebuild -quiet $(XCODE_FLAGS) -configuration Release CODE_SIGNING_ALLOWED=NO $(VERSION_FLAG) build

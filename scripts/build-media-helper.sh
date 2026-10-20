@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swiftc -swift-version 5 -O \
+swiftc -emit-library -swift-version 5 -O -target arm64-apple-macos14.0 \
   helpers/MediaRemoteHelper.swift \
   -o Pulse/Resources/Helpers/MediaRemoteHelper.dylib
 codesign --force --sign - Pulse/Resources/Helpers/MediaRemoteHelper.dylib

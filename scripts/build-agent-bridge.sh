@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swiftc -swift-version 5 -O \
+swiftc -swift-version 5 -O -target arm64-apple-macos14.0 \
   helpers/AgentHookBridge/main.swift \
   -o Pulse/Resources/Helpers/AgentHookBridge
 codesign --force --sign - Pulse/Resources/Helpers/AgentHookBridge
