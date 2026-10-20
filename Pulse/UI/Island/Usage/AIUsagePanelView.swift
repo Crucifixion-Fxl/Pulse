@@ -545,11 +545,6 @@ private struct SubscriptionCard: View {
           Text(LocalizedStringKey(subscription.vendor.localizedKey))
             .font(.system(size: 12.5, weight: .semibold))
             .lineLimit(1)
-          if subscription.isStale {
-            Image(systemName: "clock.arrow.circlepath")
-              .help(Text("ai.quota.stale"))
-              .accessibilityLabel(Text("ai.quota.stale"))
-          }
           if subscription.isSample {
             Text("ai.sample-data")
               .font(.system(size: 8.5, weight: .medium))
