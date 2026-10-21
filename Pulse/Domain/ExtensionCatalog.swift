@@ -109,7 +109,7 @@ final class ExtensionStoreBrowser: ObservableObject {
   @Published var page = 0
   @Published var selectedID: String?
   @Published var showsDeveloper = false
-  static let pageSize = 4
+  static let pageSize = 5
 
   func results(preferences: ExtensionPreferences, voiceInstalled: Bool) -> [PulseExtension] {
     ExtensionCatalog.entries.filter {
@@ -129,6 +129,13 @@ final class ExtensionStoreBrowser: ObservableObject {
 
   func visibleEntries(in results: [PulseExtension]) -> [PulseExtension] {
     Array(results.dropFirst(currentPage(for: results) * Self.pageSize).prefix(Self.pageSize))
+  }
+
+  /// Keep detail and selection within the visible page after filtering, paging,
+  /// or disabling an entry from the Enabled view.
+  func selection(in results: [PulseExtension]) -> PulseExtension? {
+    let visible = visibleEntries(in: results)
+    return visible.first { $0.id == selectedID } ?? visible.first
   }
 
   func resetFilters() { query = ""; category = .all; scope = .discover; page = 0 }

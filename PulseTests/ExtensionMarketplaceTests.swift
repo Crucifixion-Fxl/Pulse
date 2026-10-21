@@ -32,7 +32,7 @@ final class ExtensionMarketplaceTests: XCTestCase {
     for page in 0..<browser.pageCount(for: results) {
       browser.page = page
       let visible = browser.visibleEntries(in: results)
-      XCTAssertLessThanOrEqual(visible.count, 4)
+      XCTAssertLessThanOrEqual(visible.count, 5)
       ids += visible.map(\.id)
     }
     XCTAssertEqual(ids, ExtensionCatalog.entries.map(\.id))
@@ -46,6 +46,26 @@ final class ExtensionMarketplaceTests: XCTestCase {
     XCTAssertEqual(browser.page, 0)
     browser.resetFilters()
     XCTAssertEqual(browser.results(preferences: ExtensionPreferences(), voiceInstalled: true).count, ids.count)
+  }
+
+  func testDetailSelectionFollowsVisibleCatalog() throws {
+    let browser = ExtensionStoreBrowser()
+    var preferences = ExtensionPreferences()
+    let all = browser.results(preferences: preferences, voiceInstalled: true)
+    XCTAssertEqual(browser.selection(in: all)?.id, "pulse.reminders")
+    let weather = try XCTUnwrap(all.first { $0.slug == "weather" })
+    browser.show(weather)
+    XCTAssertEqual(browser.selection(in: all), weather)
+    browser.page = 1
+    XCTAssertEqual(browser.selection(in: all), browser.visibleEntries(in: all).first)
+    browser.query = "weather"
+    XCTAssertEqual(browser.selection(in: browser.results(preferences: preferences, voiceInstalled: true)), weather)
+    browser.scope = .enabled
+    weather.apply(to: &preferences)
+    XCTAssertNil(browser.selection(in: browser.results(preferences: preferences, voiceInstalled: true)))
+    browser.resetFilters()
+    browser.category = .appearance
+    XCTAssertEqual(browser.selection(in: browser.results(preferences: preferences, voiceInstalled: true))?.id, "pulse.orb")
   }
 
   func testCatalogActionsPersistAndPreserveRequiredFeatures() throws {

@@ -392,3 +392,6 @@
 "market.aurora.detail" = "Use an aurora effect for voice wake-up, responding to input and output levels. Applies on the next wake and respects Reduce Motion.";
 "market.xiaozhi.summary" = "Hold Space to start a voice conversation.";
 "market.xiaozhi.detail" = "Connect an installed and account-bound Xiaozhi runtime. Setup and microphone permission are required; global hold-Space also needs Accessibility permission. Follow the setup guide to get started.";
+
+"market.search.short" = "Search extensions…";
+"market.category" = "Filter by category";

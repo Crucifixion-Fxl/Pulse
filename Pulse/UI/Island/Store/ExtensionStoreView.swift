@@ -62,33 +62,35 @@ struct ExtensionStoreView: View {
   @EnvironmentObject private var model: AppModel
   @StateObject private var browser: ExtensionStoreBrowser
   @FocusState private var searchFocused: Bool
-  private let accent = Color(red: 0.69, green: 0.62, blue: 1)
+  @State private var hoveredID: String?
+  private let accent = Color(red: 0.56, green: 0.66, blue: 1)
   private let projectURL = URL(string: "https://github.com/Crucifixion-Fxl/Pulse")!
   private var voiceInstalled: Bool { XiaozhiVoiceSession.isInstalled }
   private var results: [PulseExtension] {
     browser.results(preferences: model.extensionPreferences, voiceInstalled: voiceInstalled)
   }
-  private var selected: PulseExtension? {
-    ExtensionCatalog.entries.first { $0.id == browser.selectedID }
-  }
+  private var selected: PulseExtension? { browser.selection(in: results) }
 
   init(browser: ExtensionStoreBrowser = ExtensionStoreBrowser()) {
     _browser = StateObject(wrappedValue: browser)
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      header
-      if browser.showsDeveloper {
-        developerContent
-      } else if let selected {
-        detail(selected)
-      } else {
-        catalog
+    HStack(spacing: 0) {
+      catalogSidebar
+        .frame(width: 252)
+        .background(.white.opacity(0.025))
+        .accessibilityIdentifier("market-catalog-sidebar")
+      Rectangle().fill(.white.opacity(0.09)).frame(width: 1)
+      Group {
+        if browser.showsDeveloper { developerContent }
+        else if let selected { detail(selected) }
+        else { emptyContent }
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      .padding(.leading, 24).padding(.trailing, 16).padding(.vertical, 18)
     }
-    .frame(height: 420, alignment: .top)
-    .padding(.horizontal, 16)
+    .frame(height: 420)
     .background {
       GeometryReader { geometry in
         Color.clear.preference(key: ExtensionStoreHeightKey.self, value: geometry.size.height)
@@ -101,148 +103,129 @@ struct ExtensionStoreView: View {
     }
   }
 
-  private var header: some View {
-    HStack(spacing: 12) {
-      if selected != nil || browser.showsDeveloper {
-        Button { browser.back() } label: {
-          Label("market.back", systemImage: "chevron.left").font(.system(size: 12, weight: .medium))
-        }.buttonStyle(.plain).foregroundStyle(.secondary)
-          .accessibilityIdentifier("market-back")
-        Divider().frame(height: 16)
-      }
-      Text("store.title").font(.system(size: 20, weight: .semibold))
-      Spacer(minLength: 4)
-      if selected == nil && !browser.showsDeveloper {
-        HStack(spacing: 2) {
+  private var catalogSidebar: some View {
+    VStack(spacing: 0) {
+      VStack(spacing: 0) {
+        HStack {
+          Text("Catalog").font(.system(size: 13, weight: .semibold))
+          Spacer()
+          Text(String(format: L10n.text("market.count"), results.count))
+            .font(.system(size: 10)).foregroundStyle(.secondary)
+        }.padding(.bottom, 12)
+        HStack(spacing: 7) {
+          Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
+          TextField("market.search.short", text: $browser.query)
+            .textFieldStyle(.plain).font(.system(size: 12))
+            .focused($searchFocused).accessibilityIdentifier("market-search")
+          if !browser.query.isEmpty {
+            Button { browser.query = ""; searchFocused = true } label: {
+              Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            }.buttonStyle(.plain).accessibilityLabel(Text("market.clear"))
+          }
+        }.padding(.horizontal, 9).frame(height: 30)
+          .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 6))
+          .overlay(RoundedRectangle(cornerRadius: 6)
+            .strokeBorder(searchFocused ? accent.opacity(0.8) : .white.opacity(0.08), lineWidth: 1))
+        HStack(spacing: 12) {
           ForEach(ExtensionStoreBrowser.Scope.allCases, id: \.self) { scope in
-            Button { browser.scope = scope } label: {
+            Button { browser.scope = scope; browser.showsDeveloper = false } label: {
               Text(LocalizedStringKey(scope.titleKey))
-                .font(.system(size: 11, weight: .medium))
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(browser.scope == scope ? .white.opacity(0.12) : .clear,
-                  in: RoundedRectangle(cornerRadius: 7))
+                .font(.system(size: 11, weight: browser.scope == scope ? .semibold : .regular))
+                .frame(height: 32)
+                .overlay(alignment: .bottom) {
+                  if browser.scope == scope { Rectangle().fill(accent).frame(height: 2) }
+                }
             }.buttonStyle(.plain)
-              .foregroundStyle(browser.scope == scope ? .white : .white.opacity(0.5))
+              .foregroundStyle(browser.scope == scope ? .white : .white.opacity(0.45))
               .accessibilityAddTraits(browser.scope == scope ? .isSelected : [])
               .accessibilityIdentifier("market-scope-\(scope.rawValue)")
           }
-        }.padding(3).background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
-        Button { searchFocused = false; browser.showsDeveloper = true } label: {
-          Label("market.developer", systemImage: "chevron.left.forwardslash.chevron.right")
-            .font(.system(size: 11, weight: .medium))
-        }.buttonStyle(.plain).foregroundStyle(accent)
-          .accessibilityIdentifier("market-developer")
-      }
-    }.frame(height: 36)
-  }
-
-  private var catalog: some View {
-    VStack(spacing: 12) {
-      HStack(spacing: 8) {
-        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-        TextField("market.search", text: $browser.query)
-          .textFieldStyle(.plain).font(.system(size: 13))
-          .focused($searchFocused).accessibilityIdentifier("market-search")
-        if !browser.query.isEmpty {
-          Button { browser.query = ""; searchFocused = true } label: {
-            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-          }.buttonStyle(.plain).help(Text("market.clear"))
-            .accessibilityLabel(Text("market.clear"))
-        }
-      }
-      .padding(.horizontal, 12).frame(height: 36)
-      .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 9))
-      .overlay(RoundedRectangle(cornerRadius: 9)
-        .strokeBorder(searchFocused ? accent.opacity(0.7) : .white.opacity(0.08), lineWidth: 1))
-
-      HStack(spacing: 6) {
-        ForEach(ExtensionCategory.allCases) { category in
-          Button { browser.category = category } label: {
-            Text(LocalizedStringKey(category.titleKey)).font(.system(size: 11, weight: .medium))
-              .padding(.horizontal, 11).padding(.vertical, 5)
-              .background(browser.category == category ? accent.opacity(0.15) : .clear, in: Capsule())
-          }.buttonStyle(.plain)
-            .foregroundStyle(browser.category == category ? accent : .white.opacity(0.5))
-            .accessibilityAddTraits(browser.category == category ? .isSelected : [])
-            .accessibilityIdentifier("market-category-\(category.rawValue)")
-        }
-        Spacer(minLength: 0)
-        Text(String(format: L10n.text("market.count"), results.count))
-          .font(.system(size: 10)).foregroundStyle(.secondary)
-      }
-
-      Group {
-        if results.isEmpty {
-          VStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").font(.system(size: 28, weight: .light)).foregroundStyle(accent)
-            Text("market.empty").font(.system(size: 15, weight: .medium))
-            Text("market.empty.detail").font(.system(size: 11)).foregroundStyle(.secondary)
-            Button("market.reset") { browser.resetFilters() }.buttonStyle(.bordered)
-              .accessibilityIdentifier("market-reset")
-          }.frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-          let entries = browser.visibleEntries(in: results)
-          VStack(spacing: 10) {
-            ForEach(0..<2, id: \.self) { row in
-              HStack(spacing: 10) {
-                ForEach(0..<2, id: \.self) { column in
-                  let index = row * 2 + column
-                  if index < entries.count {
-                    card(entries[index]).frame(maxWidth: .infinity)
-                  } else {
-                    Color.clear.frame(maxWidth: .infinity).frame(height: 114)
-                  }
-                }
+          Spacer(minLength: 0)
+          Menu {
+            Picker("market.category", selection: $browser.category) {
+              ForEach(ExtensionCategory.allCases) { category in
+                Text(LocalizedStringKey(category.titleKey)).tag(category)
               }
             }
-          }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+          } label: {
+            Image(systemName: browser.category == .all ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
+              .foregroundStyle(browser.category == .all ? .white.opacity(0.5) : accent)
+          }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help(Text("market.category")).accessibilityLabel(Text("market.category"))
+            .accessibilityIdentifier("market-category")
         }
-      }.frame(height: 238)
+      }.padding(.horizontal, 12).padding(.top, 14)
+      .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1) }
 
-      HStack {
-        Label("market.bundled.note", systemImage: "shippingbox")
-          .font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
+      VStack(spacing: 2) {
+        ForEach(browser.visibleEntries(in: results)) { entry in catalogRow(entry) }
+        if results.isEmpty {
+          Text("market.empty").font(.system(size: 11)).foregroundStyle(.secondary)
+            .padding(.top, 24).frame(maxWidth: .infinity)
+        }
+        Spacer(minLength: 0)
+      }.padding(.horizontal, 6).padding(.top, 6)
+
+      HStack(spacing: 5) {
+        Button { searchFocused = false; browser.showsDeveloper.toggle() } label: {
+          Image(systemName: "chevron.left.forwardslash.chevron.right")
+            .font(.system(size: 12)).frame(width: 28, height: 28)
+        }.foregroundStyle(browser.showsDeveloper ? accent : .white.opacity(0.45))
+          .help(Text("market.developer")).accessibilityLabel(Text("market.developer"))
+          .accessibilityIdentifier("market-developer")
         Spacer()
         Button { browser.page = browser.currentPage(for: results) - 1 } label: {
-          Image(systemName: "chevron.left").frame(width: 24, height: 24)
+          Image(systemName: "chevron.left").frame(width: 24, height: 28)
         }.disabled(browser.currentPage(for: results) == 0)
           .accessibilityLabel(Text("market.previous")).accessibilityIdentifier("market-previous")
         Text("\(browser.currentPage(for: results) + 1) / \(browser.pageCount(for: results))")
-          .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).frame(minWidth: 38)
+          .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
         Button { browser.page = browser.currentPage(for: results) + 1 } label: {
-          Image(systemName: "chevron.right").frame(width: 24, height: 24)
+          Image(systemName: "chevron.right").frame(width: 24, height: 28)
         }.disabled(browser.currentPage(for: results) + 1 >= browser.pageCount(for: results))
           .accessibilityLabel(Text("market.next")).accessibilityIdentifier("market-next")
-      }.buttonStyle(.plain).frame(height: 24)
+      }.buttonStyle(.plain).padding(.horizontal, 10).padding(.bottom, 8)
     }
   }
 
-  private func card(_ entry: PulseExtension) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Button { searchFocused = false; browser.show(entry) } label: {
-        HStack(alignment: .top, spacing: 11) {
-          icon(entry, size: 38)
-          VStack(alignment: .leading, spacing: 4) {
-            Text(LocalizedStringKey(entry.titleKey)).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-            Text(LocalizedStringKey(entry.summaryKey)).font(.system(size: 11))
-              .foregroundStyle(.white.opacity(0.55)).lineLimit(2)
-              .frame(maxWidth: .infinity, alignment: .leading)
+  private func catalogRow(_ entry: PulseExtension) -> some View {
+    let isSelected = selected?.id == entry.id && !browser.showsDeveloper
+    let active = entry.isEnabled(in: model.extensionPreferences) && (entry.category != .voice || voiceInstalled)
+    return Button { searchFocused = false; browser.show(entry) } label: {
+      HStack(spacing: 10) {
+        icon(entry, size: 32)
+        VStack(alignment: .leading, spacing: 4) {
+          HStack(spacing: 4) {
+            Text(LocalizedStringKey(entry.titleKey)).font(.system(size: 12, weight: .medium)).lineLimit(1)
+            Spacer(minLength: 0)
+            if active {
+              Image(systemName: "checkmark").font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.white.opacity(0.45)).accessibilityLabel(Text("market.active"))
+            }
           }
-          Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.white.opacity(0.25))
-        }.frame(maxWidth: .infinity, alignment: .leading).frame(height: 48, alignment: .top)
-          .contentShape(Rectangle())
-      }.buttonStyle(.plain).accessibilityIdentifier("market-open-\(entry.slug)")
-      HStack(spacing: 5) {
-        Text(entry.publisher).foregroundStyle(.white.opacity(0.5))
-        Text("·").foregroundStyle(.white.opacity(0.25))
-        Text("market.bundled").foregroundStyle(.white.opacity(0.35))
-        Spacer(minLength: 0)
-        action(entry)
-      }.font(.system(size: 10))
-    }
-    .padding(12).frame(height: 114)
-    .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
-    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.065), lineWidth: 1))
+          Text(LocalizedStringKey(entry.summaryKey)).font(.system(size: 10))
+            .foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+        }
+      }.padding(.horizontal, 10).frame(height: 52)
+        .background(isSelected ? accent.opacity(0.13) : (hoveredID == entry.id ? .white.opacity(0.045) : .clear),
+          in: RoundedRectangle(cornerRadius: 6))
+        .overlay(alignment: .leading) {
+          if isSelected { Capsule().fill(accent).frame(width: 2, height: 22) }
+        }.contentShape(Rectangle())
+    }.buttonStyle(.plain)
+      .onHover { hoveredID = $0 ? entry.id : nil }
+      .accessibilityAddTraits(isSelected ? .isSelected : [])
+      .accessibilityIdentifier("market-open-\(entry.slug)")
+  }
+
+  private var emptyContent: some View {
+    VStack(spacing: 12) {
+      Image(systemName: "magnifyingglass").font(.system(size: 26, weight: .light)).foregroundStyle(.secondary)
+      Text("market.empty").font(.system(size: 15, weight: .medium))
+      Text("market.empty.detail").font(.system(size: 11)).foregroundStyle(.secondary)
+      Button("market.reset") { browser.resetFilters() }.buttonStyle(.bordered)
+        .accessibilityIdentifier("market-reset")
+    }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   private func icon(_ entry: PulseExtension, size: CGFloat) -> some View {
@@ -282,10 +265,10 @@ struct ExtensionStoreView: View {
         model.extensionPreferences = preferences
       } label: {
         HStack(spacing: 4) {
-          if active { Image(systemName: "checkmark").font(.system(size: 9, weight: .semibold)) }
-          Text(LocalizedStringKey(active ? "market.active" : "market.enable"))
-        }.padding(.horizontal, 9).frame(height: 23)
-          .background(active ? .white.opacity(0.06) : accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
+          if active && !mutable { Image(systemName: "checkmark").font(.system(size: 9, weight: .semibold)) }
+          Text(LocalizedStringKey(active && mutable ? "market.disable" : (active ? "market.active" : "market.enable")))
+        }.padding(.horizontal, 9).frame(height: 28)
+          .background(active ? .white.opacity(0.06) : accent.opacity(0.22), in: RoundedRectangle(cornerRadius: 6))
       }.buttonStyle(.plain).foregroundStyle(active ? .white.opacity(0.6) : accent)
         .disabled(!mutable)
         .help(Text(actionHelp(entry)))
@@ -306,92 +289,71 @@ struct ExtensionStoreView: View {
   }
 
   private func detail(_ entry: PulseExtension) -> some View {
-    VStack(alignment: .leading, spacing: 20) {
-      HStack(spacing: 16) {
-        icon(entry, size: 58)
-        VStack(alignment: .leading, spacing: 6) {
-          Text(LocalizedStringKey(entry.titleKey)).font(.system(size: 23, weight: .semibold))
-          HStack(spacing: 8) {
-            Text(entry.publisher)
-            Text("·")
-            Text(LocalizedStringKey(entry.category.titleKey))
-            Text("market.bundled").padding(.horizontal, 6).padding(.vertical, 2)
-              .background(.white.opacity(0.08), in: Capsule())
-          }.font(.system(size: 11)).foregroundStyle(.secondary)
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(alignment: .top, spacing: 14) {
+        icon(entry, size: 52)
+        VStack(alignment: .leading, spacing: 7) {
+          Text(LocalizedStringKey(entry.titleKey)).font(.system(size: 21, weight: .semibold)).lineLimit(1)
+          HStack(spacing: 7) {
+            Text(entry.publisher).foregroundStyle(accent)
+            Text("·").foregroundStyle(.secondary)
+            Text("market.bundled").foregroundStyle(.secondary)
+          }.font(.system(size: 11))
         }
+        Spacer(minLength: 0)
+      }
+      Text(LocalizedStringKey(entry.summaryKey)).font(.system(size: 12))
+        .foregroundStyle(.white.opacity(0.6)).lineSpacing(3)
+        .fixedSize(horizontal: false, vertical: true).padding(.top, 14)
+      HStack(spacing: 12) {
+        action(entry).font(.system(size: 11, weight: .medium))
+        if entry.isEnabled(in: model.extensionPreferences) && (entry.category != .voice || voiceInstalled) {
+          Label("market.active", systemImage: "checkmark.circle")
+            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
+        }
+      }.padding(.top, 14)
+      HStack {
+        Text("market.overview").font(.system(size: 11, weight: .medium)).padding(.vertical, 12)
+          .overlay(alignment: .bottom) { Rectangle().fill(accent).frame(height: 2) }
         Spacer()
-        action(entry).font(.system(size: 12, weight: .medium))
-      }
-      Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
+        Text(LocalizedStringKey(entry.category.titleKey)).font(.system(size: 10)).foregroundStyle(.secondary)
+      }.padding(.top, 12)
+        .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.08)).frame(height: 1) }
+      Text(LocalizedStringKey(entry.detailKey)).font(.system(size: 12))
+        .foregroundStyle(.white.opacity(0.65)).lineSpacing(5)
+        .fixedSize(horizontal: false, vertical: true).padding(.top, 15)
+      Spacer(minLength: 12)
       HStack(alignment: .top, spacing: 24) {
-        VStack(alignment: .leading, spacing: 12) {
-          Text("market.overview").font(.system(size: 12, weight: .semibold))
-          Text(LocalizedStringKey(entry.summaryKey)).font(.system(size: 15, weight: .medium))
-          Text(LocalizedStringKey(entry.detailKey)).font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
-            .lineSpacing(5).fixedSize(horizontal: false, vertical: true)
-          Spacer(minLength: 0)
-          Link(destination: projectURL) {
-            Label("market.source", systemImage: "arrow.up.right").font(.system(size: 11))
-          }.foregroundStyle(accent)
-        }.frame(maxWidth: .infinity, alignment: .leading)
-        VStack(alignment: .leading, spacing: 16) {
-          metadata("market.publisher", value: entry.publisher)
-          metadata("market.identifier", value: entry.id)
-          metadata("market.distribution", value: L10n.text("market.bundled"))
-          metadata("market.updates", value: L10n.text("market.updates.detail"))
-        }.frame(width: 172, alignment: .leading).padding(16)
-          .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+        metadata("market.identifier", value: entry.id)
+        metadata("market.updates", value: L10n.text("market.updates.detail"))
       }
-    }.padding(.top, 12).frame(maxHeight: .infinity, alignment: .top)
-      .padding(.bottom, 12).accessibilityIdentifier("market-detail-\(entry.slug)")
+      Link(destination: projectURL) {
+        Label("market.source", systemImage: "arrow.up.right").font(.system(size: 11))
+      }.foregroundStyle(accent).padding(.top, 14)
+    }.accessibilityIdentifier("market-detail-\(entry.slug)")
   }
 
   private func metadata(_ title: String, value: String) -> some View {
     VStack(alignment: .leading, spacing: 5) {
-      Text(LocalizedStringKey(title)).font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
-      Text(value).font(.system(size: 11)).textSelection(.enabled)
+      Text(LocalizedStringKey(title)).font(.system(size: 10)).foregroundStyle(.white.opacity(0.35))
+      Text(value).font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)).textSelection(.enabled)
     }
   }
 
   private var developerContent: some View {
     VStack(alignment: .leading, spacing: 18) {
-      HStack(spacing: 16) {
-        Image(systemName: "shippingbox").font(.system(size: 28, weight: .light)).foregroundStyle(accent)
-          .frame(width: 62, height: 62).background(accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-        VStack(alignment: .leading, spacing: 7) {
-          Text("market.developer.title").font(.system(size: 22, weight: .semibold))
-          Text("market.developer.subtitle").font(.system(size: 12)).foregroundStyle(.secondary)
-        }
-      }
-      HStack(alignment: .top, spacing: 12) {
-        developerStep("puzzlepiece.extension", title: "market.developer.build", detail: "market.developer.build.detail")
-        developerStep("person.crop.square", title: "market.developer.identity", detail: "market.developer.identity.detail")
-        developerStep("shippingbox", title: "market.developer.publish", detail: "market.developer.publish.detail")
-      }
-      HStack(alignment: .top, spacing: 10) {
-        Image(systemName: "info.circle").foregroundStyle(accent)
-        Text("market.developer.status").font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(4)
-      }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
-      HStack(spacing: 16) {
-        Link(destination: projectURL.appendingPathComponent("blob/main/docs/EXTENSION-DEVELOPMENT.md")) {
-          Label("market.developer.guide", systemImage: "arrow.up.right")
-        }.foregroundStyle(accent)
-        Link("market.source", destination: projectURL).foregroundStyle(.secondary)
-        Spacer()
-        Text("market.developer.pending").foregroundStyle(.white.opacity(0.35))
-      }.font(.system(size: 11))
-    }.padding(.top, 8).frame(maxHeight: .infinity, alignment: .top)
-      .accessibilityIdentifier("market-developer-page")
-  }
-
-  private func developerStep(_ symbol: String, title: String, detail: String) -> some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Image(systemName: symbol).foregroundStyle(accent).font(.system(size: 18))
-      Text(LocalizedStringKey(title)).font(.system(size: 12, weight: .semibold))
-      Text(LocalizedStringKey(detail)).font(.system(size: 11)).foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true).lineSpacing(3)
-    }.frame(maxWidth: .infinity, minHeight: 98, alignment: .topLeading).padding(14)
-      .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+      Image(systemName: "chevron.left.forwardslash.chevron.right")
+        .font(.system(size: 26, weight: .light)).foregroundStyle(accent)
+      Text("market.developer.title").font(.system(size: 21, weight: .semibold))
+      Text("market.developer.subtitle").font(.system(size: 12)).foregroundStyle(.secondary)
+      Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
+      Text("market.developer.status").font(.system(size: 12)).foregroundStyle(.white.opacity(0.65))
+        .lineSpacing(5).fixedSize(horizontal: false, vertical: true)
+      Link(destination: projectURL.appendingPathComponent("blob/main/docs/EXTENSION-DEVELOPMENT.md")) {
+        Label("market.developer.guide", systemImage: "arrow.up.right")
+      }.font(.system(size: 12, weight: .medium)).foregroundStyle(accent)
+      Spacer()
+      Text("market.developer.pending").font(.system(size: 10)).foregroundStyle(.secondary)
+    }.accessibilityIdentifier("market-developer-page")
   }
 }

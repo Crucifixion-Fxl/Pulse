@@ -392,3 +392,6 @@
 "market.aurora.detail" = "使用极光效果呈现语音唤醒，并响应输入与播放音量。切换后在下一次唤醒时生效，尊重系统减少动态效果设置。";
 "market.xiaozhi.summary" = "长按空格，开启语音对话。";
 "market.xiaozhi.detail" = "连接已安装并完成账号绑定的小智运行时。使用前需要安装运行时并允许麦克风访问；全局长按空格还需要辅助功能权限。点击安装指南查看配置步骤。";
+
+"market.search.short" = "搜索扩展…";
+"market.category" = "按分类筛选";
