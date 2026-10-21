@@ -262,20 +262,67 @@ final class IslandStatusHeader: NSView {
 
   func updateDragging(to point: CGPoint) {
     guard let drag, let item = itemEntries.first(where: { $0.id == drag.id })?.view else { return }
+    // Compare with resting slots, never with neighbours displaced by contact.
+    // Otherwise the pushed neighbour moves the threshold and reverses the order.
+    let left = (bounds.width - surfaceSize.width) / 2
+    let right = left + surfaceSize.width - 20 - min(26, max(18, barHeight - 6)).rounded() / 2 + 16
+    let slots = expandedFrames(left: left, right: right)
     var order = headerOrder.filter { $0 != drag.id }
     let target = order.first { id in
       if id == "spacer" { return point.x < bounds.midX }
-      guard visibleIDs.contains(id), let view = itemEntries.first(where: { $0.id == id })?.view else {
-        return false
-      }
-      return point.x < view.frame.midX
+      return slots[id].map { point.x < $0.midX } ?? false
     }
     order.insert(drag.id, at: target.flatMap { order.firstIndex(of: $0) } ?? order.endIndex)
-    if order != headerOrder {
-      headerOrder = order
-      relayout(animated: true)
+    headerOrder = order
+    let ids = order.filter { visibleIDs.contains($0) }
+    guard let index = ids.firstIndex(of: drag.id) else { return }
+    let before = Array(ids[..<index]), after = Array(ids[(index + 1)...])
+    let leftWidth = before.reduce(CGFloat.zero) { $0 + itemWidth($1) + gap(after: $1) }
+    let rightWidth = after.reduce(CGFloat.zero) { $0 + itemWidth($1) + gap(after: $1) }
+      + (after.isEmpty ? 0 : gap(after: drag.id) - gap(after: after.last!))
+    let restingFrames = expandedFrames(left: left, right: right)
+    var frames = restingFrames
+    // Rigid bodies cannot be squeezed through the window's edge. The centre
+    // space absorbs contact until the entire chain reaches a boundary.
+    let x = min(max(point.x - drag.offset, left + 20 + leftWidth),
+      right - item.frame.width - rightWidth)
+    item.frame.origin.x = x
+    frames[drag.id] = item.frame
+    var edge = item.frame.minX
+    for id in before.reversed() {
+      guard var frame = frames[id] else { continue }
+      frame.origin.x = min(frame.minX, edge - gap(after: id) - frame.width)
+      frames[id] = frame
+      edge = frame.minX
     }
-    item.frame.origin.x = min(max(point.x - drag.offset, 20), bounds.width - 20 - item.frame.width)
+    edge = item.frame.maxX + gap(after: drag.id)
+    for id in after {
+      guard var frame = frames[id] else { continue }
+      frame.origin.x = max(frame.minX, edge)
+      frames[id] = frame
+      edge = frame.maxX + gap(after: id)
+    }
+    for (id, neighbour) in itemEntries where id != drag.id && visibleIDs.contains(id) {
+      guard let frame = frames[id] else { continue }
+      let inContact = frame != restingFrames[id]
+      guard frame != neighbour.frame || inContact else { continue }
+      let start = neighbour.layer?.presentation()?.position ?? neighbour.layer?.position ?? .zero
+      neighbour.frame = frame
+      guard let layer = neighbour.layer else { continue }
+      layer.removeAnimation(forKey: "headerPosition")
+      // Contact follows the pointer directly, so a spring cannot lag behind
+      // and let the dragged body sink into its neighbour. Free bodies settle.
+      if !inContact && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        let spring = CASpringAnimation(keyPath: "position")
+        spring.mass = 1
+        spring.stiffness = 700
+        spring.damping = 42
+        spring.duration = 0.28
+        spring.fromValue = NSValue(point: start)
+        spring.toValue = NSValue(point: layer.position)
+        layer.add(spring, forKey: "headerPosition")
+      }
+    }
   }
 
   func finishDragging(cancelled: Bool = false) {

@@ -64,6 +64,43 @@ final class IslandTransitionTests: XCTestCase {
     }
   }
 
+  func testDraggingPushesAChainAtEdgeContactBeforeReordering() async throws {
+    let bot = NSView(), awake = NSView(), store = NSView()
+    let header = IslandStatusHeader(quota: NSView(), bot: bot,
+      keepAwake: awake, store: store, barHeight: 32)
+    let (window, transition, _) = fixture(header: header)
+    defer { window.close() }
+    transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: false)
+    try await Task.sleep(for: .milliseconds(40))
+    let originalOrder = header.headerOrder
+    let oldStore = store.frame, oldAwake = awake.frame, oldBot = bot.frame
+    header.beginDragging("bot", at: CGPoint(x: oldBot.midX, y: 16))
+    header.updateDragging(to: CGPoint(x: oldBot.midX - 10, y: 16))
+    XCTAssertEqual(header.headerOrder, originalOrder, "Contact must move neighbours before the centre crosses a slot")
+    XCTAssertEqual(store.frame.minX, oldStore.minX - 10, accuracy: 0.1)
+    XCTAssertEqual(awake.frame.minX, oldAwake.minX - 10, accuracy: 0.1)
+    XCTAssertEqual(store.frame.maxX + 4, bot.frame.minX, accuracy: 0.1)
+    XCTAssertEqual(awake.frame.maxX + 6, store.frame.minX, accuracy: 0.1)
+    for distance in 11...16 {
+      header.updateDragging(to: CGPoint(x: oldBot.midX - CGFloat(distance), y: 16))
+      try await Task.sleep(for: .milliseconds(16))
+      let visible = store.layer?.presentation()?.frame ?? store.frame
+      let visibleAwake = awake.layer?.presentation()?.frame ?? awake.frame
+      XCTAssertEqual(visible.width, oldStore.width, accuracy: 0.1)
+      XCTAssertEqual(visibleAwake.width, oldAwake.width, accuracy: 0.1)
+      XCTAssertEqual(visible.maxX + 4, bot.frame.minX, accuracy: 0.1,
+        "Contact must not lag and let bodies overlap")
+      XCTAssertEqual(visibleAwake.maxX + 6, visible.minX, accuracy: 0.1)
+    }
+    header.updateDragging(to: CGPoint(x: oldBot.midX - 10, y: 16))
+    XCTAssertEqual(header.headerOrder, originalOrder, "A stationary pointer must not oscillate the order")
+    header.finishDragging()
+    try await Task.sleep(for: .milliseconds(430))
+    XCTAssertEqual(store.frame, oldStore)
+    XCTAssertEqual(awake.frame, oldAwake)
+    XCTAssertEqual(bot.frame, oldBot)
+  }
+
   func testHeaderDragReordersAcrossSidesAndCommitsOnlyOnDrop() async throws {
     let bot = NSView(), store = NSView()
     let header = IslandStatusHeader(quota: NSView(), bot: bot, additionalQuotas: NSView(),
