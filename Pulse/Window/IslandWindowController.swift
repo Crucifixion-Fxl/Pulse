@@ -145,6 +145,15 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         }
       }.store(in: &cancellables)
 
+    model.$extensionPreferences.map(\.statusItems).removeDuplicates()
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] items in
+        guard let self else { return }
+        for window in self.windows.values {
+          window.transition.statusHeader?.setEnabledItems(items)
+        }
+      }.store(in: &cancellables)
+
     model.weatherStore.objectWillChange
       .receive(on: DispatchQueue.main)
       .sink { [weak self] in
@@ -239,6 +248,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         barHeight: DisplayGeometryCalculator.statusHeaderHeight(for: DisplaySupport.metrics(for: screen)))
       let transition = IslandTransitionView(content: hostingView, statusHeader: header)
       header.setStoreAvailable(model.canUseActiveList)
+      header.setEnabledItems(model.extensionPreferences.statusItems, animated: false)
       panel.contentView = transition
       let initiallyVisible = model.islandState != .collapsed || model.isCollapsedIslandVisible
       panel.alphaValue = initiallyVisible ? 1 : 0

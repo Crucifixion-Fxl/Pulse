@@ -319,22 +319,33 @@ struct IslandRootView: View {
       .overlay(alignment: .top) {
         if !usesCompositorTransitions, effectiveState != .collapsed, model.canUseActiveList {
           HStack(spacing: 0) {
-            IslandStatusItemView(item: .quota, displayID: displayID).frame(width: 60)
-            IslandStatusItemView(item: .additionalQuotas, displayID: displayID)
-              .frame(width: 170).padding(.leading, 12)
+            if model.extensionPreferences.statusItems.contains("quota") {
+              IslandStatusItemView(item: .quota, displayID: displayID).frame(width: 60)
+            }
+            if model.extensionPreferences.statusItems.contains("additionalQuotas") {
+              IslandStatusItemView(item: .additionalQuotas, displayID: displayID)
+                .frame(width: 170)
+                .padding(.leading, model.extensionPreferences.statusItems.contains("quota") ? 12 : 0)
+            }
             Spacer(minLength: 0)
-            IslandStatusItemView(item: .keepAwake, displayID: displayID)
-              .frame(width: model.isKeepAwakeInputExpanded ? 188 : 100)
-              .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 6)
-            IslandStatusItemView(item: .weather, displayID: displayID)
-              .frame(maxWidth: model.isKeepAwakeInputExpanded ? 28 : 108)
-              .fixedSize(horizontal: true, vertical: false)
-              .padding(.trailing, 6)
+            if model.extensionPreferences.statusItems.contains("keepAwake") {
+              IslandStatusItemView(item: .keepAwake, displayID: displayID)
+                .frame(width: model.isKeepAwakeInputExpanded ? 188 : 100)
+                .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 6)
+            }
+            if model.extensionPreferences.statusItems.contains("weather") {
+              IslandStatusItemView(item: .weather, displayID: displayID)
+                .frame(maxWidth: model.isKeepAwakeInputExpanded ? 28 : 108)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.trailing, 6)
+            }
             ExtensionStoreButton(displayID: displayID)
             IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
           }
           .padding(.horizontal, 20)
           .frame(height: expandedContentTopInset - 8)
+          .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.9),
+            value: model.extensionPreferences.statusItems)
         }
       }
       .background(alignment: .top) {

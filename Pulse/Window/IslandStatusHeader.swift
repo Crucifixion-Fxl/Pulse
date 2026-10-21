@@ -18,15 +18,37 @@ final class IslandStatusHeader: NSView {
   private var keepAwakeEditing = false
   private var surfaceSize = CGSize.zero
   private var surfaceState: IslandPresentationState = .collapsed
+  private var enabledItems = Set(ExtensionPreferences.availableStatusItems)
+
+  func setEnabledItems(_ items: [String], animated: Bool = true) {
+    let enabled = Set(items).union(["bot"])
+    guard enabledItems != enabled else { return }
+    enabledItems = enabled
+    relayout(animated: animated)
+  }
+
+  private func relayout(animated: Bool) {
+    guard surfaceSize != .zero else { return }
+    let spring = CASpringAnimation()
+    spring.mass = 1
+    spring.stiffness = 380
+    spring.damping = 34
+    spring.duration = 0.38
+    move(to: surfaceSize, state: surfaceState,
+      spring: animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? spring : nil,
+      fromPresentation: true)
+  }
 
   func setStoreAvailable(_ available: Bool) {
     guard isStoreAvailable != available else { return }
     isStoreAvailable = available
     store?.isHidden = !isExpanded || !available
+    relayout(animated: false)
   }
 
   func refreshWeatherLayout() {
-    guard surfaceSize != .zero, weather?.frame.width != weatherWidth else { return }
+    guard enabledItems.contains("weather"), surfaceSize != .zero,
+      weather?.frame.width != weatherWidth else { return }
     move(to: surfaceSize, state: surfaceState, spring: nil)
   }
 
@@ -38,13 +60,7 @@ final class IslandStatusHeader: NSView {
   func setKeepAwakeEditing(_ editing: Bool) {
     guard keepAwakeEditing != editing else { return }
     keepAwakeEditing = editing
-    let spring = CASpringAnimation()
-    spring.mass = 1
-    spring.stiffness = 380
-    spring.damping = 34
-    spring.duration = 0.38
-    move(to: surfaceSize, state: surfaceState,
-      spring: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : spring)
+    relayout(animated: true)
   }
   var barHeight: CGFloat
 
@@ -86,11 +102,16 @@ final class IslandStatusHeader: NSView {
     }
   }
 
-  func move(to size: CGSize, state: IslandPresentationState, spring: CASpringAnimation?) {
+  func move(to size: CGSize, state: IslandPresentationState, spring: CASpringAnimation?,
+            fromPresentation: Bool = false) {
     surfaceSize = size
     surfaceState = state
     isExpanded = state != .collapsed
     store?.isHidden = !isExpanded || !isStoreAvailable
+    quota.isHidden = !enabledItems.contains("quota")
+    additionalQuotas?.isHidden = !enabledItems.contains("additionalQuotas")
+    weather?.isHidden = !enabledItems.contains("weather")
+    keepAwake?.isHidden = !enabledItems.contains("keepAwake")
     let inset: CGFloat = state == .collapsed ? 12 : 20
     let left = (bounds.width - size.width) / 2
     let faceSize = min(26, max(18, barHeight - 6)).rounded()
@@ -100,14 +121,16 @@ final class IslandStatusHeader: NSView {
       CGRect(x: botX, y: 0, width: 32, height: barHeight)
     ]
     if additionalQuotas != nil {
-      frames.append(CGRect(x: left + inset + 72, y: 0, width: 170, height: barHeight))
+      frames.append(CGRect(x: left + inset + (quota.isHidden ? 0 : 72), y: 0,
+        width: 170, height: barHeight))
     }
-    let storeWidth: CGFloat = store == nil || !isExpanded ? 0 : 28
+    let storeWidth: CGFloat = store == nil || !isExpanded || !isStoreAvailable ? 0 : 28
     // Use the text's ideal width so a short city name does not leave a
     // blank tail between the weather and the store.
-    let weatherX = botX - storeWidth - 6 - weatherWidth
+    let visibleWeatherWidth: CGFloat = weather == nil || !enabledItems.contains("weather") ? 0 : weatherWidth
+    let weatherX = botX - storeWidth - (visibleWeatherWidth > 0 ? 6 + visibleWeatherWidth : 0)
     if weather != nil {
-      frames.append(CGRect(x: weatherX, y: 0, width: weatherWidth, height: barHeight))
+      frames.append(CGRect(x: weatherX, y: 0, width: visibleWeatherWidth, height: barHeight))
     }
     if keepAwake != nil {
       frames.append(CGRect(x: weatherX - (keepAwakeEditing ? 8 + 188 : 6 + 100), y: 0,
@@ -117,7 +140,10 @@ final class IslandStatusHeader: NSView {
       frames.append(CGRect(x: botX - 28, y: 0, width: 24, height: barHeight))
     }
     for (item, destination) in zip(items, frames) {
-      let start = item.layer?.position ?? .zero
+      // Surface transitions have already rebased model positions into a new
+      // window envelope in prepare(). Only in-place relayouts sample presentation.
+      let start = (fromPresentation ? item.layer?.presentation()?.position : nil)
+        ?? item.layer?.position ?? .zero
       item.frame = destination
       guard let layer = item.layer else { continue }
       layer.removeAnimation(forKey: "headerPosition")

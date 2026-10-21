@@ -23,6 +23,57 @@ final class IslandTransitionTests: XCTestCase {
     return (window, transition, content)
   }
 
+  func testDisabledHeaderItemsReleaseSpaceAndAnimateRightward() async throws {
+    let weather = NSView(), awake = NSView(), store = NSView(), extras = NSView()
+    let header = IslandStatusHeader(quota: NSView(), bot: NSView(), additionalQuotas: extras,
+      weather: weather, keepAwake: awake, store: store, barHeight: 32)
+    let (window, transition, _) = fixture(header: header)
+    defer { window.close() }
+    transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: false)
+    try await Task.sleep(for: .milliseconds(40))
+    let initial = awake.frame.minX
+    let releasedWidth = weather.frame.width + 6
+    header.setEnabledItems(["quota", "additionalQuotas", "bot", "keepAwake"])
+    XCTAssertTrue(weather.isHidden)
+    XCTAssertEqual(awake.frame.minX, initial + releasedWidth, accuracy: 0.5)
+    XCTAssertEqual(store.frame.minX - awake.frame.maxX, 6, accuracy: 0.5)
+    var positions: [CGFloat] = []
+    for _ in 0..<24 {
+      try await Task.sleep(for: .milliseconds(16))
+      positions.append(awake.layer?.presentation()?.frame.minX ?? awake.frame.minX)
+    }
+    XCTAssertTrue(positions.contains { $0 > initial + 1 && $0 < awake.frame.minX - 1 },
+      "The eye must visibly move through intermediate positions toward the store")
+    XCTAssertEqual(try XCTUnwrap(positions.last), awake.frame.minX, accuracy: 0.5)
+    // Immediate layout is also the reduced-motion path.
+    header.setEnabledItems(["additionalQuotas", "bot"], animated: false)
+    XCTAssertTrue(header.quota.isHidden)
+    XCTAssertTrue(awake.isHidden)
+    XCTAssertEqual(extras.frame.minX, header.quota.frame.minX, accuracy: 0.5)
+    XCTAssertNil(awake.layer?.animation(forKey: "headerPosition"))
+    header.setEnabledItems(ExtensionPreferences.availableStatusItems, animated: false)
+    XCTAssertFalse(weather.isHidden)
+    XCTAssertFalse(awake.isHidden)
+    XCTAssertEqual(awake.frame.minX, initial, accuracy: 0.5)
+  }
+
+  func testHeaderRelayoutReversalStartsAtVisiblePosition() async throws {
+    let awake = NSView()
+    let header = IslandStatusHeader(quota: NSView(), bot: NSView(), weather: NSView(),
+      keepAwake: awake, store: NSView(), barHeight: 32)
+    let (window, transition, _) = fixture(header: header)
+    defer { window.close() }
+    transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: false)
+    try await Task.sleep(for: .milliseconds(40))
+    header.setEnabledItems(["bot", "keepAwake"])
+    try await Task.sleep(for: .milliseconds(80))
+    let visible = try XCTUnwrap(awake.layer?.presentation()?.position)
+    header.setEnabledItems(ExtensionPreferences.availableStatusItems)
+    let animation = try XCTUnwrap(awake.layer?.animation(forKey: "headerPosition") as? CASpringAnimation)
+    let origin = try XCTUnwrap(animation.fromValue as? NSValue).pointValue
+    XCTAssertEqual(origin.x, visible.x, accuracy: 1)
+  }
+
   func testStatusItemsStayLiveAndTravelWithTheOpeningSilhouette() async throws {
     let quota = NSView()
     let bot = NSView()
