@@ -241,8 +241,18 @@ final class ExtensionStoreTests: XCTestCase {
       }
       XCTAssertGreaterThan(try pixel().redComponent, 0.9)
       host.rootView = content(true)
-      try await Task.sleep(for: .milliseconds(80))
-      let middle = try pixel()
+      // CI can defer the first SwiftUI frame beyond 80 ms. Observe an actual
+      // transition frame instead of assuming wall time equals animation time.
+      host.layoutSubtreeIfNeeded()
+      let deadline = CACurrentMediaTime() + 1
+      var middle = try pixel()
+      while CACurrentMediaTime() < deadline {
+        let reachedFrame = reduced ? middle.blueComponent > 0.9
+          : middle.redComponent > 0.1 && middle.blueComponent > 0.1
+        if reachedFrame { break }
+        try await Task.sleep(for: .milliseconds(8))
+        middle = try pixel()
+      }
       if reduced {
         XCTAssertGreaterThan(middle.blueComponent, 0.9)
         XCTAssertLessThan(middle.redComponent, 0.1)
