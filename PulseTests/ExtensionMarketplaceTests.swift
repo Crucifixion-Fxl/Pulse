@@ -25,29 +25,6 @@ final class ExtensionMarketplaceTests: XCTestCase {
     XCTAssertTrue(browser.results(preferences: preferences, voiceInstalled: true).map(\.id).contains("pulse.xiaozhi"))
   }
 
-  func testEveryExtensionIsReachableAndFiltersResetPagination() {
-    let browser = ExtensionStoreBrowser()
-    let results = browser.results(preferences: ExtensionPreferences(), voiceInstalled: true)
-    var ids: [String] = []
-    for page in 0..<browser.pageCount(for: results) {
-      browser.page = page
-      let visible = browser.visibleEntries(in: results)
-      XCTAssertLessThanOrEqual(visible.count, 5)
-      ids += visible.map(\.id)
-    }
-    XCTAssertEqual(ids, ExtensionCatalog.entries.map(\.id))
-    XCTAssertEqual(Set(ids).count, ids.count)
-    browser.query = "not-a-real-plugin"
-    XCTAssertEqual(browser.page, 0)
-    XCTAssertTrue(browser.results(preferences: ExtensionPreferences(), voiceInstalled: true).isEmpty)
-    browser.page = 90
-    XCTAssertEqual(browser.currentPage(for: []), 0)
-    browser.category = .voice
-    XCTAssertEqual(browser.page, 0)
-    browser.resetFilters()
-    XCTAssertEqual(browser.results(preferences: ExtensionPreferences(), voiceInstalled: true).count, ids.count)
-  }
-
   func testDetailSelectionFollowsVisibleCatalog() throws {
     let browser = ExtensionStoreBrowser()
     var preferences = ExtensionPreferences()
@@ -56,8 +33,6 @@ final class ExtensionMarketplaceTests: XCTestCase {
     let weather = try XCTUnwrap(all.first { $0.slug == "weather" })
     browser.show(weather)
     XCTAssertEqual(browser.selection(in: all), weather)
-    browser.page = 1
-    XCTAssertEqual(browser.selection(in: all), browser.visibleEntries(in: all).first)
     browser.query = "weather"
     XCTAssertEqual(browser.selection(in: browser.results(preferences: preferences, voiceInstalled: true)), weather)
     browser.scope = .enabled
@@ -131,13 +106,26 @@ final class ExtensionMarketplaceTests: XCTestCase {
       try png.write(to: URL(fileURLWithPath: "/tmp/pulse-market-\(name).png"))
     }
     try capture("browse")
-    browser.page = browser.currentPage(for: browser.results(preferences: model.extensionPreferences, voiceInstalled: true)) + 1
+    func findScrollView(_ view: NSView) -> NSScrollView? {
+      if let scroll = view as? NSScrollView { return scroll }
+      return view.subviews.lazy.compactMap { findScrollView($0) }.first
+    }
+    let scroll = try XCTUnwrap(findScrollView(host))
+    let document = try XCTUnwrap(scroll.documentView)
+    XCTAssertGreaterThan(document.bounds.height, scroll.contentView.bounds.height * 2,
+      "All extensions must be available in one continuous list")
+    scroll.contentView.scroll(to: CGPoint(x: 0,
+      y: document.bounds.height - scroll.contentView.bounds.height))
+    scroll.reflectScrolledClipView(scroll.contentView)
     try await Task.sleep(for: .milliseconds(80))
-    XCTAssertEqual(browser.page, 1)
+    XCTAssertGreaterThan(scroll.contentView.bounds.minY, 0)
+    browser.show(try XCTUnwrap(ExtensionCatalog.entries.last))
+    try await Task.sleep(for: .milliseconds(80))
+    try capture("scrolled-bottom")
     browser.query = "weather"
     try await Task.sleep(for: .milliseconds(100))
     XCTAssertEqual(browser.query, "weather")
-    XCTAssertEqual(browser.page, 0)
+    XCTAssertEqual(scroll.contentView.bounds.minY, 0, accuracy: 1)
     try capture("search")
     let weather = try XCTUnwrap(ExtensionCatalog.entries.first { $0.id == "pulse.weather" })
     browser.show(weather)
@@ -147,7 +135,7 @@ final class ExtensionMarketplaceTests: XCTestCase {
     weather.apply(to: &model.extensionPreferences)
     try await Task.sleep(for: .milliseconds(80))
     XCTAssertFalse(model.extensionPreferences.statusItems.contains("weather"))
-    browser.back()
+    browser.selectedID = nil
     try await Task.sleep(for: .milliseconds(80))
     XCTAssertEqual(browser.query, "weather", "Back must preserve the search context")
     browser.scope = .enabled
@@ -162,12 +150,6 @@ final class ExtensionMarketplaceTests: XCTestCase {
     try XCTUnwrap(ExtensionCatalog.entries.first { $0.id == "pulse.cat" }).apply(to: &model.extensionPreferences)
     try await Task.sleep(for: .milliseconds(80))
     XCTAssertEqual(model.extensionPreferences.bot, .cat)
-    browser.showsDeveloper = true
-    try await Task.sleep(for: .milliseconds(80))
-    XCTAssertTrue(browser.showsDeveloper)
-    try capture("developer")
-    browser.back()
-    try await Task.sleep(for: .milliseconds(80))
     XCTAssertEqual(browser.category, .appearance)
   }
 }

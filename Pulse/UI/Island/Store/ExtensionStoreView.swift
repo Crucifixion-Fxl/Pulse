@@ -83,8 +83,7 @@ struct ExtensionStoreView: View {
         .accessibilityIdentifier("market-catalog-sidebar")
       Rectangle().fill(.white.opacity(0.09)).frame(width: 1)
       Group {
-        if browser.showsDeveloper { developerContent }
-        else if let selected { detail(selected) }
+        if let selected { detail(selected) }
         else { emptyContent }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -128,7 +127,7 @@ struct ExtensionStoreView: View {
             .strokeBorder(searchFocused ? accent.opacity(0.8) : .white.opacity(0.08), lineWidth: 1))
         HStack(spacing: 12) {
           ForEach(ExtensionStoreBrowser.Scope.allCases, id: \.self) { scope in
-            Button { browser.scope = scope; browser.showsDeveloper = false } label: {
+            Button { browser.scope = scope } label: {
               Text(LocalizedStringKey(scope.titleKey))
                 .font(.system(size: 11, weight: browser.scope == scope ? .semibold : .regular))
                 .frame(height: 32)
@@ -148,36 +147,25 @@ struct ExtensionStoreView: View {
 
       HStack(alignment: .top, spacing: 4) {
         categorySidebar
-        VStack(spacing: 2) {
-          ForEach(browser.visibleEntries(in: results)) { entry in catalogRow(entry) }
-          if results.isEmpty {
-            Text("market.empty").font(.system(size: 11)).foregroundStyle(.secondary)
-              .padding(.top, 24).frame(maxWidth: .infinity)
+        ScrollViewReader { proxy in
+          ScrollView(.vertical) {
+            VStack(spacing: 2) {
+              Color.clear.frame(height: 0).id("catalog-top")
+              ForEach(results) { entry in catalogRow(entry) }
+              if results.isEmpty {
+                Text("market.empty").font(.system(size: 11)).foregroundStyle(.secondary)
+                  .padding(.top, 24).frame(maxWidth: .infinity)
+              }
+            }.frame(maxWidth: .infinity)
           }
-          Spacer(minLength: 0)
+          .scrollIndicators(.hidden)
+          .accessibilityIdentifier("market-results-scroll")
+          .onChange(of: browser.query) { _, _ in proxy.scrollTo("catalog-top", anchor: .top) }
+          .onChange(of: browser.category) { _, _ in proxy.scrollTo("catalog-top", anchor: .top) }
+          .onChange(of: browser.scope) { _, _ in proxy.scrollTo("catalog-top", anchor: .top) }
         }.frame(maxWidth: .infinity)
-      }.padding(.horizontal, 6).padding(.top, 6)
+      }.padding(.horizontal, 6).padding(.top, 6).padding(.bottom, 8)
 
-
-      HStack(spacing: 5) {
-        Button { searchFocused = false; browser.showsDeveloper.toggle() } label: {
-          Image(systemName: "chevron.left.forwardslash.chevron.right")
-            .font(.system(size: 12)).frame(width: 28, height: 28)
-        }.foregroundStyle(browser.showsDeveloper ? accent : .white.opacity(0.45))
-          .help(Text("market.developer")).accessibilityLabel(Text("market.developer"))
-          .accessibilityIdentifier("market-developer")
-        Spacer()
-        Button { browser.page = browser.currentPage(for: results) - 1 } label: {
-          Image(systemName: "chevron.left").frame(width: 24, height: 28)
-        }.disabled(browser.currentPage(for: results) == 0)
-          .accessibilityLabel(Text("market.previous")).accessibilityIdentifier("market-previous")
-        Text("\(browser.currentPage(for: results) + 1) / \(browser.pageCount(for: results))")
-          .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-        Button { browser.page = browser.currentPage(for: results) + 1 } label: {
-          Image(systemName: "chevron.right").frame(width: 24, height: 28)
-        }.disabled(browser.currentPage(for: results) + 1 >= browser.pageCount(for: results))
-          .accessibilityLabel(Text("market.next")).accessibilityIdentifier("market-next")
-      }.buttonStyle(.plain).padding(.horizontal, 10).padding(.bottom, 8)
     }
   }
 
@@ -186,7 +174,6 @@ struct ExtensionStoreView: View {
       ForEach(ExtensionCategory.allCases) { category in
         Button {
           browser.category = category
-          browser.showsDeveloper = false
           searchFocused = false
         } label: {
           Image(systemName: category.symbol)
@@ -210,7 +197,7 @@ struct ExtensionStoreView: View {
   }
 
   private func catalogRow(_ entry: PulseExtension) -> some View {
-    let isSelected = selected?.id == entry.id && !browser.showsDeveloper
+    let isSelected = selected?.id == entry.id
     let active = entry.isEnabled(in: model.extensionPreferences) && (entry.category != .voice || voiceInstalled)
     return Button { searchFocused = false; browser.show(entry) } label: {
       HStack(spacing: 10) {
@@ -361,20 +348,4 @@ struct ExtensionStoreView: View {
     }
   }
 
-  private var developerContent: some View {
-    VStack(alignment: .leading, spacing: 18) {
-      Image(systemName: "chevron.left.forwardslash.chevron.right")
-        .font(.system(size: 26, weight: .light)).foregroundStyle(accent)
-      Text("market.developer.title").font(.system(size: 21, weight: .semibold))
-      Text("market.developer.subtitle").font(.system(size: 12)).foregroundStyle(.secondary)
-      Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
-      Text("market.developer.status").font(.system(size: 12)).foregroundStyle(.white.opacity(0.65))
-        .lineSpacing(5).fixedSize(horizontal: false, vertical: true)
-      Link(destination: projectURL.appendingPathComponent("blob/main/docs/EXTENSION-DEVELOPMENT.md")) {
-        Label("market.developer.guide", systemImage: "arrow.up.right")
-      }.font(.system(size: 12, weight: .medium)).foregroundStyle(accent)
-      Spacer()
-      Text("market.developer.pending").font(.system(size: 10)).foregroundStyle(.secondary)
-    }.accessibilityIdentifier("market-developer-page")
-  }
 }

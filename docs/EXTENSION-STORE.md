@@ -7,18 +7,17 @@ selected. Clicking the same icon again (or Escape) restores the previous
 panel. If that panel was disabled, the first enabled panel opens instead.
 Weather uses its natural text width, with 6pt gaps to Keep Awake and the store.
 The store crossfades while the panel expands to its measured content height,
-without an internal scroll area. The underlying panel stays mounted.
+with a continuously scrolling extension list. The underlying panel stays mounted.
 Reduce Motion switches the content immediately;
 hidden panels do not receive pointer or accessibility input.
 The store is hidden and cannot be opened from the reminder authorization screen.
 
 While the store is open, the feature sidebar is replaced by a persistent Catalog
 sidebar with search, a category icon rail to the left of the results,
-Discover / Enabled views and five-row
-pagination. Selecting a row updates the detail pane on the right. Filtering and
-paging select the first visible result if the previous selection is no longer
-visible. Empty results clear the detail pane and offer a filter reset.
-The developer entry opens contribution information in the same right pane. The current
+Discover / Enabled views. Selecting a row updates the detail pane on the right. Filtering selects the first matching result if the previous selection no longer
+matches, and resets list scroll position. Empty results clear the detail pane and offer a filter reset.
+The category rail stays fixed while the list scrolls. There are no page controls,
+scrollbar indicators or developer icon. The current
 entries are bundled capabilities, not downloadable community plugins. Search
 and navigation preserve the existing configuration behavior. See the
 [UI research](EXTENSION-MARKETPLACE-RESEARCH.md) and

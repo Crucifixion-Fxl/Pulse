@@ -19,18 +19,19 @@ No third-party assets or implementations are copied into the application.
 - Opening the store replaces the feature sidebar with Catalog. The live status
   header stays in place, with the existing filled/outline store toggle.
 - The 252-point sidebar contains search, Discover / Enabled, a vertical category icon rail,
-  five compact extension rows and page navigation. It never scrolls internally.
+  a continuous extension list. The category rail stays fixed; the list scrolls
+  without scrollbar indicators or pagination controls.
 - The right pane immediately shows the selected extension. Selecting another
   row updates only that pane; there is no back-and-forth page navigation.
-- Query, category and scope changes reset pagination. Selection falls back to
-  the first visible result when necessary; empty results show a reset action.
+- Query, category and scope changes reset the list scroll position. Selection falls back to
+  the first matching result when necessary; empty results show a reset action.
 - The detail header includes the extension icon, name, publisher, bundled
   provenance, summary and explicit Enable / Disable action. Required entries
   retain configuration guards. A missing voice runtime links to setup.
 - Overview, category, identifier, update policy and source link have separate
   typographic hierarchy without nested cards or a metadata sidebar.
-- Developer information uses the same detail pane and links to the real
-  contribution guide. It explicitly states community publishing is unavailable.
+- The bottom developer shortcut is removed. Contribution documentation remains
+  in the repository; no publishing flow is exposed.
 - All routes share a stable 420-point content height and preserve the existing
   crossfade and Reduce Motion behavior. Hidden content cannot change the
   authorization page geometry or receive pointer/accessibility input.
@@ -41,8 +42,8 @@ Only existing bundled capabilities are listed. No registry, external plugin
 loader, publisher accounts, fabricated ratings/downloads or publication flow
 is implied. Metadata and configuration remain separate from presentation.
 
-Tests cover search, categories, enabled-state filtering, paging, visible detail
+Tests cover search, categories, enabled-state filtering, continuous scrolling, filtered detail
 selection, configuration persistence and guards, localization, and rendered
-browse/search/detail/empty/appearance/developer states. Controller tests cover
+browse/search/detail/empty/appearance and scrolled-to-bottom states. Controller tests cover
 store switching, layout, header stability and authorization isolation. These
 state-driven native view tests do not constitute installed-app click-through.

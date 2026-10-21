@@ -112,13 +112,10 @@ final class ExtensionStoreBrowser: ObservableObject {
     case discover, enabled
     var titleKey: String { "market.scope.\(rawValue)" }
   }
-  @Published var query = "" { didSet { page = 0 } }
-  @Published var category: ExtensionCategory = .all { didSet { page = 0 } }
-  @Published var scope: Scope = .discover { didSet { page = 0 } }
-  @Published var page = 0
+  @Published var query = ""
+  @Published var category: ExtensionCategory = .all
+  @Published var scope: Scope = .discover
   @Published var selectedID: String?
-  @Published var showsDeveloper = false
-  static let pageSize = 5
 
   func results(preferences: ExtensionPreferences, voiceInstalled: Bool) -> [PulseExtension] {
     ExtensionCatalog.entries.filter {
@@ -128,26 +125,11 @@ final class ExtensionStoreBrowser: ObservableObject {
     }
   }
 
-  func pageCount(for results: [PulseExtension]) -> Int {
-    max(1, (results.count + Self.pageSize - 1) / Self.pageSize)
-  }
-
-  func currentPage(for results: [PulseExtension]) -> Int {
-    min(max(0, page), pageCount(for: results) - 1)
-  }
-
-  func visibleEntries(in results: [PulseExtension]) -> [PulseExtension] {
-    Array(results.dropFirst(currentPage(for: results) * Self.pageSize).prefix(Self.pageSize))
-  }
-
-  /// Keep detail and selection within the visible page after filtering, paging,
-  /// or disabling an entry from the Enabled view.
+  /// Selection follows the filtered catalog, independent of scroll position.
   func selection(in results: [PulseExtension]) -> PulseExtension? {
-    let visible = visibleEntries(in: results)
-    return visible.first { $0.id == selectedID } ?? visible.first
+    results.first { $0.id == selectedID } ?? results.first
   }
 
-  func resetFilters() { query = ""; category = .all; scope = .discover; page = 0 }
-  func show(_ entry: PulseExtension) { selectedID = entry.id; showsDeveloper = false }
-  func back() { selectedID = nil; showsDeveloper = false }
+  func resetFilters() { query = ""; category = .all; scope = .discover }
+  func show(_ entry: PulseExtension) { selectedID = entry.id }
 }
