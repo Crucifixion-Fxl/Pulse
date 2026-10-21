@@ -141,30 +141,23 @@ struct ExtensionStoreView: View {
               .accessibilityIdentifier("market-scope-\(scope.rawValue)")
           }
           Spacer(minLength: 0)
-          Menu {
-            Picker("market.category", selection: $browser.category) {
-              ForEach(ExtensionCategory.allCases) { category in
-                Text(LocalizedStringKey(category.titleKey)).tag(category)
-              }
-            }
-          } label: {
-            Image(systemName: browser.category == .all ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
-              .foregroundStyle(browser.category == .all ? .white.opacity(0.5) : accent)
-          }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .help(Text("market.category")).accessibilityLabel(Text("market.category"))
-            .accessibilityIdentifier("market-category")
+
         }
       }.padding(.horizontal, 12).padding(.top, 14)
       .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1) }
 
-      VStack(spacing: 2) {
-        ForEach(browser.visibleEntries(in: results)) { entry in catalogRow(entry) }
-        if results.isEmpty {
-          Text("market.empty").font(.system(size: 11)).foregroundStyle(.secondary)
-            .padding(.top, 24).frame(maxWidth: .infinity)
-        }
-        Spacer(minLength: 0)
+      HStack(alignment: .top, spacing: 4) {
+        categorySidebar
+        VStack(spacing: 2) {
+          ForEach(browser.visibleEntries(in: results)) { entry in catalogRow(entry) }
+          if results.isEmpty {
+            Text("market.empty").font(.system(size: 11)).foregroundStyle(.secondary)
+              .padding(.top, 24).frame(maxWidth: .infinity)
+          }
+          Spacer(minLength: 0)
+        }.frame(maxWidth: .infinity)
       }.padding(.horizontal, 6).padding(.top, 6)
+
 
       HStack(spacing: 5) {
         Button { searchFocused = false; browser.showsDeveloper.toggle() } label: {
@@ -186,6 +179,34 @@ struct ExtensionStoreView: View {
           .accessibilityLabel(Text("market.next")).accessibilityIdentifier("market-next")
       }.buttonStyle(.plain).padding(.horizontal, 10).padding(.bottom, 8)
     }
+  }
+
+  private var categorySidebar: some View {
+    VStack(spacing: 4) {
+      ForEach(ExtensionCategory.allCases) { category in
+        Button {
+          browser.category = category
+          browser.showsDeveloper = false
+          searchFocused = false
+        } label: {
+          Image(systemName: category.symbol)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(browser.category == category ? accent : .white.opacity(0.45))
+            .frame(width: 28, height: 32)
+            .background(browser.category == category ? accent.opacity(0.13) : .clear,
+              in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain)
+          .help(Text(LocalizedStringKey(category.titleKey)))
+          .accessibilityLabel(Text(LocalizedStringKey(category.titleKey)))
+          .accessibilityAddTraits(browser.category == category ? .isSelected : [])
+          .accessibilityIdentifier("market-category-\(category.rawValue)")
+      }
+      Spacer(minLength: 0)
+    }.frame(width: 28)
+      .accessibilityElement(children: .contain)
+      .accessibilityLabel(Text("market.category"))
+      .accessibilityIdentifier("market-category-sidebar")
   }
 
   private func catalogRow(_ entry: PulseExtension) -> some View {

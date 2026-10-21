@@ -13,7 +13,8 @@ hidden panels do not receive pointer or accessibility input.
 The store is hidden and cannot be opened from the reminder authorization screen.
 
 While the store is open, the feature sidebar is replaced by a persistent Catalog
-sidebar with search, category filtering, Discover / Enabled views and five-row
+sidebar with search, a category icon rail to the left of the results,
+Discover / Enabled views and five-row
 pagination. Selecting a row updates the detail pane on the right. Filtering and
 paging select the first visible result if the previous selection is no longer
 visible. Empty results clear the detail pane and offer a filter reset.

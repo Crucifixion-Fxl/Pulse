@@ -18,7 +18,7 @@ No third-party assets or implementations are copied into the application.
 
 - Opening the store replaces the feature sidebar with Catalog. The live status
   header stays in place, with the existing filled/outline store toggle.
-- The 252-point sidebar contains search, Discover / Enabled, a category menu,
+- The 252-point sidebar contains search, Discover / Enabled, a vertical category icon rail,
   five compact extension rows and page navigation. It never scrolls internally.
 - The right pane immediately shows the selected extension. Selecting another
   row updates only that pane; there is no back-and-forth page navigation.

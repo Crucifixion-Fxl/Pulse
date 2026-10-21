@@ -5,6 +5,15 @@ enum ExtensionCategory: String, CaseIterable, Identifiable {
   case all, productivity, status, appearance, voice
   var id: String { rawValue }
   var titleKey: String { "market.category.\(rawValue)" }
+  var symbol: String {
+    switch self {
+    case .all: "square.grid.2x2"
+    case .productivity: "checklist"
+    case .status: "chart.bar.xaxis"
+    case .appearance: "paintpalette"
+    case .voice: "waveform"
+    }
+  }
 }
 
 enum ExtensionCapability: Equatable {
