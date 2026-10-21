@@ -13,7 +13,6 @@ struct CollapsedQuotaChipView: View {
   private var vendorLabel: String { label ?? subscription.vendor.chipLabel }
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var appeared = false
 
   private static let ringSize: CGFloat = 20
   private static let ringLineWidth: CGFloat = 2.5
@@ -44,7 +43,7 @@ struct CollapsedQuotaChipView: View {
         Circle()
           .trim(
             from: 0,
-            to: appeared || reduceMotion ? 1 - subscription.quota.fraction : 0
+            to: 1 - subscription.quota.fraction
           )
           .stroke(tint, style: StrokeStyle(lineWidth: Self.ringLineWidth, lineCap: .round))
           .rotationEffect(.degrees(-90))
@@ -75,10 +74,7 @@ struct CollapsedQuotaChipView: View {
         }
       }
     }
-    .onAppear {
-      guard !reduceMotion else { return }
-      withAnimation(.smooth(duration: 0.35)) { appeared = true }
-    }
+    .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: subscription.quota.fraction)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(
       Text(

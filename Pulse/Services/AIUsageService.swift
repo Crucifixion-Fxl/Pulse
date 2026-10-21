@@ -6,6 +6,12 @@ import os
 /// as additional conformers without touching AppModel or the panel view.
 protocol AIUsageProvider: Sendable {
   func fetchUsage() async throws -> AIUsageSnapshot
+  /// Small local snapshot for the first frame; never performs network or log scans.
+  func cachedUsage() -> AIUsageSnapshot?
+}
+
+extension AIUsageProvider {
+  func cachedUsage() -> AIUsageSnapshot? { nil }
 }
 
 /// Fabricates a deterministic snapshot so the panel has something beautiful
@@ -25,6 +31,12 @@ struct SampleAIUsageProvider: AIUsageProvider {
 struct DefaultAIUsageProvider: AIUsageProvider {
   var codex: AIUsageProvider = CodexAIUsageProvider()
   var fallback: AIUsageProvider = SampleAIUsageProvider()
+
+  func cachedUsage() -> AIUsageSnapshot? {
+    guard var cached = codex.cachedUsage() else { return nil }
+    cached.subscriptions += AIUsageSample.makeSnapshot(now: Date()).subscriptions.filter { $0.vendor != .openAI }
+    return cached
+  }
 
   func fetchUsage() async throws -> AIUsageSnapshot {
     let real: AIUsageSnapshot?

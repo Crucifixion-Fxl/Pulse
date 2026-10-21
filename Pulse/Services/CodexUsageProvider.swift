@@ -344,8 +344,23 @@ actor CodexAIUsageProvider: AIUsageProvider {
     self.loadWindows = loadWindows
   }
 
-  private var cacheURL: URL {
+  private nonisolated var cacheURL: URL {
     homeDirectory.appendingPathComponent("Library/Caches/Pulse/codex-quota.json")
+  }
+
+  nonisolated func cachedUsage() -> AIUsageSnapshot? {
+    guard let auth = try? Data(contentsOf: homeDirectory.appendingPathComponent(".codex/auth.json")),
+      let credentials = try? JSONDecoder().decode(CodexOAuthUsage.Credentials.self, from: auth),
+      let accountID = credentials.tokens?.account_id, !accountID.isEmpty,
+      let data = try? Data(contentsOf: cacheURL),
+      let cache = try? JSONDecoder().decode(Cache.self, from: data),
+      cache.accountID == accountID, cache.session != nil || cache.weekly != nil
+    else { return nil }
+    var snapshot = CodexUsageParser.buildSnapshot(sessions: [], liveWindows: (cache.session, cache.weekly))
+    // Daily token history is loaded separately by the full background refresh.
+    snapshot.days = []
+    for index in snapshot.subscriptions.indices { snapshot.subscriptions[index].isStale = true }
+    return snapshot
   }
 
   func fetchUsage() async throws -> AIUsageSnapshot {

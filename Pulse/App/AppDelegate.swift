@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import os
 
 @main
 enum PulseApplication {
@@ -56,6 +57,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
       _ = AgentHookConfigInstaller().installAll(bundle: .main)
     }
 
+    // Render cached quota with the bot on the first frame, then refresh without
+    // waiting for reminder authorization/list loading.
+    Logger(subsystem: "com.fxl.TodoIsland", category: "startup")
+      .notice("quota ready before window=\(self.model.aiUsage != nil, privacy: .public)")
+    model.refreshAIUsage()
     islandController = IslandWindowController(model: model, agentStore: agentStore)
     configureStatusItem()
 
@@ -78,9 +84,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     Task {
       await model.start()
-      // The collapsed bar's Codex quota chip needs data before the first
-      // expansion; the throttle keeps this to one fetch per five minutes.
-      model.refreshAIUsage()
       islandController?.show()
     }
     aiUsageTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in

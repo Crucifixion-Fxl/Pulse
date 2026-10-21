@@ -209,6 +209,7 @@ final class AppModel: ObservableObject {
     self.defaults = defaults
     self.extensionPreferences = ExtensionPreferences.load(from: defaults)
     self.aiUsageProvider = aiUsageProvider
+    self.aiUsage = aiUsageProvider.cachedUsage()
     self.lyricsService = lyricsService
     self.nowPlayingController = nowPlayingController
     // The stay-mode onboarding was removed; a missing choice defaults to

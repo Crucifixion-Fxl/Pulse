@@ -32,6 +32,53 @@ final class CodexUsageTests: XCTestCase {
     XCTAssertFalse(recovered.subscriptions[0].isStale)
   }
 
+  @MainActor
+  func testCachedQuotaIsReadyBeforeFirstRefreshAndThenUpdates() async throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let suite = "QuotaStartup-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer {
+      try? FileManager.default.removeItem(at: home)
+      defaults.removePersistentDomain(forName: suite)
+    }
+    let auth = home.appendingPathComponent(".codex/auth.json")
+    try FileManager.default.createDirectory(at: auth.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(#"{"tokens":{"account_id":"account-a"}}"#.utf8).write(to: auth)
+    let provider = CodexAIUsageProvider(homeDirectory: home, loadWindows: { _ in
+      (nil, CodexRateWindow(usedPercent: 22, windowMinutes: 10080, resetsAt: Date()))
+    })
+    XCTAssertNil(provider.cachedUsage(), "A fresh installation must not invent a cached quota")
+    _ = try await provider.fetchUsage()
+    let restarted = CodexAIUsageProvider(homeDirectory: home, loadWindows: { _ in
+      try await Task.sleep(for: .milliseconds(150))
+      return (nil, CodexRateWindow(usedPercent: 28, windowMinutes: 10080, resetsAt: Date()))
+    })
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults,
+      aiUsageProvider: DefaultAIUsageProvider(codex: restarted))
+    XCTAssertEqual(model.aiUsage?.subscriptions.first?.quota.used, 22,
+      "Cached quota must exist synchronously before creating the island window")
+    XCTAssertEqual(model.aiUsage?.subscriptions.count, 3)
+    XCTAssertTrue(try XCTUnwrap(model.aiUsage).days.isEmpty)
+    model.refreshAIUsage()
+    try await Task.sleep(for: .milliseconds(30))
+    XCTAssertEqual(model.aiUsage?.subscriptions.first?.quota.used, 22,
+      "Pending network requests must not blank the first frame")
+    for _ in 0..<50 {
+      if model.aiUsage?.subscriptions.first?.quota.used == 28 { break }
+      try await Task.sleep(for: .milliseconds(20))
+    }
+    XCTAssertEqual(model.aiUsage?.subscriptions.first?.quota.used, 28,
+      "Startup cache must not prevent the first live refresh")
+    XCTAssertEqual(model.aiUsage?.days.count, 15)
+    try Data(#"{"tokens":{"account_id":"account-b"}}"#.utf8).write(to: auth)
+    XCTAssertNil(restarted.cachedUsage(), "Never show another account's cached number")
+    try FileManager.default.removeItem(at: auth)
+    XCTAssertNil(restarted.cachedUsage(), "Signed-out users must not reuse the account cache")
+    try Data(#"{"tokens":{"account_id":"account-a"}}"#.utf8).write(to: auth)
+    try Data("corrupt".utf8).write(to: home.appendingPathComponent("Library/Caches/Pulse/codex-quota.json"))
+    XCTAssertNil(restarted.cachedUsage())
+  }
+
   private actor QuotaSequence {
     var calls = 0
     func next() throws -> CodexAIUsageProvider.Windows {
