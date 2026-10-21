@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Insomnia's eye / inline pills / countdown vocabulary, sized for the notch's
-/// right wing. Weather contracts to its icon while the three pills are open.
+/// Controls unfold to the left of the eye; neighbouring items keep their size.
 struct KeepAwakeStatusView: View {
   @ObservedObject var store: KeepAwakeStore
   let isActive: Bool
@@ -28,18 +27,6 @@ struct KeepAwakeStatusView: View {
 
   var body: some View {
     HStack(spacing: editing ? 6 : 4) {
-      Button {
-        if store.phase == .idle { setEditing(!editing) }
-        else { showsStatus.toggle() }
-      } label: {
-        AwakeEyeMarkView(isRunning: running || store.phase == .starting,
-          reduceMotion: reduceMotion, size: 25)
-          .frame(width: 26, height: 28).contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel(L10n.text("awake.title"))
-      .accessibilityValue(L10n.text("awake.phase.\(store.phase)"))
-      .help(L10n.text("awake.title"))
       if editing {
         durationPill("awake.days", value: $days, index: 0)
         durationPill("awake.hours", value: $hours, index: 1)
@@ -60,9 +47,21 @@ struct KeepAwakeStatusView: View {
       } else if store.phase == .recoveryRequired {
         Button { showsStatus.toggle() } label: {
           Image(systemName: "exclamationmark.circle")
-            .font(.system(size: 11)).foregroundStyle(.secondary)
+            .font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14)
         }.buttonStyle(.plain).accessibilityLabel(L10n.text("awake.status"))
       }
+      Button {
+        if store.phase == .idle { setEditing(!editing) }
+        else { showsStatus.toggle() }
+      } label: {
+        AwakeEyeMarkView(isRunning: running || store.phase == .starting,
+          reduceMotion: reduceMotion, size: 25)
+          .frame(width: 26, height: 28).contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(L10n.text("awake.title"))
+      .accessibilityValue(L10n.text("awake.phase.\(store.phase)"))
+      .help(L10n.text("awake.title"))
     }
     .foregroundStyle(.white)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
@@ -84,7 +83,7 @@ struct KeepAwakeStatusView: View {
             .font(.system(size: 12))
         }
         if let key = store.messageKey { Text(L10n.text(key)).font(.system(size: 12)) }
-        Text(L10n.text("awake.note")).font(.system(size: 11)).foregroundStyle(.secondary)
+        Text(L10n.text("awake.note")).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14)
       }.padding(16).frame(width: 270).preferredColorScheme(.dark)
     }
     .onExitCommand { setEditing(false) }
@@ -119,9 +118,8 @@ struct KeepAwakeStatusView: View {
       .focused($focused, equals: index)
       .accessibilityLabel(L10n.text(key))
       .onSubmit(start)
-      .scaleEffect(visiblePills || reduceMotion ? 1 : 0.55, anchor: .leading)
       .opacity(visiblePills ? 1 : 0)
-      .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.72).delay(Double(index) * 0.04), value: visiblePills)
+      .animation(reduceMotion ? .easeInOut(duration: 0.15) : .easeOut(duration: 0.12).delay(0.20 + Double(index) * 0.025), value: visiblePills)
   }
 
   private func setEditing(_ value: Bool) {

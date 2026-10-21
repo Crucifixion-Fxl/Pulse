@@ -417,11 +417,11 @@ struct IslandRootView: View {
       IslandStatusItemView(item: .additionalQuotas, displayID: displayID).frame(width: 170).padding(.trailing, 12)
     case "keepAwake":
       IslandStatusItemView(item: .keepAwake, displayID: displayID)
-        .frame(width: model.isKeepAwakeInputExpanded ? 188 : 100)
+        .frame(width: model.keepAwakeStore.phase.headerWidth(editing: model.isKeepAwakeInputExpanded))
         .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 6)
     case "weather":
       IslandStatusItemView(item: .weather, displayID: displayID)
-        .frame(maxWidth: model.isKeepAwakeInputExpanded ? 28 : 108)
+        .frame(maxWidth: 108)
         .fixedSize(horizontal: true, vertical: false).padding(.trailing, 6)
     case "store": ExtensionStoreButton(displayID: displayID).padding(.trailing, 4)
     default: IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32).padding(.trailing, 6)

@@ -23,6 +23,47 @@ final class IslandTransitionTests: XCTestCase {
     return (window, transition, content)
   }
 
+  func testEyeUnfoldsLeftWithoutReservedSpaceOrResizingNeighbours() async throws {
+    let awake = NSView(), store = NSView(), weather = NSView()
+    let header = IslandStatusHeader(quota: NSView(), bot: NSView(), weather: weather,
+      keepAwake: awake, store: store, barHeight: 32)
+    header.setHeaderOrder(["quota", "additionalQuotas", "spacer", "store", "keepAwake", "weather", "bot"])
+    let (window, transition, _) = fixture(header: header)
+    defer { window.close() }
+    transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: false)
+    try await Task.sleep(for: .milliseconds(40))
+    XCTAssertEqual(awake.frame.width, 26)
+    XCTAssertEqual(awake.frame.minX - store.frame.maxX, 4)
+    let eyeRight = awake.frame.maxX
+    let oldStore = store.frame
+    let oldWeather = weather.frame
+    header.setKeepAwakeEditing(true)
+    XCTAssertEqual(awake.frame.width, 186)
+    XCTAssertEqual(weather.frame, oldWeather, "Weather must retain its content and size")
+    XCTAssertEqual(store.frame.width, oldStore.width)
+    XCTAssertLessThan(store.frame.minX, oldStore.minX - 150)
+    var positions: [CGFloat] = []
+    for _ in 0..<26 {
+      try await Task.sleep(for: .milliseconds(16))
+      let visibleStore = store.layer?.presentation()?.frame ?? store.frame
+      let visibleEye = awake.layer?.presentation()?.frame ?? awake.frame
+      positions.append(visibleStore.minX)
+      XCTAssertEqual(visibleStore.width, oldStore.width, accuracy: 0.1)
+      XCTAssertEqual(visibleEye.maxX, eyeRight, accuracy: 2.1, "Eye stays anchored while its controls unfold left")
+    }
+    XCTAssertTrue(positions.contains { $0 < oldStore.minX - 1 && $0 > store.frame.minX + 1 })
+    header.setKeepAwakeEditing(false)
+    try await Task.sleep(for: .milliseconds(430))
+    XCTAssertEqual(awake.frame.width, 26)
+    XCTAssertEqual(store.frame, oldStore)
+    for (phase, width): (KeepAwakePhase, CGFloat) in [(.active, 100), (.stopping, 78),
+      (.starting, 48), (.recoveryRequired, 44), (.idle, 26)] {
+      header.setKeepAwakePhase(phase)
+      XCTAssertEqual(awake.frame.width, width)
+      XCTAssertEqual(weather.frame, oldWeather)
+    }
+  }
+
   func testHeaderDragReordersAcrossSidesAndCommitsOnlyOnDrop() async throws {
     let bot = NSView(), store = NSView()
     let header = IslandStatusHeader(quota: NSView(), bot: bot, additionalQuotas: NSView(),

@@ -16,6 +16,8 @@ final class IslandStatusHeader: NSView {
   private var isExpanded = false
   private var isStoreAvailable = true
   private var keepAwakeEditing = false
+  private var keepAwakePhase: KeepAwakePhase = .idle
+  private var keepAwakeWidth: CGFloat { keepAwakePhase.headerWidth(editing: keepAwakeEditing) }
   private var surfaceSize = CGSize.zero
   private var surfaceState: IslandPresentationState = .collapsed
   private var enabledItems = Set(ExtensionPreferences.availableStatusItems)
@@ -73,7 +75,13 @@ final class IslandStatusHeader: NSView {
 
   private var weatherWidth: CGFloat {
     let idealWidth = weather?.intrinsicContentSize.width ?? 0
-    return keepAwakeEditing ? 28 : (idealWidth > 0 ? min(108, ceil(idealWidth)) : 108)
+    return idealWidth > 0 ? min(108, ceil(idealWidth)) : 108
+  }
+
+  func setKeepAwakePhase(_ phase: KeepAwakePhase) {
+    guard keepAwakePhase != phase else { return }
+    keepAwakePhase = phase
+    relayout(animated: true)
   }
 
   func setKeepAwakeEditing(_ editing: Bool) {
@@ -154,8 +162,8 @@ final class IslandStatusHeader: NSView {
       frames.append(CGRect(x: weatherX, y: 0, width: visibleWeatherWidth, height: barHeight))
     }
     if keepAwake != nil {
-      frames.append(CGRect(x: weatherX - (keepAwakeEditing ? 8 + 188 : 6 + 100), y: 0,
-        width: keepAwakeEditing ? 188 : 100, height: barHeight))
+      frames.append(CGRect(x: weatherX - (gap(after: "keepAwake") + keepAwakeWidth), y: 0,
+        width: keepAwakeWidth, height: barHeight))
     }
     if store != nil {
       frames.append(CGRect(x: botX - 28, y: 0, width: 24, height: barHeight))
@@ -166,8 +174,13 @@ final class IslandStatusHeader: NSView {
       let destination = orderedFrames[id] ?? fallback
       // Surface transitions have already rebased model positions into a new
       // window envelope in prepare(). Only in-place relayouts sample presentation.
-      let start = (fromPresentation ? item.layer?.presentation()?.position : nil)
+      var start = (fromPresentation ? item.layer?.presentation()?.position : nil)
         ?? item.layer?.position ?? .zero
+      if fromPresentation, id == "keepAwake" {
+        // Keep the eye's right edge still when the controls appear to its left.
+        let oldWidth = item.layer?.presentation()?.bounds.width ?? item.frame.width
+        start.x -= (destination.width - oldWidth) * (1 - (item.layer?.anchorPoint.x ?? 0))
+      }
       item.frame = destination
       guard let layer = item.layer else { continue }
       layer.removeAnimation(forKey: "headerPosition")
@@ -187,7 +200,7 @@ final class IslandStatusHeader: NSView {
     switch id {
     case "quota": 60
     case "additionalQuotas": 170
-    case "keepAwake": keepAwakeEditing ? 188 : 100
+    case "keepAwake": keepAwakeWidth
     case "weather": weatherWidth
     case "store": 24
     default: 32

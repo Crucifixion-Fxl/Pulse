@@ -145,6 +145,15 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         }
       }.store(in: &cancellables)
 
+    model.keepAwakeStore.$phase.removeDuplicates()
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] phase in
+        guard let self else { return }
+        for window in self.windows.values {
+          window.transition.statusHeader?.setKeepAwakePhase(phase)
+        }
+      }.store(in: &cancellables)
+
     model.$extensionPreferences.removeDuplicates()
       .receive(on: DispatchQueue.main)
       .sink { [weak self] preferences in
@@ -258,6 +267,8 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         barHeight: DisplayGeometryCalculator.statusHeaderHeight(for: DisplaySupport.metrics(for: screen)))
       let transition = IslandTransitionView(content: hostingView, statusHeader: header)
       header.setStoreAvailable(model.canUseActiveList)
+      header.setKeepAwakePhase(model.keepAwakeStore.phase)
+      header.setKeepAwakeEditing(model.isKeepAwakeInputExpanded)
       header.setEnabledItems(model.extensionPreferences.statusItems, animated: false)
       header.setHeaderOrder(model.extensionPreferences.orderedHeaderItems, animated: false)
       header.onOrderChanged = { [weak model] order in

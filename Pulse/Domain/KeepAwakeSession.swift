@@ -19,4 +19,15 @@ enum KeepAwakePhase: Equatable, Sendable {
 
   var isBusy: Bool { self == .authorizing || self == .starting || self == .stopping }
   var hasLease: Bool { self != .idle }
+
+  func headerWidth(editing: Bool) -> CGFloat {
+    if editing { return 186 }
+    switch self {
+    case .idle: return 26
+    case .active: return 100
+    case .stopping: return 78
+    case .authorizing, .starting: return 48
+    case .recoveryRequired: return 44
+    }
+  }
 }

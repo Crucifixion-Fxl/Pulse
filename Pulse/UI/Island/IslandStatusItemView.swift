@@ -114,7 +114,7 @@ struct IslandStatusItemView: View {
         case .keepAwake:
           KeepAwakeStatusView(store: model.keepAwakeStore, isActive: isExpanded)
         case .weather:
-          WeatherStatusView(store: model.weatherStore, isActive: isExpanded, isCompact: model.isKeepAwakeInputExpanded)
+          WeatherStatusView(store: model.weatherStore, isActive: isExpanded, isCompact: false)
         }
       }
     }
