@@ -441,6 +441,26 @@ struct AgentSessionSnapshot: Sendable {
         return sessionId
     }
 
+    /// A command to reopen this exact provider session from its project directory.
+    func resumeCommand(sessionId: String) -> String? {
+        let invocation: String
+        switch source {
+        case "codex": invocation = "codex resume"
+        case "claude": invocation = "claude --resume"
+        default: return nil
+        }
+        let id = displaySessionId(sessionId: sessionId)
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        func quote(_ value: String) -> String {
+            "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+        }
+        let command = "\(invocation) \(quote(id))"
+        guard let cwd, !cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return command
+        }
+        return "cd -- \(quote(cwd)) && \(command)"
+    }
+
     var isRemote: Bool {
         guard let remoteHostId else { return false }
         return !remoteHostId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

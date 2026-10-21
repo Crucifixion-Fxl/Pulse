@@ -146,7 +146,7 @@ private struct SessionCard: View {
     .padding(.vertical, 10)
     .padding(.horizontal, 6)
     .background(cardBackground)
-    .contextMenu { copySessionIDButton }
+    .contextMenu { copySessionButton }
   }
 
   private var status: AgentCardStatus { cardStatus(session) }
@@ -201,15 +201,15 @@ private struct SessionCard: View {
         .foregroundStyle(.white.opacity(0.55))
         .fixedSize()
 
-      Button(action: copySessionID) {
+      Button(action: copySession) {
         Image(systemName: copyFeedbackID == nil ? "doc.on.doc" : "checkmark")
           .foregroundStyle(copyFeedbackID == nil ? .white.opacity(0.5) : .green)
           .frame(width: 24, height: 24)
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
-      .help(Text("agents.session.copy-id"))
-      .accessibilityLabel(Text("agents.session.copy-id"))
+      .help(Text(copyLabel))
+      .accessibilityLabel(Text(copyLabel))
       .accessibilityIdentifier("copy-session-\(sessionID)")
       .task(id: copyFeedbackID) {
         guard copyFeedbackID != nil else { return }
@@ -219,15 +219,22 @@ private struct SessionCard: View {
     }
   }
 
-  private var copySessionIDButton: some View {
-    Button(action: copySessionID) {
-      Label("agents.session.copy-id", systemImage: "doc.on.doc")
+  private var copyLabel: LocalizedStringKey {
+    session.resumeCommand(sessionId: sessionID) == nil
+      ? "agents.session.copy-id" : "agents.session.copy-resume-command"
+  }
+
+  private var copySessionButton: some View {
+    Button(action: copySession) {
+      Label(copyLabel, systemImage: "doc.on.doc")
     }
   }
 
-  private func copySessionID() {
+  private func copySession() {
+    let content = session.resumeCommand(sessionId: sessionID)
+      ?? session.displaySessionId(sessionId: sessionID)
     NSPasteboard.general.clearContents()
-    if NSPasteboard.general.setString(session.displaySessionId(sessionId: sessionID), forType: .string) {
+    if NSPasteboard.general.setString(content, forType: .string) {
       copyFeedbackID = UUID()
     }
   }

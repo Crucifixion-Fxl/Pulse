@@ -52,6 +52,49 @@ final class AgentReducerTests: XCTestCase {
         XCTAssertTrue(snap.displayTitle(sessionId: "internal-id").hasSuffix("…"))
     }
 
+    func testResumeCommandUsesProviderSessionAndCorrectAgent() {
+        var snap = AgentSessionSnapshot()
+        snap.source = "codex"
+        snap.providerSessionId = " provider-id "
+        snap.cwd = "/work/My Project"
+        XCTAssertEqual(snap.resumeCommand(sessionId: "internal-id"),
+                       "cd -- '/work/My Project' && codex resume 'provider-id'")
+        snap.source = "claude"
+        snap.providerSessionId = " "
+        snap.cwd = nil
+        XCTAssertEqual(snap.resumeCommand(sessionId: "session-id"), "claude --resume 'session-id'")
+        XCTAssertNil(snap.resumeCommand(sessionId: " "))
+        snap.source = "cursor"
+        XCTAssertNil(snap.resumeCommand(sessionId: "session-id"))
+    }
+
+    func testResumeCommandPreservesShellArgumentsAndWorkingDirectory() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Pulse resume ' $(false) \(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let id = "session ' $(false); *"
+        for source in ["codex", "claude"] {
+            var snap = AgentSessionSnapshot()
+            snap.source = source
+            snap.cwd = directory.path
+            snap.providerSessionId = id
+            let command = try XCTUnwrap(snap.resumeCommand(sessionId: "internal-id"))
+            let shell = Process()
+            let output = Pipe()
+            shell.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            // Record the actual arguments without launching an AI session.
+            shell.arguments = ["-f", "-c", "function \(source) { printf '%s\\n' \"$PWD\" \"$#\" \"$1\" \"$2\"; }; " + command]
+            shell.standardOutput = output
+            try shell.run()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            shell.waitUntilExit()
+            XCTAssertEqual(shell.terminationStatus, 0)
+            XCTAssertEqual(String(decoding: data, as: UTF8.self),
+                           "\(directory.path)\n2\n\(source == "codex" ? "resume" : "--resume")\n\(id)\n")
+        }
+    }
+
     func testRecentActivityAgeUsesActivityTimeAndClampsFutureDates() {
         let now = Date(timeIntervalSince1970: 10_000)
         XCTAssertEqual(agentActivityAge(now, from: now), L10n.text("agents.activity.now"))

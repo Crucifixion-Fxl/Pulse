@@ -191,6 +191,7 @@
 "agents.task.pending" = "Pending task";
 "agents.session.actions" = "Session actions";
 "agents.session.copy-id" = "Copy session ID";
+"agents.session.copy-resume-command" = "Copy resume command";
 "agents.activity.help" = "Time since the latest activity";
 "agents.activity.now" = "Just now";
 "agents.activity.seconds" = "%ds ago";
