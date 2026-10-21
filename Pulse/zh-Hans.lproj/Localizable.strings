@@ -191,6 +191,7 @@
 "agents.task.pending" = "待处理任务";
 "agents.session.actions" = "会话操作";
 "agents.session.copy-id" = "复制会话 ID";
+"header.drag-to-reorder" = "拖动调整位置";
 "agents.session.copy-resume-command" = "复制恢复会话命令";
 "agents.activity.help" = "距离最近一次活动的时间";
 "agents.activity.now" = "刚刚";

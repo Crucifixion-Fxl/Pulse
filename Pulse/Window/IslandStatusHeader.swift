@@ -5,7 +5,7 @@ import QuartzCore
 /// silhouette. The original quota and bot stay opaque; extra vendors fade
 /// in after the expanding left wing has room for them.
 @MainActor
-final class IslandStatusHeader: NSView {
+final class IslandStatusHeader: NSView, NSGestureRecognizerDelegate {
   let quota: NSView
   let bot: NSView
   let additionalQuotas: NSView?
@@ -19,10 +19,29 @@ final class IslandStatusHeader: NSView {
   private var surfaceSize = CGSize.zero
   private var surfaceState: IslandPresentationState = .collapsed
   private var enabledItems = Set(ExtensionPreferences.availableStatusItems)
+  private(set) var headerOrder = ExtensionPreferences.defaultHeaderOrder
+  var onOrderChanged: (([String]) -> Void)?
+  private var drag: (id: String, originalOrder: [String], offset: CGFloat)?
+  private var itemEntries: [(id: String, view: NSView)] {
+    [("quota", quota), ("bot", bot)]
+      + [("additionalQuotas", additionalQuotas), ("weather", weather),
+         ("keepAwake", keepAwake), ("store", store)].compactMap { id, view in
+        view.map { (id, $0) }
+      }
+  }
+
+  func setHeaderOrder(_ order: [String], animated: Bool = true) {
+    let normalized = ExtensionPreferences.normalizedHeaderOrder(order)
+    guard headerOrder != normalized else { return }
+    cancelDrag()
+    headerOrder = normalized
+    relayout(animated: animated)
+  }
 
   func setEnabledItems(_ items: [String], animated: Bool = true) {
     let enabled = Set(items).union(["bot"])
     guard enabledItems != enabled else { return }
+    cancelDrag()
     enabledItems = enabled
     relayout(animated: animated)
   }
@@ -82,6 +101,11 @@ final class IslandStatusHeader: NSView {
     for item in items {
       item.wantsLayer = true
       addSubview(item)
+      let pan = NSPanGestureRecognizer(target: self, action: #selector(handleDrag(_:)))
+      pan.delaysPrimaryMouseButtonEvents = true
+      pan.delegate = self
+      item.addGestureRecognizer(pan)
+      item.toolTip = L10n.text("header.drag-to-reorder")
     }
   }
 
@@ -107,6 +131,7 @@ final class IslandStatusHeader: NSView {
     surfaceSize = size
     surfaceState = state
     isExpanded = state != .collapsed
+    if !isExpanded { cancelDrag() }
     store?.isHidden = !isExpanded || !isStoreAvailable
     quota.isHidden = !enabledItems.contains("quota")
     additionalQuotas?.isHidden = !enabledItems.contains("additionalQuotas")
@@ -139,7 +164,10 @@ final class IslandStatusHeader: NSView {
     if store != nil {
       frames.append(CGRect(x: botX - 28, y: 0, width: 24, height: barHeight))
     }
-    for (item, destination) in zip(items, frames) {
+    let orderedFrames = isExpanded ? expandedFrames(left: left, right: botX + 32) : [:]
+    for ((id, item), fallback) in zip(itemEntries, frames) {
+      guard drag?.id != id else { continue }
+      let destination = orderedFrames[id] ?? fallback
       // Surface transitions have already rebased model positions into a new
       // window envelope in prepare(). Only in-place relayouts sample presentation.
       let start = (fromPresentation ? item.layer?.presentation()?.position : nil)
@@ -157,6 +185,112 @@ final class IslandStatusHeader: NSView {
     for extra in [additionalQuotas, weather, keepAwake].compactMap({ $0 }) {
       reveal(extra, state: state, spring: spring)
     }
+  }
+
+  private func itemWidth(_ id: String) -> CGFloat {
+    switch id {
+    case "quota": 60
+    case "additionalQuotas": 170
+    case "keepAwake": keepAwakeEditing ? 188 : 100
+    case "weather": weatherWidth
+    case "store": 24
+    default: 32
+    }
+  }
+
+  private func gap(after id: String) -> CGFloat {
+    switch id {
+    case "quota", "additionalQuotas": 12
+    case "store": 4
+    case "keepAwake": keepAwakeEditing ? 8 : 6
+    default: 6
+    }
+  }
+
+  private var visibleIDs: Set<String> {
+    Set(itemEntries.filter { !$0.view.isHidden }.map(\.id))
+  }
+
+  private func expandedFrames(left: CGFloat, right: CGFloat) -> [String: CGRect] {
+    let split = headerOrder.firstIndex(of: "spacer")!
+    let leading = headerOrder[..<split].filter { visibleIDs.contains($0) }
+    let trailing = headerOrder[(split + 1)...].filter { visibleIDs.contains($0) }
+    var result: [String: CGRect] = [:]
+    func place(_ ids: [String], startingAt start: CGFloat) {
+      var x = start
+      for id in ids {
+        result[id] = CGRect(x: x, y: 0, width: itemWidth(id), height: barHeight)
+        x += itemWidth(id) + gap(after: id)
+      }
+    }
+    let trailingWidth = trailing.reduce(CGFloat.zero) { $0 + itemWidth($1) + gap(after: $1) }
+      - (trailing.last.map { gap(after: $0) } ?? 0)
+    place(leading, startingAt: left + 20)
+    place(trailing, startingAt: right - trailingWidth)
+    return result
+  }
+
+  func gestureRecognizerShouldBegin(_ gestureRecognizer: NSGestureRecognizer) -> Bool {
+    isExpanded && !(gestureRecognizer.view === keepAwake && keepAwakeEditing)
+  }
+
+  @objc private func handleDrag(_ recognizer: NSPanGestureRecognizer) {
+    guard let id = itemEntries.first(where: { $0.view === recognizer.view })?.id else { return }
+    let point = recognizer.location(in: self)
+    switch recognizer.state {
+    case .began:
+      beginDragging(id, at: point)
+      updateDragging(to: point)
+    case .changed: updateDragging(to: point)
+    case .ended: finishDragging()
+    case .cancelled, .failed: finishDragging(cancelled: true)
+    default: break
+    }
+  }
+
+  /// Keep the live view under the pointer; animate only its neighbours.
+  func beginDragging(_ id: String, at point: CGPoint) {
+    guard isExpanded, drag == nil, visibleIDs.contains(id),
+      let item = itemEntries.first(where: { $0.id == id })?.view else { return }
+    let visible = item.layer?.presentation()?.frame ?? item.frame
+    item.layer?.removeAnimation(forKey: "headerPosition")
+    item.frame = visible
+    drag = (id, headerOrder, point.x - visible.minX)
+    item.layer?.zPosition = 10
+  }
+
+  func updateDragging(to point: CGPoint) {
+    guard let drag, let item = itemEntries.first(where: { $0.id == drag.id })?.view else { return }
+    var order = headerOrder.filter { $0 != drag.id }
+    let target = order.first { id in
+      if id == "spacer" { return point.x < bounds.midX }
+      guard visibleIDs.contains(id), let view = itemEntries.first(where: { $0.id == id })?.view else {
+        return false
+      }
+      return point.x < view.frame.midX
+    }
+    order.insert(drag.id, at: target.flatMap { order.firstIndex(of: $0) } ?? order.endIndex)
+    if order != headerOrder {
+      headerOrder = order
+      relayout(animated: true)
+    }
+    item.frame.origin.x = min(max(point.x - drag.offset, 20), bounds.width - 20 - item.frame.width)
+  }
+
+  func finishDragging(cancelled: Bool = false) {
+    guard let drag else { return }
+    if cancelled { headerOrder = drag.originalOrder }
+    self.drag = nil
+    itemEntries.first(where: { $0.id == drag.id })?.view.layer?.zPosition = 0
+    relayout(animated: true)
+    if !cancelled, headerOrder != drag.originalOrder { onOrderChanged?(headerOrder) }
+  }
+
+  private func cancelDrag() {
+    guard let drag else { return }
+    headerOrder = drag.originalOrder
+    itemEntries.first(where: { $0.id == drag.id })?.view.layer?.zPosition = 0
+    self.drag = nil
   }
 
   private func reveal(_ item: NSView, state: IslandPresentationState, spring: CASpringAnimation?) {
@@ -187,11 +321,11 @@ final class IslandStatusHeader: NSView {
   // Header controls use the same live views throughout the spring animation.
   override func hitTest(_ point: NSPoint) -> NSView? {
     let localPoint = convert(point, from: superview)
-    for item in (isExpanded ? [store, keepAwake, weather] : []).compactMap({ $0 }) {
+    for item in isExpanded ? items : [] {
       guard (item.layer?.presentation()?.opacity ?? item.layer?.opacity ?? 0) > 0.95,
         !item.isHidden,
         item.frame.contains(localPoint) else { continue }
-      return item.hitTest(localPoint)
+      return item.hitTest(localPoint) ?? item
     }
     return nil
   }

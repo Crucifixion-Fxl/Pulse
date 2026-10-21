@@ -23,6 +23,41 @@ final class IslandTransitionTests: XCTestCase {
     return (window, transition, content)
   }
 
+  func testHeaderDragReordersAcrossSidesAndCommitsOnlyOnDrop() async throws {
+    let bot = NSView(), store = NSView()
+    let header = IslandStatusHeader(quota: NSView(), bot: bot, additionalQuotas: NSView(),
+      weather: NSView(), keepAwake: NSView(), store: store, barHeight: 32)
+    let (window, transition, _) = fixture(header: header)
+    defer { window.close() }
+    transition.transition(to: expanded, state: .pinned, collapsedRadius: 18, animated: false)
+    try await Task.sleep(for: .milliseconds(40))
+    var saved: [[String]] = []
+    header.onOrderChanged = { saved.append($0) }
+    header.beginDragging("bot", at: CGPoint(x: bot.frame.midX, y: 16))
+    header.updateDragging(to: CGPoint(x: 25, y: 16))
+    XCTAssertEqual(header.headerOrder.first, "bot")
+    XCTAssertTrue(saved.isEmpty)
+    XCTAssertEqual(bot.frame.minX, 20, accuracy: 0.5, "Dragged view follows the pointer")
+    XCTAssertNotNil(header.quota.layer?.animation(forKey: "headerPosition"), "Neighbours animate out of the way")
+    header.finishDragging()
+    XCTAssertEqual(saved.count, 1)
+    XCTAssertLessThan(bot.frame.maxX, header.quota.frame.minX)
+    let committed = header.headerOrder
+    header.beginDragging("store", at: CGPoint(x: store.frame.midX, y: 16))
+    header.updateDragging(to: CGPoint(x: 25, y: 16))
+    header.finishDragging(cancelled: true)
+    XCTAssertEqual(header.headerOrder, committed)
+    XCTAssertEqual(saved.count, 1, "Cancel must not persist the preview order")
+    header.setEnabledItems(["bot", "quota", "keepAwake"], animated: false)
+    header.setEnabledItems(ExtensionPreferences.availableStatusItems, animated: false)
+    XCTAssertEqual(header.headerOrder, committed)
+    XCTAssertLessThan(bot.frame.maxX, header.quota.frame.minX)
+    header.settle(size: collapsed.size, state: .collapsed)
+    XCTAssertGreaterThan(bot.frame.minX, header.quota.frame.maxX, "Collapsed bar retains its compact layout")
+    header.settle(size: expanded.size, state: .pinned)
+    XCTAssertLessThan(bot.frame.maxX, header.quota.frame.minX)
+  }
+
   func testDisabledHeaderItemsReleaseSpaceAndAnimateRightward() async throws {
     let weather = NSView(), awake = NSView(), store = NSView(), extras = NSView()
     let header = IslandStatusHeader(quota: NSView(), bot: NSView(), additionalQuotas: extras,

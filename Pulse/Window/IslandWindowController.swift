@@ -145,12 +145,13 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
         }
       }.store(in: &cancellables)
 
-    model.$extensionPreferences.map(\.statusItems).removeDuplicates()
+    model.$extensionPreferences.removeDuplicates()
       .receive(on: DispatchQueue.main)
-      .sink { [weak self] items in
+      .sink { [weak self] preferences in
         guard let self else { return }
         for window in self.windows.values {
-          window.transition.statusHeader?.setEnabledItems(items)
+          window.transition.statusHeader?.setEnabledItems(preferences.statusItems)
+          window.transition.statusHeader?.setHeaderOrder(preferences.orderedHeaderItems)
         }
       }.store(in: &cancellables)
 
@@ -249,6 +250,10 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       let transition = IslandTransitionView(content: hostingView, statusHeader: header)
       header.setStoreAvailable(model.canUseActiveList)
       header.setEnabledItems(model.extensionPreferences.statusItems, animated: false)
+      header.setHeaderOrder(model.extensionPreferences.orderedHeaderItems, animated: false)
+      header.onOrderChanged = { [weak model] order in
+        model?.extensionPreferences.setHeaderOrder(order)
+      }
       panel.contentView = transition
       let initiallyVisible = model.islandState != .collapsed || model.isCollapsedIslandVisible
       panel.alphaValue = initiallyVisible ? 1 : 0

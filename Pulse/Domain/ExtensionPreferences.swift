@@ -19,6 +19,34 @@ struct ExtensionPreferences: Codable, Equatable {
   var bot: BotCharacter = .orb
   var wakeEffect: WakeEffect = .blackHole
   var voiceProviderID = "xiaozhi"
+  /// Separate from enablement so hiding a widget never loses its position.
+  /// Optional for backwards-compatible decoding of existing preferences.
+  var headerOrder: [String]?
+
+  static let defaultHeaderOrder = ["quota", "additionalQuotas", "spacer", "keepAwake", "weather", "store", "bot"]
+
+  var orderedHeaderItems: [String] { Self.normalizedHeaderOrder(headerOrder) }
+
+  static func normalizedHeaderOrder(_ order: [String]?) -> [String] {
+    var result: [String] = []
+    for id in (order ?? defaultHeaderOrder) + defaultHeaderOrder
+      where defaultHeaderOrder.contains(id) && !result.contains(id) {
+      result.append(id)
+    }
+    return result
+  }
+
+  mutating func setHeaderOrder(_ order: [String]) {
+    headerOrder = Self.normalizedHeaderOrder(order)
+  }
+
+  mutating func moveHeaderItem(_ id: String, before target: String) {
+    guard id != "spacer", id != target, Self.defaultHeaderOrder.contains(id),
+      Self.defaultHeaderOrder.contains(target) else { return }
+    var order = orderedHeaderItems.filter { $0 != id }
+    order.insert(id, at: order.firstIndex(of: target)!)
+    setHeaderOrder(order)
+  }
 
   static let defaultsKey = "pulse-extension-preferences-v1"
   static let availableBars = ["reminders", "agents", "music", "clipboard"]
@@ -28,6 +56,7 @@ struct ExtensionPreferences: Codable, Equatable {
     bars = Self.availableBars.filter { bars.contains($0) }
     if bars.isEmpty { bars = ["reminders"] }
     statusItems = Self.availableStatusItems.filter { statusItems.contains($0) || $0 == "bot" }
+    if let headerOrder { self.headerOrder = Self.normalizedHeaderOrder(headerOrder) }
   }
 
   mutating func setBar(_ id: String, enabled: Bool) {

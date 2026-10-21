@@ -319,33 +319,25 @@ struct IslandRootView: View {
       .overlay(alignment: .top) {
         if !usesCompositorTransitions, effectiveState != .collapsed, model.canUseActiveList {
           HStack(spacing: 0) {
-            if model.extensionPreferences.statusItems.contains("quota") {
-              IslandStatusItemView(item: .quota, displayID: displayID).frame(width: 60)
+            ForEach(model.extensionPreferences.orderedHeaderItems, id: \.self) { id in
+              if id == "spacer" {
+                Spacer(minLength: 0)
+              } else if id == "store" || model.extensionPreferences.statusItems.contains(id) {
+                expandedHeaderItem(id)
+                  .help(Text("header.drag-to-reorder"))
+                  .draggable("pulse-header-\(id)")
+                  .dropDestination(for: String.self) { items, _ in
+                    guard let value = items.first, value.hasPrefix("pulse-header-") else { return false }
+                    model.extensionPreferences.moveHeaderItem(String(value.dropFirst(13)), before: id)
+                    return true
+                  }
+              }
             }
-            if model.extensionPreferences.statusItems.contains("additionalQuotas") {
-              IslandStatusItemView(item: .additionalQuotas, displayID: displayID)
-                .frame(width: 170)
-                .padding(.leading, model.extensionPreferences.statusItems.contains("quota") ? 12 : 0)
-            }
-            Spacer(minLength: 0)
-            if model.extensionPreferences.statusItems.contains("keepAwake") {
-              IslandStatusItemView(item: .keepAwake, displayID: displayID)
-                .frame(width: model.isKeepAwakeInputExpanded ? 188 : 100)
-                .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 6)
-            }
-            if model.extensionPreferences.statusItems.contains("weather") {
-              IslandStatusItemView(item: .weather, displayID: displayID)
-                .frame(maxWidth: model.isKeepAwakeInputExpanded ? 28 : 108)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.trailing, 6)
-            }
-            ExtensionStoreButton(displayID: displayID)
-            IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32)
           }
           .padding(.horizontal, 20)
           .frame(height: expandedContentTopInset - 8)
           .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.9),
-            value: model.extensionPreferences.statusItems)
+            value: model.extensionPreferences)
         }
       }
       .background(alignment: .top) {
@@ -414,6 +406,26 @@ struct IslandRootView: View {
         ? (hostDisplayHasNotch ? 14 : 18)
         : 36
     )
+  }
+
+  @ViewBuilder
+  private func expandedHeaderItem(_ id: String) -> some View {
+    switch id {
+    case "quota":
+      IslandStatusItemView(item: .quota, displayID: displayID).frame(width: 60).padding(.trailing, 12)
+    case "additionalQuotas":
+      IslandStatusItemView(item: .additionalQuotas, displayID: displayID).frame(width: 170).padding(.trailing, 12)
+    case "keepAwake":
+      IslandStatusItemView(item: .keepAwake, displayID: displayID)
+        .frame(width: model.isKeepAwakeInputExpanded ? 188 : 100)
+        .padding(.trailing, model.isKeepAwakeInputExpanded ? 8 : 6)
+    case "weather":
+      IslandStatusItemView(item: .weather, displayID: displayID)
+        .frame(maxWidth: model.isKeepAwakeInputExpanded ? 28 : 108)
+        .fixedSize(horizontal: true, vertical: false).padding(.trailing, 6)
+    case "store": ExtensionStoreButton(displayID: displayID).padding(.trailing, 4)
+    default: IslandStatusItemView(item: .bot, displayID: displayID).frame(width: 32).padding(.trailing, 6)
+    }
   }
 
   @ViewBuilder

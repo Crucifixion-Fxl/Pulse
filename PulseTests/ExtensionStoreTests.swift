@@ -4,6 +4,31 @@ import XCTest
 @testable import Pulse
 
 final class ExtensionStoreTests: XCTestCase {
+  func testHeaderOrderMigratesPersistsAndSurvivesDisableEnable() throws {
+    let suite = "HeaderOrder-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    // Preferences written by versions before header dragging existed.
+    let old = #"{"bars":["agents"],"statusItems":["bot","quota"],"bot":"cat","wakeEffect":"aurora","voiceProviderID":"xiaozhi"}"#
+    defaults.set(Data(old.utf8), forKey: ExtensionPreferences.defaultsKey)
+    var prefs = ExtensionPreferences.load(from: defaults)
+    XCTAssertEqual(prefs.bot, .cat)
+    XCTAssertEqual(prefs.bars, ["agents"])
+    XCTAssertEqual(prefs.orderedHeaderItems, ExtensionPreferences.defaultHeaderOrder)
+    prefs.moveHeaderItem("bot", before: "quota")
+    prefs.moveHeaderItem("store", before: "keepAwake")
+    let order = prefs.orderedHeaderItems
+    prefs.setStatusItem("weather", enabled: true)
+    prefs.setStatusItem("weather", enabled: false)
+    prefs.setStatusItem("weather", enabled: true)
+    prefs.save(to: defaults)
+    XCTAssertEqual(ExtensionPreferences.load(from: defaults).orderedHeaderItems, order)
+    XCTAssertEqual(order.first, "bot")
+    prefs.setHeaderOrder(["unknown", "bot", "bot"])
+    XCTAssertEqual(Set(prefs.orderedHeaderItems), Set(ExtensionPreferences.defaultHeaderOrder))
+    XCTAssertEqual(prefs.orderedHeaderItems.count, ExtensionPreferences.defaultHeaderOrder.count)
+  }
+
   func testPreferencesPersistAndNeverEmptySidebarOrRemoveBot() throws {
     let suite = "ExtensionStore-\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!
