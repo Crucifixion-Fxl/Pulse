@@ -236,8 +236,15 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       // temporary compositor animation and window envelope.
       hostingView.sizingOptions = []
       hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+      var dragTargets: [HeaderDragTarget] = []
+      func dragTarget(_ id: String) -> HeaderDragTarget {
+        let target = HeaderDragTarget(id: id)
+        dragTargets.append(target)
+        return target
+      }
       func statusItem(_ item: IslandStatusItem) -> NSView {
         let host = NSHostingView(rootView: IslandStatusItemView(item: item, displayID: id)
+          .modifier(HeaderDragModifier(target: dragTarget(item.rawValue), displayID: id))
           .environmentObject(model).environmentObject(agentStore))
         host.sizingOptions = item == .weather ? [.intrinsicContentSize] : []
         return host
@@ -245,7 +252,9 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       let header = IslandStatusHeader(quota: statusItem(.quota), bot: statusItem(.bot),
         additionalQuotas: statusItem(.additionalQuotas),
         weather: statusItem(.weather), keepAwake: statusItem(.keepAwake),
-        store: NSHostingView(rootView: ExtensionStoreButton(displayID: id).environmentObject(model)),
+        store: NSHostingView(rootView: ExtensionStoreButton(displayID: id)
+          .modifier(HeaderDragModifier(target: dragTarget("store"), displayID: id))
+          .environmentObject(model)),
         barHeight: DisplayGeometryCalculator.statusHeaderHeight(for: DisplaySupport.metrics(for: screen)))
       let transition = IslandTransitionView(content: hostingView, statusHeader: header)
       header.setStoreAvailable(model.canUseActiveList)
@@ -254,6 +263,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
       header.onOrderChanged = { [weak model] order in
         model?.extensionPreferences.setHeaderOrder(order)
       }
+      for target in dragTargets { target.header = header }
       panel.contentView = transition
       let initiallyVisible = model.islandState != .collapsed || model.isCollapsedIslandVisible
       panel.alphaValue = initiallyVisible ? 1 : 0

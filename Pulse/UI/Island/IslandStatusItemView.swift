@@ -1,5 +1,57 @@
 import SwiftUI
 
+/// SwiftUI owns the button gestures inside each hosting view. Recognize the
+/// reorder there so a button cannot consume the drag before AppKit sees it.
+@MainActor
+final class HeaderDragTarget {
+  weak var header: IslandStatusHeader?
+  let id: String
+  private var active = false
+  private var anchor = CGPoint.zero
+
+  init(id: String) { self.id = id }
+
+  func update(_ value: DragGesture.Value) {
+    guard let header, header.canDragItem(id) else { return }
+    if !active {
+      guard let center = header.dragAnchor(for: id) else { return }
+      anchor = center
+      header.beginDragging(id, at: center)
+      active = true
+    }
+    // Global gesture translation remains stable as the hosting view itself moves.
+    header.updateDragging(to: CGPoint(x: anchor.x + value.translation.width, y: anchor.y))
+  }
+
+  func finish(_ value: DragGesture.Value? = nil, cancelled: Bool = false) {
+    guard active else { return }
+    if !cancelled, let value { update(value) }
+    header?.finishDragging(cancelled: cancelled)
+    active = false
+  }
+}
+
+struct HeaderDragModifier: ViewModifier {
+  let target: HeaderDragTarget
+  let displayID: String?
+  @EnvironmentObject private var model: AppModel
+
+  private var enabled: Bool {
+    IslandRouting.effectiveState(global: model.islandState,
+      activeDisplayID: model.hostDisplayID, windowDisplayID: displayID) != .collapsed
+      && !(target.id == "keepAwake" && model.isKeepAwakeInputExpanded)
+  }
+
+  func body(content: Content) -> some View {
+    content
+      .contentShape(Rectangle())
+      .highPriorityGesture(DragGesture(minimumDistance: 6, coordinateSpace: .global)
+        .onChanged { target.update($0) }
+        .onEnded { target.finish($0) }, including: enabled ? .all : .none)
+      .onDisappear { target.finish(cancelled: true) }
+  }
+}
+
 enum IslandStatusItem: String, CaseIterable {
   case quota
   case additionalQuotas

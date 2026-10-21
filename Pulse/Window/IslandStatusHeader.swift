@@ -5,7 +5,7 @@ import QuartzCore
 /// silhouette. The original quota and bot stay opaque; extra vendors fade
 /// in after the expanding left wing has room for them.
 @MainActor
-final class IslandStatusHeader: NSView, NSGestureRecognizerDelegate {
+final class IslandStatusHeader: NSView {
   let quota: NSView
   let bot: NSView
   let additionalQuotas: NSView?
@@ -101,10 +101,6 @@ final class IslandStatusHeader: NSView, NSGestureRecognizerDelegate {
     for item in items {
       item.wantsLayer = true
       addSubview(item)
-      let pan = NSPanGestureRecognizer(target: self, action: #selector(handleDrag(_:)))
-      pan.delaysPrimaryMouseButtonEvents = true
-      pan.delegate = self
-      item.addGestureRecognizer(pan)
       item.toolTip = L10n.text("header.drag-to-reorder")
     }
   }
@@ -230,27 +226,19 @@ final class IslandStatusHeader: NSView, NSGestureRecognizerDelegate {
     return result
   }
 
-  func gestureRecognizerShouldBegin(_ gestureRecognizer: NSGestureRecognizer) -> Bool {
-    isExpanded && !(gestureRecognizer.view === keepAwake && keepAwakeEditing)
+  func canDragItem(_ id: String) -> Bool {
+    isExpanded && visibleIDs.contains(id) && !(id == "keepAwake" && keepAwakeEditing)
   }
 
-  @objc private func handleDrag(_ recognizer: NSPanGestureRecognizer) {
-    guard let id = itemEntries.first(where: { $0.view === recognizer.view })?.id else { return }
-    let point = recognizer.location(in: self)
-    switch recognizer.state {
-    case .began:
-      beginDragging(id, at: point)
-      updateDragging(to: point)
-    case .changed: updateDragging(to: point)
-    case .ended: finishDragging()
-    case .cancelled, .failed: finishDragging(cancelled: true)
-    default: break
-    }
+  func dragAnchor(for id: String) -> CGPoint? {
+    guard let item = itemEntries.first(where: { $0.id == id })?.view else { return nil }
+    let frame = item.layer?.presentation()?.frame ?? item.frame
+    return CGPoint(x: frame.midX, y: frame.midY)
   }
 
   /// Keep the live view under the pointer; animate only its neighbours.
   func beginDragging(_ id: String, at point: CGPoint) {
-    guard isExpanded, drag == nil, visibleIDs.contains(id),
+    guard canDragItem(id), drag == nil,
       let item = itemEntries.first(where: { $0.id == id })?.view else { return }
     let visible = item.layer?.presentation()?.frame ?? item.frame
     item.layer?.removeAnimation(forKey: "headerPosition")
