@@ -315,7 +315,10 @@ final class ExtensionStoreTests: XCTestCase {
       }
     }
     print("Store main-thread gaps (ms): \(maxima)")
-    let warm = maxima.dropFirst().sorted()
+    // Compare opening with opening. Closing shrinks the surface and has a
+    // different layout cost; mixing it into the median falsely flags a cold stall.
+    let warm = maxima.enumerated().filter { $0.offset > 0 && $0.offset.isMultiple(of: 2) }
+      .map(\.element).sorted()
     XCTAssertLessThanOrEqual(maxima[0], warm[warm.count / 2] * 1.5 + 8,
       "First store entry must not pay a separate cold layout cost: \(maxima)")
   }

@@ -149,7 +149,7 @@ struct ExtensionStoreView: View {
         categorySidebar
         ScrollViewReader { proxy in
           ScrollView(.vertical) {
-            VStack(spacing: 2) {
+            LazyVStack(spacing: 2) {
               Color.clear.frame(height: 0).id("catalog-top")
               ForEach(results) { entry in catalogRow(entry) }
               if results.isEmpty {

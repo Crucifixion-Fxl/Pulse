@@ -114,11 +114,17 @@ final class ExtensionMarketplaceTests: XCTestCase {
     let document = try XCTUnwrap(scroll.documentView)
     XCTAssertGreaterThan(document.bounds.height, scroll.contentView.bounds.height * 2,
       "All extensions must be available in one continuous list")
-    scroll.contentView.scroll(to: CGPoint(x: 0,
-      y: document.bounds.height - scroll.contentView.bounds.height))
-    scroll.reflectScrolledClipView(scroll.contentView)
-    try await Task.sleep(for: .milliseconds(80))
+    // A lazy stack refines its document height as rows materialize. Continue
+    // scrolling until the actual final row is reached, as repeated wheel input does.
+    for _ in 0..<6 {
+      scroll.contentView.scroll(to: CGPoint(x: 0,
+        y: document.bounds.height - scroll.contentView.bounds.height))
+      scroll.reflectScrolledClipView(scroll.contentView)
+      try await Task.sleep(for: .milliseconds(80))
+      if abs(scroll.contentView.bounds.maxY - document.bounds.height) < 1 { break }
+    }
     XCTAssertGreaterThan(scroll.contentView.bounds.minY, 0)
+    XCTAssertEqual(scroll.contentView.bounds.maxY, document.bounds.height, accuracy: 1)
     browser.show(try XCTUnwrap(ExtensionCatalog.entries.last))
     try await Task.sleep(for: .milliseconds(80))
     try capture("scrolled-bottom")
