@@ -12,6 +12,13 @@ Reduce Motion switches the content immediately;
 hidden panels do not receive pointer or accessibility input.
 The store is hidden and cannot be opened from the reminder authorization screen.
 
+The catalog supports search, category filters, Discover / Enabled views, four-card
+pagination, extension details and a developer contribution page. The current
+entries are bundled capabilities, not downloadable community plugins. Search
+and navigation preserve the existing configuration behavior. See the
+[UI research](EXTENSION-MARKETPLACE-RESEARCH.md) and
+[contribution guide](EXTENSION-DEVELOPMENT.md).
+
 - Reminders, Agents, Music and Clipboard can be enabled independently. The last
   enabled bar cannot be disabled.
 - Main quota, other quotas, weather and Keep Awake can be hidden. The bot stays
