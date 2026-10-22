@@ -125,6 +125,7 @@ final class IslandWindowController: NSObject, NSWindowDelegate {
           self?.model.islandState == .pinned,
           self?.model.isRequestingAccess == false,
           self?.model.isKeepAwakeControlsPresented == false,
+          self?.model.isWeatherDetailsPresented == false,
           self?.model.isExtensionStorePresented == false,
           // An approval-held panel outlives focus fights: the request
           // lands while the user is in another app, and the key-window

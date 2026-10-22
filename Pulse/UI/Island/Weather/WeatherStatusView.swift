@@ -5,6 +5,7 @@ struct WeatherStatusView: View {
   @ObservedObject var store: WeatherStore
   let isActive: Bool
   var isCompact = false
+  @EnvironmentObject private var model: AppModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var showsDetails = false
 
@@ -49,6 +50,17 @@ struct WeatherStatusView: View {
     .accessibilityHidden(!isActive)
     .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: store.snapshot)
     .popover(isPresented: $showsDetails, arrowEdge: .bottom) { details.preferredColorScheme(.dark) }
+    // The popover owns a separate tracking window. Leaving the island surface
+    // for these details must not dismiss the island that anchors the popover.
+    .onChange(of: showsDetails) { _, presented in
+      model.setWeatherDetailsPresented(presented)
+    }
+    .onDisappear {
+      if showsDetails {
+        showsDetails = false
+        model.setWeatherDetailsPresented(false)
+      }
+    }
     .task(id: isActive) {
       guard isActive else { showsDetails = false; return }
       while !Task.isCancelled {

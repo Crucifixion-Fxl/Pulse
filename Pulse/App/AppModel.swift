@@ -16,6 +16,14 @@ final class AppModel: ObservableObject {
   lazy var keepAwakeStore = KeepAwakeStore()
   @Published private(set) var isKeepAwakeControlsPresented = false
   @Published private(set) var isKeepAwakeInputExpanded = false
+  @Published private(set) var isWeatherDetailsPresented = false
+
+  func setWeatherDetailsPresented(_ presented: Bool) {
+    guard isWeatherDetailsPresented != presented else { return }
+    isWeatherDetailsPresented = presented
+    if presented { hoverTask?.cancel() }
+    else { schedulePointerExitCollapseIfNeeded() }
+  }
 
   func setKeepAwakeInputExpanded(_ expanded: Bool) {
     guard isKeepAwakeInputExpanded != expanded else { return }
@@ -1179,7 +1187,8 @@ final class AppModel: ObservableObject {
   }
 
   private func schedulePointerExitCollapseIfNeeded() {
-    guard !isPointerInsideIsland, !isKeepAwakeControlsPresented, !isExtensionStorePresented else { return }
+    guard !isPointerInsideIsland, !isKeepAwakeControlsPresented,
+      !isWeatherDetailsPresented, !isExtensionStorePresented else { return }
 
     let delay: Duration
     switch islandState {
@@ -1198,7 +1207,8 @@ final class AppModel: ObservableObject {
       try? await Task.sleep(for: delay)
       guard
         !Task.isCancelled,
-        !isPointerInsideIsland, !isKeepAwakeControlsPresented, !isExtensionStorePresented
+        !isPointerInsideIsland, !isKeepAwakeControlsPresented,
+        !isWeatherDetailsPresented, !isExtensionStorePresented
       else { return }
 
       switch islandState {
