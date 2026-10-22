@@ -1,0 +1,7 @@
+Generated with the built-in image_gen tool on 2026-10-22.
+Master: Pulse-AppIcon-master.png (transparent PNG).
+AppIcon sizes and docs/images/pulse-icon.png are exports of this master.
+PulseStatus.imageset is the corresponding native monochrome vector mark.
+
+Prompt:
+Use case: logo-brand. Create one production-ready macOS app icon for Pulse, a minimal desktop workspace app. Square 1024x1024 composition with real transparent outer corners. A large centered dark graphite rounded-square tile, occupying about 86% of the canvas, soft continuous rounded corners, very subtle upper-edge highlight, almost flat material, straight-on. Center a single bold continuous pulse waveform with rounded caps and rounded joins: short horizontal lead, a modest rise, one tall peak, one trough, then short horizontal exit. Make the pulse a clean bright cyan-to-periwinkle gradient, width about 58% of tile, substantial stroke legible at 16px. Balanced, restrained, contemporary native macOS icon. No heart shape, no checkmark, no letters, no words, no labels, no surrounding mockup, no extra symbols, no neon haze, no decorative details. Entire outer area beyond tile is truly transparent; do not paint a checkerboard.

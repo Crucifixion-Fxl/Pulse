@@ -199,10 +199,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   private func configureStatusItem() {
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-    statusItem.button?.image = NSImage(
-      systemSymbolName: "checklist",
-      accessibilityDescription: L10n.text("app.name")
-    )
+    let icon = NSImage(named: "PulseStatus")
+    icon?.size = NSSize(width: 18, height: 18)
+    icon?.isTemplate = true
+    icon?.accessibilityDescription = L10n.text("app.name")
+    statusItem.button?.image = icon
 
     let menu = NSMenu()
     menu.delegate = self
