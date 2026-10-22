@@ -349,13 +349,16 @@ struct MusicPanelView: View {
         .frame(maxWidth: .infinity)
         .id(track.lyricsIdentity)
       }
-      .onChange(of: currentIndex) { _, newValue in
-        guard let newValue else { return }
-        if reduceMotion {
-          proxy.scrollTo(newValue, anchor: .center)
+      .onChange(of: currentIndex) { oldValue, newValue in
+        // Seeking back into an intro has no active line. It still needs a
+        // scroll target, otherwise the previous verse remains on screen.
+        guard let target = newValue ?? lyrics.lines.first?.id else { return }
+        let isNextLine = oldValue.map { newValue == $0 + 1 } ?? false
+        if reduceMotion || !isNextLine {
+          proxy.scrollTo(target, anchor: .center)
         } else {
           withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
-            proxy.scrollTo(newValue, anchor: .center)
+            proxy.scrollTo(target, anchor: .center)
           }
         }
       }
