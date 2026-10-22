@@ -466,32 +466,31 @@ struct MusicPanelView: View {
         .font(.system(size: 28, weight: .semibold))
         .foregroundStyle(.white.opacity(printing ? 0.28 : 0))
         .multilineTextAlignment(.center)
-      Text(line.text)
+      Text(Self.printedLyric(line.text, fraction: printing ? fill : 1))
         .font(.system(size: 28, weight: .semibold))
-        .foregroundStyle(.white)
         .multilineTextAlignment(.center)
         .shadow(
           color: printing ? .white.opacity(0.35 + 0.3 * envelope) : .clear,
           radius: printing ? glowRadius : 0)
-        .mask(printFillMask(fraction: printing ? fill : 1))
     }
     .opacity(isCurrent ? 1 : 0)
     .scaleEffect(isCurrent ? 1 : 0.86)
   }
 
-  /// Hard-edged left-to-right reveal for the printed overlay, with a soft
-  /// 3% frontier so the glow glides instead of stepping.
-  private func printFillMask(fraction: Double) -> some View {
-    LinearGradient(
-      stops: [
-        .init(color: .white, location: 0),
-        .init(color: .white, location: max(0, fraction - 0.015)),
-        .init(color: .clear, location: min(1, fraction + 0.015)),
-        .init(color: .clear, location: 1),
-      ],
-      startPoint: .leading,
-      endPoint: .trailing
-    )
+  /// Keep the entire string in layout, but reveal graphemes in reading
+  /// order. A block-wide horizontal mask lights every wrapped row at once.
+  private static func printedLyric(_ text: String, fraction: Double) -> AttributedString {
+    var result = AttributedString(text)
+    result.foregroundColor = .clear
+    let progress = min(max(fraction, 0), 1) * Double(text.count)
+    let complete = Int(progress)
+    let boundary = result.characters.index(result.startIndex, offsetBy: complete)
+    result[result.startIndex..<boundary].foregroundColor = .white
+    if boundary < result.endIndex {
+      let next = result.characters.index(after: boundary)
+      result[boundary..<next].foregroundColor = .white.opacity(progress - Double(complete))
+    }
+    return result
   }
 
   /// Soft fade into the island surface top and bottom — the Day

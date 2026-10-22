@@ -46,13 +46,41 @@ final class MusicLyricsScrollingTests: XCTestCase {
       "A new song must center its current row even when its line index is unchanged")
   }
 
-  private func fixture(elapsed: Double, playing: Bool) async throws
+  func testWrappedLyricPrintsInReadingOrder() async throws {
+    let fixture = try await fixture(elapsed: 1, playing: false,
+      lines: [(0, "MMMMMMMM\nMMMMMMMM")])
+    defer { fixture.window.close() }
+    let view = fixture.scroll.contentView
+    let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+    view.cacheDisplay(in: view.bounds, to: bitmap)
+    var brightRows: [(Int, Int)] = []
+    for y in 0..<bitmap.pixelsHigh {
+      var bright = 0
+      for x in 0..<bitmap.pixelsWide {
+        if let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+          color.alphaComponent > 0.8, min(color.redComponent, color.greenComponent,
+            color.blueComponent) > 0.8 { bright += 1 }
+      }
+      if bright > 4 { brightRows.append((y, bright)) }
+    }
+    XCTAssertFalse(brightRows.isEmpty, "The current lyric must be visible")
+    let groups = brightRows.reduce(into: [[Int]]()) { groups, row in
+      if let last = groups.last?.last, row.0 - last < 6 {
+        groups[groups.count - 1].append(row.0)
+      } else { groups.append([row.0]) }
+    }
+    XCTAssertEqual(groups.count, 1,
+      "At 1/8 progress only the first visual line should be printed, not every wrapped line")
+  }
+
+  private func fixture(elapsed: Double, playing: Bool,
+    lines: [(TimeInterval, String)]? = nil) async throws
     -> (window: NSWindow, model: AppModel, scroll: NSScrollView) {
     let suite = "MusicLyricsScroll-\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults,
-      lyricsService: LyricsService(providers: [ScrollingLyricsProvider()]))
+      lyricsService: LyricsService(providers: [ScrollingLyricsProvider(lines: lines)]))
     model.nowPlayingDidChange(track(elapsed: elapsed, playing: playing))
     try await Task.sleep(for: .milliseconds(50))
     guard case .loaded = model.lyricsState else {
@@ -68,7 +96,9 @@ final class MusicLyricsScrollingTests: XCTestCase {
     try await Task.sleep(for: .milliseconds(300))
     host.layoutSubtreeIfNeeded()
     let scroll = try XCTUnwrap(scrollViews(host).first)
-    XCTAssertGreaterThan(try XCTUnwrap(scroll.documentView).bounds.height, 1000)
+    if lines == nil {
+      XCTAssertGreaterThan(try XCTUnwrap(scroll.documentView).bounds.height, 1000)
+    }
     return (window, model, scroll)
   }
 
@@ -83,7 +113,10 @@ final class MusicLyricsScrollingTests: XCTestCase {
 }
 
 private struct ScrollingLyricsProvider: LyricsProvider {
+  var lines: [(TimeInterval, String)]?
+
   func fetchLyrics(title: String, artist: String, duration: TimeInterval) async -> Lyrics? {
+    if let lines { return Lyrics(timedLines: lines) }
     let prefix = title == "Second song"
       ? "A longer second song lyric that wraps onto several lines"
       : "Fixture lyric"
