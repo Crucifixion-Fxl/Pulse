@@ -32,7 +32,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private var islandController: IslandWindowController?
   private var statusItem: NSStatusItem?
   private var settingsController: HostedWindowController<AnyView>?
-  private var launchAtLoginMenuItem: NSMenuItem?
 
   /// Hosted unit tests boot this AppDelegate for real; their app instance
   /// would steal the live socket path (unlink + rebind) and touch the real
@@ -154,8 +153,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   func menuWillOpen(_ menu: NSMenu) {
     islandController?.refreshWakeShortcut()
-    LaunchAtLoginService.shared.refresh()
-    launchAtLoginMenuItem?.state = LaunchAtLoginService.shared.isEnabled ? .on : .off
   }
 
   @objc private func openIsland() {
@@ -165,9 +162,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   @objc private func openSettings() {
     if settingsController == nil {
       let view = AnyView(
-        SettingsView { [weak self] in
-          self?.islandController?.pinAndShow()
-        }
+        SettingsView(
+          openIsland: { [weak self] in self?.islandController?.pinAndShow() },
+          enableGlobalWake: { [weak self] in
+            self?.islandController?.enableGlobalWakeShortcut()
+          }
+        )
         .environmentObject(model)
       )
       settingsController = HostedWindowController(
@@ -181,16 +181,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   @objc private func previewAIWake() {
     islandController?.previewAIWake()
-  }
-
-  @objc private func enableGlobalWake() {
-    islandController?.enableGlobalWakeShortcut()
-  }
-
-  @objc private func toggleLaunchAtLogin() {
-    let service = LaunchAtLoginService.shared
-    service.setEnabled(!service.isEnabled)
-    launchAtLoginMenuItem?.state = service.isEnabled ? .on : .off
   }
 
   @objc private func showAbout() {
@@ -219,25 +209,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     menu.addItem(
       withTitle: L10n.text("menu.open"), action: #selector(openIsland), keyEquivalent: "")
     menu.addItem(
+      withTitle: L10n.text("wake.menu"), action: #selector(previewAIWake), keyEquivalent: "")
+    menu.addItem(.separator())
+    menu.addItem(
       withTitle: L10n.text("menu.settings"), action: #selector(openSettings), keyEquivalent: ",")
     menu.addItem(
-      withTitle: L10n.text("wake.menu"), action: #selector(previewAIWake), keyEquivalent: "")
-    menu.addItem(
-      withTitle: L10n.text("wake.enable-global"), action: #selector(enableGlobalWake), keyEquivalent: "")
-    menu.addItem(.separator())
-
-    let launchItem = NSMenuItem(
-      title: L10n.text("settings.launch-at-login"),
-      action: #selector(toggleLaunchAtLogin),
-      keyEquivalent: ""
-    )
-    launchItem.state = LaunchAtLoginService.shared.isEnabled ? .on : .off
-    menu.addItem(launchItem)
-    launchAtLoginMenuItem = launchItem
-
-    menu.addItem(.separator())
-    menu.addItem(
       withTitle: L10n.text("menu.about"), action: #selector(showAbout), keyEquivalent: "")
+    menu.addItem(.separator())
     menu.addItem(withTitle: L10n.text("menu.quit"), action: #selector(quit), keyEquivalent: "q")
 
     statusItem.menu = menu

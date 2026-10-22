@@ -89,6 +89,8 @@
 "settings.fullscreen" = "全屏";
 "settings.fullscreen.policy" = "隐藏折叠胶囊，主动打开的灵动岛仍可显示";
 "settings.launch-at-login" = "登录时启动";
+"settings.voice" = "语音对话";
+"settings.voice.shortcut-help" = "在其他应用中也可长按空格开启语音对话。";
 "settings.about" = "关于";
 "settings.privacy" = "Pulse 只在这台 Mac 上处理提醒事项内容。";
 
@@ -230,8 +232,8 @@
 "weather.last-update" = "上次更新";
 "weather.location-settings" = "打开定位设置";
 "weather.refresh" = "刷新天气";
-"wake.menu" = "开启语音对话 · 长按空格";
-"wake.enable-global" = "启用其他应用中的长按空格…";
+"wake.menu" = "语音对话";
+"wake.enable-global" = "启用全局长按空格…";
 "wake.title" = "AI 唤醒";
 "wake.charging" = "AI 唤醒蓄力中";
 "wake.awake" = "AI 语音对话，按 Escape 退出";

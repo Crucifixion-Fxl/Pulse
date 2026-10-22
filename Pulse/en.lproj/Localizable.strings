@@ -89,6 +89,8 @@
 "settings.fullscreen" = "Full Screen";
 "settings.fullscreen.policy" = "Hide the collapsed fallback capsule; allow explicitly opened Islands";
 "settings.launch-at-login" = "Launch at Login";
+"settings.voice" = "Voice Conversation";
+"settings.voice.shortcut-help" = "Hold Space to start a voice conversation from other apps.";
 "settings.about" = "About";
 "settings.privacy" = "Pulse processes Reminder content only on this Mac.";
 
@@ -230,8 +232,8 @@
 "weather.last-update" = "Last update";
 "weather.location-settings" = "Location settings";
 "weather.refresh" = "Refresh weather";
-"wake.menu" = "Start Voice Conversation · Hold Space";
-"wake.enable-global" = "Enable Hold Space in Other Apps…";
+"wake.menu" = "Voice Conversation";
+"wake.enable-global" = "Enable Global Hold Space…";
 "wake.title" = "AI Wake";
 "wake.charging" = "AI wake charging";
 "wake.awake" = "AI voice conversation. Press Escape to close.";

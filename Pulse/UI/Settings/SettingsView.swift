@@ -4,6 +4,7 @@ struct SettingsView: View {
   @EnvironmentObject private var model: AppModel
   @ObservedObject private var launchAtLogin = LaunchAtLoginService.shared
   let openIsland: () -> Void
+  let enableGlobalWake: () -> Void
 
   var body: some View {
     Form {
@@ -58,6 +59,13 @@ struct SettingsView: View {
             set: { launchAtLogin.setEnabled($0) }
           )
         )
+      }
+
+      Section("settings.voice") {
+        Button("wake.enable-global", action: enableGlobalWake)
+        Text("settings.voice.shortcut-help")
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
 
       Section("settings.about") {
