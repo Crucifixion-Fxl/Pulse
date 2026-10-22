@@ -106,19 +106,19 @@ enum CodexUsageParser {
     in tail: Data, now: Date = Date()
   ) -> (usage: CodexTokenUsage, rateWindow: CodexRateWindow?)? {
     guard !tail.isEmpty else { return nil }
-    // Split on newlines from the end; event lines are well under 2 KB so a
-    // 128 KB tail always contains the last complete event.
-    var lines: [Data] = []
-    var start = tail.startIndex
-    for index in tail.indices where tail[index] == 0x0A {
-      lines.append(tail.subdata(in: start..<index))
-      start = tail.index(after: index)
-    }
-    if start < tail.endIndex { lines.append(tail.subdata(in: start..<tail.endIndex)) }
-
-    for line in lines.reversed() {
-      guard line.contains(Data("\"token_count\"".utf8)),
-        let event = try? JSONDecoder().decode(TokenCountEvent.self, from: line),
+    // Walk backwards lazily: most tails have a recent counter, so avoid
+    // scanning and copying every earlier line. Data slices also retain their
+    // original indices; this works when the caller supplies a slice itself.
+    let marker = Data("\"token_count\"".utf8)
+    let decoder = JSONDecoder()
+    var end = tail.endIndex
+    while end > tail.startIndex {
+      let start = tail[..<end].lastIndex(of: 0x0A).map { tail.index(after: $0) }
+        ?? tail.startIndex
+      let line = tail[start..<end]
+      end = start > tail.startIndex ? tail.index(before: start) : tail.startIndex
+      guard line.range(of: marker) != nil,
+        let event = try? decoder.decode(TokenCountEvent.self, from: line),
         let usage = event.payload?.info?.total_token_usage
       else { continue }
       let tokens = CodexTokenUsage(

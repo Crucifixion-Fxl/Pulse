@@ -136,6 +136,25 @@ final class CodexUsageTests: XCTestCase {
     XCTAssertNil(CodexUsageParser.lastTokenCount(in: Data("{}".utf8)))
   }
 
+  func testTailParsingPreservesBoundariesAndSkipsInvalidNewerEvents() {
+    let valid = #"{"payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":42,"output_tokens":7}}}}"#
+    let invalid = #"{"payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":"invalid"}}}}"#
+    let missingUsage = #"{"payload":{"type":"token_count","info":null}}"#
+    let truncated = #"{"payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":99"#
+    for ending in ["", "\n", "\r\n", "\n\n", "\n\(invalid)\n\(missingUsage)\n\(truncated)"] {
+      // A tail can begin mid-line and can be a Data slice with nonzero indices.
+      let data = Data(("prefix" + "partial JSON\n" + valid + ending).utf8).dropFirst(6)
+      let parsed = CodexUsageParser.lastTokenCount(in: data)
+      XCTAssertEqual(parsed?.usage,
+        CodexTokenUsage(input: 42, cached: 0, cacheWrite: 0, output: 7), ending)
+      XCTAssertNil(parsed?.rateWindow)
+    }
+    XCTAssertEqual(CodexUsageParser.lastTokenCount(in: Data(valid.utf8))?.usage.input, 42)
+    for empty in ["", "\n", "\n\n", "partial JSON", truncated, missingUsage] {
+      XCTAssertNil(CodexUsageParser.lastTokenCount(in: Data(empty.utf8)))
+    }
+  }
+
   func testBuildSnapshotAggregatesDaysAndKeepsNewestRate() {
     let sessions: [(date: Date, usage: CodexTokenUsage, rateWindow: CodexRateWindow?)] = [
       (
