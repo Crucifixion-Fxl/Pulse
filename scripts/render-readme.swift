@@ -55,64 +55,6 @@ struct DemoLyrics: LyricsProvider {
       (35,"Let the quiet carry you"), (55,"Into something new"), (80,"One small step at a time")])
   }
 }
-@MainActor final class Story: ObservableObject {
-  @Published var scene = 0
-  let titles = ["Make room for your day.", "Keep your agents in sight.", "Stay in the rhythm.", "Pick up where you copied."]
-  let subtitles = ["Your calendar, reminders and progress — one glance away.",
-    "See active sessions and requests without leaving your flow.",
-    "Now Playing, playback controls and lyrics beside your work.",
-    "Recent text and images, ready to copy again."]
-}
-struct Showcase: View {
-  @ObservedObject var story: Story
-  let model: AppModel
-  let agents: AgentSessionStore
-  var body: some View {
-    ZStack {
-      Color(red: 0.045, green: 0.055, blue: 0.09)
-      RadialGradient(colors: [Color.blue.opacity(0.2), .clear], center: .topLeading, startRadius: 10, endRadius: 700)
-      RadialGradient(colors: [Color.purple.opacity(0.17), .clear], center: .bottomTrailing, startRadius: 10, endRadius: 600)
-      VStack(spacing: 0) {
-        HStack(spacing: 12) {
-          Image(nsImage: NSImage(contentsOfFile: CommandLine.arguments[1] + "/docs/images/pulse-icon.png")!)
-            .resizable().frame(width: 42, height: 42)
-          Text("Pulse").font(.system(size: 28, weight: .bold))
-          Spacer()
-          Text("ONE NATIVE macOS ISLAND").font(.system(size: 11, weight: .semibold, design: .monospaced)).tracking(2).foregroundStyle(.white.opacity(0.55))
-        }.padding(.horizontal, 44).padding(.top, 26)
-        Text(story.titles[story.scene]).font(.system(size: 36, weight: .bold)).padding(.top, 21)
-        Text(story.subtitles[story.scene]).font(.system(size: 16)).foregroundStyle(.white.opacity(0.62)).padding(.top, 8)
-        ZStack(alignment: .top) {
-          RoundedRectangle(cornerRadius: 20).fill(.white.opacity(0.025))
-          VStack(spacing: 0) {
-            HStack {
-              Text("●  ●  ●").font(.system(size: 9)).foregroundStyle(.white.opacity(0.25))
-              Spacer()
-            }.padding(.horizontal, 14).frame(height: 25)
-            Spacer()
-          }
-          IslandRootView().environmentObject(model).environmentObject(agents)
-            .frame(width: 760, height: 420)
-            .scaleEffect(1.13, anchor: .top)
-            .frame(width: 860, height: 475, alignment: .top)
-        }.frame(width: 920, height: 475).padding(.top, 23)
-        HStack(spacing: 12) {
-          ForEach(Array(["Reminders", "Agents + quotas", "Music", "Clipboard"].enumerated()), id: \.offset) { index, title in
-            HStack(spacing: 7) {
-              Circle().fill(index == story.scene ? Color.cyan : Color.white.opacity(0.18)).frame(width: 5, height: 5)
-              Text(title).font(.system(size: 12, weight: .medium))
-            }.foregroundStyle(.white.opacity(index == story.scene ? 1 : 0.42))
-              .padding(.horizontal, 15).padding(.vertical, 9)
-              .background(.white.opacity(index == story.scene ? 0.08 : 0.025), in: Capsule())
-          }
-        }.padding(.top, 15)
-        Text("Actual Pulse views · Fictional demo data · No personal content")
-          .font(.system(size: 10)).foregroundStyle(.white.opacity(0.35)).padding(.top, 13)
-        Spacer(minLength: 0)
-      }
-    }.foregroundStyle(.white).frame(width: 1000, height: 770).preferredColorScheme(.dark)
-  }
-}
 @main @MainActor struct Render {
   static func main() {
     let app = NSApplication.shared
@@ -133,9 +75,8 @@ struct Showcase: View {
         agents.apply(HookEvent(from: try! JSONSerialization.data(withJSONObject: json))!)
       }
     }
-    let story = Story()
-    let host = NSHostingView(rootView: Showcase(story: story, model: model, agents: agents))
-    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1000, height: 770), styleMask: .borderless, backing: .buffered, defer: false)
+    let host = NSHostingView(rootView: IslandRootView().environmentObject(model).environmentObject(agents).preferredColorScheme(.dark))
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 760, height: 420), styleMask: .borderless, backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.contentView = host
     window.orderBack(nil)
@@ -153,7 +94,6 @@ struct Showcase: View {
       ])
       var images: [CGImage] = []
       for (i, pane) in [IslandSidebarItem.reminders, .agents, .music, .clipboard].enumerated() {
-        story.scene = i
         model.requestSidebarItem(pane)
         try? await Task.sleep(for: .seconds(2.4))
         host.layoutSubtreeIfNeeded()
@@ -165,23 +105,8 @@ struct Showcase: View {
         precondition(model.canUseActiveList && model.islandState == .pinned)
         print("Rendered \(pane.rawValue): \(image.width)x\(image.height)")
       }
-      let dest = CGImageDestinationCreateWithURL(output.appendingPathComponent("pulse-overview.gif") as CFURL, UTType.gif.identifier as CFString, images.count, nil)!
-      CGImageDestinationSetProperties(dest, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
-      for image in images { CGImageDestinationAddImage(dest, image, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 4.0]] as CFDictionary) }
-      precondition(CGImageDestinationFinalize(dest))
-      // A single contact sheet for readers who prefer a non-animated preview.
-      let context = CGContext(data: nil, width: 2000, height: 1540, bitsPerComponent: 8, bytesPerRow: 0,
-        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-      context.interpolationQuality = .high
-      for (i, image) in images.enumerated() {
-        context.draw(image, in: CGRect(x: (i % 2) * 1000, y: (1 - i / 2) * 770, width: 1000, height: 770))
-      }
-      let still = CGImageDestinationCreateWithURL(output.appendingPathComponent("pulse-overview.png") as CFURL,
-        UTType.png.identifier as CFString, 1, nil)!
-      CGImageDestinationAddImage(still, context.makeImage()!, nil)
-      precondition(CGImageDestinationFinalize(still))
       defaults.removePersistentDomain(forName: suite)
-      print("PASS: four production view scenes; synthetic inputs only; looping GIF saved")
+      print("PASS: four production UI snapshots captured with fictional data")
       app.terminate(nil)
     }
     app.run()
