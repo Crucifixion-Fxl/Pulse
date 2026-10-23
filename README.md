@@ -13,7 +13,7 @@
 <p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
 
 <p align="center"><img src="docs/images/pulse-overview.gif" width="900" alt="Pulse in action: reminders and calendar, agent sessions and Codex quota, music with lyrics, and clipboard history"></p>
-<p align="center"><sub>Actual Pulse views with fictional demo data. No personal reminders, sessions, clipboard content or account usage. <a href="docs/images/pulse-overview.png">View the static overview</a>.</sub></p>
+<p align="center"><sub>Choreographed from actual Pulse views and fictional demo data. No personal reminders, sessions, clipboard content or account usage. <a href="docs/images/pulse-overview.png">View the static overview</a>.</sub></p>
 
 ## Highlights
 

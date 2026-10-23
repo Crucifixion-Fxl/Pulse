@@ -51,14 +51,15 @@ import UniformTypeIdentifiers
 }
 struct DemoLyrics: LyricsProvider {
   func fetchLyrics(title: String, artist: String, duration: TimeInterval) async -> Lyrics? {
-    Lyrics(timedLines: [(0,"A little room to breathe"), (18,"A little time to dream"),
-      (35,"Let the quiet carry you"), (55,"Into something new"), (80,"One small step at a time")])
+    Lyrics(timedLines: [(0,"Room to breathe"), (18,"Time to dream"),
+      (35,"Quietly, we go"), (55,"Into something new"), (80,"One step at a time")])
   }
 }
 @main @MainActor struct Render {
   static func main() {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
+    let repository = URL(fileURLWithPath: CommandLine.arguments[1])
     let output = URL(fileURLWithPath: CommandLine.arguments[2])
     try! FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     let suite = "PulseReadmeDemo-\(UUID().uuidString)"
@@ -85,8 +86,9 @@ struct DemoLyrics: LyricsProvider {
       model.pinIsland()
       model.setIslandHovered(true)
       model.refreshAIUsage()
-      model.nowPlayingDidChange(NowPlayingTrack(title: "Quiet Orbit", artist: "Pulse Demo", album: "Focus Sessions", artworkData: nil,
-        duration: 180, elapsed: 37, isPlaying: false, playbackRate: 0))
+      let cover = try! Data(contentsOf: repository.appendingPathComponent("docs/images/pulse-icon.png"))
+      model.nowPlayingDidChange(NowPlayingTrack(title: "Quiet Orbit", artist: "Pulse Demo", album: "Focus Sessions", artworkData: cover,
+        duration: 180, elapsed: 37, isPlaying: true, playbackRate: 1))
       model.clipboardHistoryDidChange([
         ClipboardItem(id: UUID(), kind: .text, text: "Small ideas.\nThoughtful details.\nA little progress every day.", capturedAt: Date(), contentHash: 1),
         ClipboardItem(id: UUID(), kind: .text, text: "https://example.com/design-notes", capturedAt: Date().addingTimeInterval(-120), contentHash: 2),
@@ -96,6 +98,10 @@ struct DemoLyrics: LyricsProvider {
       for (i, pane) in [IslandSidebarItem.reminders, .agents, .music, .clipboard].enumerated() {
         model.requestSidebarItem(pane)
         try? await Task.sleep(for: .seconds(2.4))
+        if pane == .music {
+          model.seedReadmeMusic()
+          try? await Task.sleep(for: .milliseconds(150))
+        }
         host.layoutSubtreeIfNeeded()
         let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
         host.cacheDisplay(in: host.bounds, to: bitmap)

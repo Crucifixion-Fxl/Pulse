@@ -13,7 +13,7 @@
 <p align="center"><a href="README.md">English</a> · 简体中文</p>
 
 <p align="center"><img src="docs/images/pulse-overview.gif" width="900" alt="Pulse 使用场景：提醒日历、智能体会话与 Codex 额度、音乐歌词和剪贴板历史"></p>
-<p align="center"><sub>使用真实 Pulse 界面与虚构演示数据，不含个人提醒、会话、剪贴板内容或账户用量。<a href="docs/images/pulse-overview.png">查看四场景静态拼图</a>。</sub></p>
+<p align="center"><sub>基于真实 Pulse 界面与虚构数据编排的演示动画，不含个人提醒、会话、剪贴板内容或账户用量。<a href="docs/images/pulse-overview.png">查看四场景静态拼图</a>。</sub></p>
 
 ## 主要功能
 

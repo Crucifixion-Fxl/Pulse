@@ -1,25 +1,39 @@
 # README artwork
 
-`pulse-overview.gif` is a four-scene, 17-second looping tour of Reminders,
+`pulse-overview.gif` is a four-scene, 22-second looping tour of Reminders,
 Agents, Music and Clipboard. `pulse-overview.png` places the same four scenes
 in one static image. Both READMEs embed the GIF and link to the static version.
 
-The 1200 × 760 GIF uses 425 frames at 25 fps. A deterministic Core Graphics
-composition adds eased horizontal transitions, a moving scene indicator and
-a collapse/reopen loop. This is an editorial product tour using native view
-captures, not a screen recording or a claim about exact app transition timing.
+The 1200 × 700 GIF uses 1,100 frames at 50 fps (20 ms per frame). A deterministic
+Core Graphics composition keeps the product in a quiet pool of blue-violet
+light, with no surrounding title, tabs or decorative borders. Native panes
+enter in a short stagger as the island changes height. The orb anticipates
+transitions with a glance, nods during music, then takes a brief close-up with
+a head tilt and double blink before returning to its header position. The
+loop starts on the full Reminders view so its first frame is useful on its own.
+
+This is an editorial product film made from native view captures. The pane
+entrances, island morph and mascot close-up are demonstration choreography,
+not a screen recording or a claim about the app's exact motion. The mascot
+keeps the production orb's flat white face and black capsule-eye proportions.
 A shared GIF palette keeps the background and typography stable between frames.
+Gifsicle then optimizes frame differences losslessly, preserving all 1,100
+frames and their 20 ms timing without leaving trails in the dark background.
 
 The renderer hosts the production `IslandRootView` in a separate process.
 Reminders and completion history are in-memory fixtures; agent events use
 `demo-*` identifiers and `/demo/` paths; quotas use `SampleAIUsageProvider`;
-lyrics are original fixture text; clipboard entries are invented, including
+music titles and lyrics are original fixture text; the cover uses Pulse's
+existing icon; clipboard entries are invented, including
 the reserved `example.com` domain. It does not launch the application delegate,
 start the agent server, read Apple Reminders, monitor the clipboard, or capture
-the desktop. Weather and Keep Awake are omitted from this tour. The music
-favorites rail accurately shows its unconfigured state.
+the desktop. Weather and Keep Awake are omitted from this tour. A fixture-only
+extension is appended to a temporary copy of `AppModel.swift` to populate the
+music favorites rail. It is not compiled into the shipping app and does not
+load a personal playlist or contact its service.
 
-Regenerate from the repository root on macOS with Xcode 26+, Python 3 and ffmpeg:
+Regenerate from the repository root on macOS with Xcode 26+, Python 3, ffmpeg
+and gifsicle:
 
 ```sh
 python3 scripts/render-readme.py
