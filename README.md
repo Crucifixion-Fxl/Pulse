@@ -12,7 +12,8 @@
 <p align="center"><strong><a href="https://github.com/Crucifixion-Fxl/Pulse/releases/latest">Download the latest DMG</a></strong></p>
 <p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
 
-<p align="center"><img src="docs/images/extension-store.png" width="900" alt="Pulse extension store with bars, characters, status items, wake effects and voice providers"></p>
+<p align="center"><img src="docs/images/pulse-overview.gif" width="900" alt="Pulse in action: reminders and calendar, agent sessions and Codex quota, music with lyrics, and clipboard history"></p>
+<p align="center"><sub>Actual Pulse views with fictional demo data. No personal reminders, sessions, clipboard content or account usage. <a href="docs/images/pulse-overview.png">View the static overview</a>.</sub></p>
 
 ## Highlights
 
