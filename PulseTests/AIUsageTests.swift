@@ -2,6 +2,56 @@ import XCTest
 @testable import Pulse
 
 final class AIUsageTests: XCTestCase {
+  @MainActor
+  func testRefreshShowsChangedQuotaWithoutFiveMinuteDelay() async throws {
+    let suite = "QuotaRefresh-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    var now = Date()
+    let provider = RefreshProvider()
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults,
+      aiUsageProvider: provider, aiUsageClock: { now })
+    model.refreshAIUsage()
+    for _ in 0..<50 {
+      if model.aiUsage != nil { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(model.aiUsage?.subscriptions.first?.quota.used, 52)
+    now = now.addingTimeInterval(6)
+    model.refreshAIUsage()
+    for _ in 0..<50 {
+      if model.aiUsage?.subscriptions.first?.quota.used == 58 { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(model.aiUsage?.subscriptions.first?.quota.used, 58,
+      "A new observation must replace the 48% balance without waiting five minutes")
+    XCTAssertEqual(AppModel.aiUsagePollingInterval, 30)
+  }
+
+  @MainActor
+  func testColdRefreshCoalescesRequestsEvenBeforeSnapshotExists() async throws {
+    let suite = "QuotaCoalescing-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let provider = RefreshProvider()
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults, aiUsageProvider: provider)
+    for _ in 0..<20 { model.refreshAIUsage() }
+    try await Task.sleep(for: .milliseconds(100))
+    let calls = await provider.calls
+    XCTAssertEqual(calls, 1, "Hover, timer and activation must share the in-flight request")
+  }
+
+  private actor RefreshProvider: AIUsageProvider {
+    var calls = 0
+    func fetchUsage() async throws -> AIUsageSnapshot {
+      calls += 1
+      let used = calls == 1 ? 52 : 58
+      try await Task.sleep(for: .milliseconds(30))
+      return CodexUsageParser.buildSnapshot(sessions: [], liveWindows: (nil,
+        CodexRateWindow(usedPercent: Double(used), windowMinutes: 10080, resetsAt: Date())))
+    }
+  }
+
   private var calendar: Calendar {
     var calendar = Calendar(identifier: .gregorian)
     calendar.firstWeekday = 2

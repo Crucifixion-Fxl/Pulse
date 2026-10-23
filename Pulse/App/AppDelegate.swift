@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
       await model.start()
       islandController?.show()
     }
-    aiUsageTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+    aiUsageTimer = Timer.scheduledTimer(withTimeInterval: AppModel.aiUsagePollingInterval, repeats: true) { [weak self] _ in
       Task { @MainActor [weak self] in
         self?.model.refreshAIUsage()
       }

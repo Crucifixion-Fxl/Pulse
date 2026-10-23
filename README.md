@@ -19,7 +19,7 @@
 
 - **An island that follows you.** A compact menu-bar surface expands into a workspace on the display you are using, with notch-aware geometry and keyboard shortcuts.
 - **Reminders at a glance.** Month calendar, completion heatmap, grouped day schedule, quick entry and undo. Use Apple Reminders or a private local source.
-- **Agents and quotas.** Live coding sessions, attention requests and one-click session ID copying. Codex reads live quotas and local token usage, retaining the last successful quota offline and across restarts. Other vendors are labeled sample data.
+- **Agents and quotas.** Live coding sessions, attention requests and one-click session ID copying. Codex reads live quotas and local token usage, retaining the newest known quota across restarts and using newer same-window local observations when live refresh is unavailable. Other vendors are labeled sample data.
 - **Make it yours.** The [extension store](docs/EXTENSION-STORE.md) controls Reminders, Agents, Music and Clipboard bars, status items, three bot characters and two voice-reactive wake effects.
 - **Music and clipboard.** System Now Playing, playback controls, synced lyrics and recent clipboard history.
 - **Small daily helpers.** Local weather and timed [Keep Awake](docs/adr/0014-bounded-keep-awake-sessions.md).

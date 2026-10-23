@@ -166,7 +166,11 @@ final class AppModel: ObservableObject {
   private var favoriteProvider = FavoritePlaylistProvider()
   private let favoritesStore = FavoritePlaylistStore()
   private let nowPlayingController: any NowPlayingControlling
-  /// Guards refreshAIUsage against refetching on every hover-select.
+  /// Periodic refresh is independent of hover; the shorter gate only coalesces
+  /// repeated activation/selection events. One request may be in flight at a time.
+  static let aiUsagePollingInterval: TimeInterval = 30
+  private let aiUsageClock: @MainActor () -> Date
+  private var isRefreshingAIUsage = false
   private var lastAIUsageRefresh: Date?
   /// Identity whose lyrics are loaded or being fetched; elapsed/rate
   /// jitter must never re-trigger a fetch.
@@ -206,6 +210,7 @@ final class AppModel: ObservableObject {
     store: ReminderStore = SourceAwareReminderStore(),
     defaults: UserDefaults = .standard,
     aiUsageProvider: AIUsageProvider = DefaultAIUsageProvider(),
+    aiUsageClock: @escaping @MainActor () -> Date = { Date() },
     lyricsService: LyricsService = LyricsService(),
     nowPlayingController: any NowPlayingControlling = NowPlayingController.shared,
     completionFeedbackDuration: Duration = .milliseconds(750),
@@ -217,6 +222,7 @@ final class AppModel: ObservableObject {
     self.defaults = defaults
     self.extensionPreferences = ExtensionPreferences.load(from: defaults)
     self.aiUsageProvider = aiUsageProvider
+    self.aiUsageClock = aiUsageClock
     self.aiUsage = aiUsageProvider.cachedUsage()
     self.lyricsService = lyricsService
     self.nowPlayingController = nowPlayingController
@@ -943,9 +949,6 @@ final class AppModel: ObservableObject {
     expandedContentHeight = measuredHeight
   }
 
-  /// Refreshes the AI usage panel on panel selection and app activation;
-  /// throttled to five minutes so hover-selecting the sidebar icon doesn't
-  /// refetch. Stale data is kept when a fetch fails.
   /// Picks whose quota the collapsed bar's chip shows; persisted so the
   /// choice survives relaunches.
   func setCollapsedQuotaVendor(_ vendor: AIUsageVendor) {
@@ -955,10 +958,14 @@ final class AppModel: ObservableObject {
   }
 
   func refreshAIUsage() {
-    let staleness = lastAIUsageRefresh.map { Date().timeIntervalSince($0) } ?? .infinity
-    guard aiUsage == nil || staleness > 300 else { return }
-    lastAIUsageRefresh = Date()
+    guard !isRefreshingAIUsage else { return }
+    let now = aiUsageClock()
+    let staleness = lastAIUsageRefresh.map { now.timeIntervalSince($0) } ?? .infinity
+    guard staleness >= 5 else { return }
+    lastAIUsageRefresh = now
+    isRefreshingAIUsage = true
     Task { @MainActor in
+      defer { isRefreshingAIUsage = false }
       if let snapshot = try? await aiUsageProvider.fetchUsage() {
         aiUsage = snapshot
       }

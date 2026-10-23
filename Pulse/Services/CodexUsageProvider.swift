@@ -297,7 +297,8 @@ enum CodexOAuthUsage {
         CodexRateWindow(
           usedPercent: Double($0.used_percent ?? 0),
           windowMinutes: ($0.limit_window_seconds ?? 0) / 60,
-          resetsAt: $0.reset_at.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? now)
+          resetsAt: $0.reset_at.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? now,
+          observedAt: now)
       }
     }
 
@@ -327,12 +328,13 @@ actor CodexAIUsageProvider: AIUsageProvider {
   typealias Windows = (session: CodexRateWindow?, weekly: CodexRateWindow?)
   private struct Cache: Codable {
     var accountID: String?
+    var fetchedAt: Date?
     var session: CodexRateWindow?
     var weekly: CodexRateWindow?
   }
   private let homeDirectory: URL
   private let loadWindows: @Sendable (URL) async throws -> Windows
-  private var lastLive: Cache?
+  private var lastKnown: Cache?
 
   init(
     homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
@@ -368,26 +370,31 @@ actor CodexAIUsageProvider: AIUsageProvider {
     // and day tokens still render when the backend is unreachable.
     let auth = try? Data(contentsOf: homeDirectory.appendingPathComponent(".codex/auth.json"))
     let accountID = auth.flatMap { try? JSONDecoder().decode(CodexOAuthUsage.Credentials.self, from: $0) }?.tokens?.account_id
-    if lastLive == nil, let data = try? Data(contentsOf: cacheURL) {
-      lastLive = try? JSONDecoder().decode(Cache.self, from: data)
+    if lastKnown == nil, let data = try? Data(contentsOf: cacheURL) {
+      lastKnown = try? JSONDecoder().decode(Cache.self, from: data)
+      // Older caches predate observation timestamps. Their file date is the
+      // last successful write, not the time this process happened to read them.
+      if lastKnown?.fetchedAt == nil {
+        lastKnown?.fetchedAt = (try? FileManager.default.attributesOfItem(atPath: cacheURL.path)[.modificationDate]) as? Date
+      }
     }
     // Never carry one account's quota into a different account.
-    if lastLive?.accountID != accountID { lastLive = nil }
+    if lastKnown?.accountID != accountID { lastKnown = nil }
     var isStale = false
-    let windows: Windows?
+    var windows: Windows?
     do {
       let live = try await loadWindows(homeDirectory)
       guard live.session != nil || live.weekly != nil else { throw URLError(.cannotParseResponse) }
       windows = live
-      let cache = Cache(accountID: accountID, session: live.session, weekly: live.weekly)
-      lastLive = cache
+      let cache = Cache(accountID: accountID, fetchedAt: Date(), session: live.session, weekly: live.weekly)
+      lastKnown = cache
       if let data = try? JSONEncoder().encode(cache) {
         try? FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: cacheURL, options: .atomic)
       }
     } catch {
       isStale = true
-      windows = lastLive.map { ($0.session, $0.weekly) }
+      windows = lastKnown.map { ($0.session, $0.weekly) }
     }
 
     let sessionsRoot = homeDirectory.appendingPathComponent(".codex/sessions")
@@ -413,6 +420,43 @@ actor CodexAIUsageProvider: AIUsageProvider {
         try? handle.close()
         if let entry = CodexUsageParser.lastTokenCount(in: tail) {
           parsed.append((date, entry.usage, entry.rateWindow))
+        }
+      }
+    }
+
+    // A failed HTTP request must not make an hours-old OAuth cache outrank
+    // a newer observation written by Codex itself. Only refine an existing,
+    // account-matched window with the same reset boundary; never infer that
+    // unrelated historical rollouts belong to the currently signed-in account.
+    if isStale, var cache = lastKnown, let accountID, cache.accountID == accountID {
+      let originalSession = cache.session
+      let originalWeekly = cache.weekly
+      let now = Date()
+      for entry in parsed {
+        guard let candidate = entry.rateWindow,
+          let observed = candidate.observedAt, observed <= now.addingTimeInterval(5),
+          (0...100).contains(candidate.usedPercent), candidate.resetsAt > now
+        else { continue }
+        let previous: CodexRateWindow?
+        switch candidate.lane {
+        case .session: previous = cache.session
+        case .weekly: previous = cache.weekly
+        case .unknown: continue
+        }
+        guard let previous, previous.resetsAt == candidate.resetsAt,
+          let boundary = previous.observedAt ?? cache.fetchedAt, observed > boundary
+        else { continue }
+        switch candidate.lane {
+        case .session: cache.session = candidate
+        case .weekly: cache.weekly = candidate
+        case .unknown: break
+        }
+      }
+      windows = (cache.session, cache.weekly)
+      if cache.session != originalSession || cache.weekly != originalWeekly {
+        lastKnown = cache
+        if let data = try? JSONEncoder().encode(cache) {
+          try? data.write(to: cacheURL, options: .atomic)
         }
       }
     }

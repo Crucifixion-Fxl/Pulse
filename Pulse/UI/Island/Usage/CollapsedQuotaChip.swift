@@ -75,6 +75,7 @@ struct CollapsedQuotaChipView: View {
       }
     }
     .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: subscription.quota.fraction)
+    .help(subscription.isStale ? L10n.text("ai.quota.stale") : vendorLabel)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(
       Text(

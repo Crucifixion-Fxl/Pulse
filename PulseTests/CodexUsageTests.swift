@@ -79,6 +79,93 @@ final class CodexUsageTests: XCTestCase {
     XCTAssertNil(restarted.cachedUsage())
   }
 
+  func testOfflineUsesNewerMatchingRolloutAndPersistsIt() async throws {
+    let fixture = try await offlineQuotaFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.home) }
+    try writeQuotaEvent(home: fixture.home, used: 58, observed: Date(), reset: fixture.reset)
+    let updated = try await fixture.provider.fetchUsage()
+    XCTAssertEqual(updated.subscriptions.first?.quota.used, 58,
+      "A 48% cached balance must advance to the newer 42% recorded balance during a TLS outage")
+    XCTAssertTrue(updated.subscriptions[0].isStale, "A recorded observation is not a live HTTP response")
+    let restarted = CodexAIUsageProvider(homeDirectory: fixture.home, loadWindows: { _ in
+      throw URLError(.secureConnectionFailed)
+    })
+    XCTAssertEqual(restarted.cachedUsage()?.subscriptions.first?.quota.used, 58)
+    try writeQuotaEvent(home: fixture.home, used: 55, observed: Date().addingTimeInterval(-60), reset: fixture.reset)
+    let retained = try await restarted.fetchUsage()
+    XCTAssertEqual(retained.subscriptions.first?.quota.used, 58, "Restart must not regress to an older observation")
+  }
+
+  func testOfflineRejectsOlderAndDifferentWindowObservations() async throws {
+    let fixture = try await offlineQuotaFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.home) }
+    for (used, observed, reset) in [
+      (58, Date().addingTimeInterval(-300), fixture.reset),
+      (58, Date(), fixture.reset + 86400),
+      (58, Date().addingTimeInterval(3600), fixture.reset),
+      (158, Date(), fixture.reset),
+    ] {
+      try writeQuotaEvent(home: fixture.home, used: used, observed: observed, reset: reset)
+      let result = try await fixture.provider.fetchUsage()
+      XCTAssertEqual(result.subscriptions.first?.quota.used, 52)
+    }
+  }
+
+  func testLegacyCacheUsesFileDateAsFreshnessBoundary() async throws {
+    let fixture = try await offlineQuotaFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.home) }
+    let cacheURL = fixture.home.appendingPathComponent("Library/Caches/Pulse/codex-quota.json")
+    var cache = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: cacheURL)) as? [String: Any])
+    cache.removeValue(forKey: "fetchedAt")
+    var weekly = try XCTUnwrap(cache["weekly"] as? [String: Any])
+    weekly.removeValue(forKey: "observedAt")
+    cache["weekly"] = weekly
+    try JSONSerialization.data(withJSONObject: cache).write(to: cacheURL)
+    try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-120)], ofItemAtPath: cacheURL.path)
+    try writeQuotaEvent(home: fixture.home, used: 58, observed: Date(), reset: fixture.reset)
+    let restarted = CodexAIUsageProvider(homeDirectory: fixture.home, loadWindows: { _ in
+      throw URLError(.secureConnectionFailed)
+    })
+    let result = try await restarted.fetchUsage()
+    XCTAssertEqual(result.subscriptions.first?.quota.used, 58)
+  }
+
+  private func offlineQuotaFixture() async throws -> (home: URL, provider: CodexAIUsageProvider, reset: Int) {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: home.appendingPathComponent(".codex/sessions"), withIntermediateDirectories: true)
+    try Data(#"{"tokens":{"account_id":"demo-account"}}"#.utf8).write(to: home.appendingPathComponent(".codex/auth.json"))
+    let reset = Int(Date().addingTimeInterval(86400).timeIntervalSince1970)
+    let source = OfflineQuotaSequence(reset: reset)
+    let provider = CodexAIUsageProvider(homeDirectory: home, loadWindows: { _ in try await source.next() })
+    _ = try await provider.fetchUsage()
+    return (home, provider, reset)
+  }
+
+  private func writeQuotaEvent(home: URL, used: Int, observed: Date, reset: Int) throws {
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let stamp = DateFormatter()
+    stamp.dateFormat = "yyyy-MM-dd'T'HH-mm-ss"
+    let file = home.appendingPathComponent(".codex/sessions/rollout-\(stamp.string(from: Date()))-test.jsonl")
+    let event: [String: Any] = ["timestamp": iso.string(from: observed), "type": "event_msg", "payload": [
+      "type": "token_count", "info": ["total_token_usage": ["input_tokens": 50]],
+      "rate_limits": ["limit_id": "codex", "primary": ["used_percent": used, "window_minutes": 10080, "resets_at": reset]],
+    ]]
+    try JSONSerialization.data(withJSONObject: event).write(to: file)
+  }
+
+  private actor OfflineQuotaSequence {
+    let reset: Int
+    var calls = 0
+    init(reset: Int) { self.reset = reset }
+    func next() throws -> CodexAIUsageProvider.Windows {
+      calls += 1
+      if calls > 1 { throw URLError(.secureConnectionFailed) }
+      return (nil, CodexRateWindow(usedPercent: 52, windowMinutes: 10080,
+        resetsAt: Date(timeIntervalSince1970: TimeInterval(reset)), observedAt: Date().addingTimeInterval(-120)))
+    }
+  }
+
   private actor QuotaSequence {
     var calls = 0
     func next() throws -> CodexAIUsageProvider.Windows {
