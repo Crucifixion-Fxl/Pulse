@@ -4,6 +4,80 @@ import XCTest
 
 final class LocalSourceAppModelTests: XCTestCase {
   @MainActor
+  func testFirstOpeningAfterMidnightIncludesOverdueReminders() async throws {
+    let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+    try await assertFirstOpeningIncludesOverdueReminders(previousDay: yesterday)
+  }
+
+  @MainActor
+  func testFirstOpeningAfterMonthRolloverIncludesOverdueReminders() async throws {
+    let calendar = Calendar.current
+    let monthStart = calendar.dateInterval(of: .month, for: Date())!.start
+    let previousDay = calendar.date(byAdding: .day, value: -1, to: monthStart)!
+    try await assertFirstOpeningIncludesOverdueReminders(previousDay: previousDay)
+  }
+
+  @MainActor
+  private func assertFirstOpeningIncludesOverdueReminders(previousDay: Date) async throws {
+    let suite = "FirstOpening-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let store = LocalOnlyTestReminderStore()
+    let model = AppModel(store: store, defaults: defaults)
+    await model.reload()
+    let listID = try XCTUnwrap(model.activeListID)
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let olderDay = calendar.date(byAdding: .month, value: -1, to: previousDay)!
+    for (title, day) in [("Older overdue", olderDay), ("Previous day", previousDay), ("Today", today)] {
+      try await store.createReminder(
+        title: title, in: listID,
+        dueComponents: calendar.dateComponents([.year, .month, .day], from: day))
+    }
+    try await store.createReminder(title: "Undated", in: listID, dueComponents: nil)
+
+    // Recreate the state left behind when the collapsed app spans midnight:
+    // selection and the loaded month still belong to the previous opening.
+    model.selectDay(previousDay)
+    await model.reload()
+    XCTAssertEqual(model.islandState, .collapsed)
+    XCTAssertEqual(model.selectedDaySchedule.pending.map(\.title), ["Previous day"])
+
+    model.pinIslandFromSurface(on: nil)
+    XCTAssertEqual(model.selectedDay, today, "The first opening must reset the stale day")
+    for _ in 0..<100 where !model.selectedDaySchedule.pending.contains(where: { $0.title == "Today" }) {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    let expected = ["Older overdue", "Previous day", "Today", "Undated"]
+    XCTAssertEqual(model.visibleScheduleReminders.map(\.title), expected)
+
+    model.collapseIsland()
+    model.pinIslandFromSurface(on: nil)
+    for _ in 0..<100 where !model.selectedDaySchedule.pending.contains(where: { $0.title == "Today" }) {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(model.visibleScheduleReminders.map(\.title), expected)
+  }
+
+  @MainActor
+  func testPinningAnAlreadyOpenIslandPreservesCalendarSelection() async throws {
+    let suite = "OpenSelection-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = AppModel(store: LocalOnlyTestReminderStore(), defaults: defaults)
+    await model.reload()
+    model.pinIslandFromSurface(on: nil)
+    let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+    model.selectDay(yesterday)
+    let selection = model.selectedDay
+
+    model.pinIsland()
+
+    XCTAssertEqual(model.selectedDay, selection)
+    model.collapseIsland()
+  }
+
+  @MainActor
   func testMonthNavigationCrossesYearsWithoutMovingSelection() async throws {
     let defaults = UserDefaults(suiteName: #function)!
     defaults.removePersistentDomain(forName: #function)

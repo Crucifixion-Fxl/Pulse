@@ -869,6 +869,11 @@ final class AppModel: ObservableObject {
   func pinIsland() {
     hoverTask?.cancel()
     showCollapsedIsland()
+    // The app may stay collapsed across midnight. Reset before opening so
+    // today's schedule carries overdue reminders on the very first click.
+    if islandState == .collapsed {
+      selectDay(Date())
+    }
     islandState = .pinned
     guard suspendedEditingFocus != nil else { return }
     suspendedEditingFocus = nil
